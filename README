@@ -17,7 +17,8 @@
     (none)
 
   REQUIRES
-    node >= 20.6.0
+    node 22
+    go 1.26
 
   LINKS
     pi-coding-agent  https://github.com/badlogic/pi-mono
