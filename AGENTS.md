@@ -1,5 +1,5 @@
 - pi-mono: https://github.com/badlogic/pi-mono
 - 리소스(extension, skill, prompt, theme) 변경 시 README 최신화
 - README는 플레인 텍스트, 박스 가운데 정렬 유지
-- extension 최상위는 index.ts, README만 허용. 헬퍼 파일은 하위 폴더 만들어 분리
+- extension 최상위는 index.ts, README만 허용. 나머지는 하위 폴더로 분리
 - 커밋 메시지는 한글로 간결하게
