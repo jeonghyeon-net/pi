@@ -2,7 +2,9 @@
   "name": "@jeonghyeon-net/pi",
   "private": true,
   "scripts": {
-    "test": "go test ./..."
+    "test": "go test ./...",
+    "lint": "biome check",
+    "format": "biome format --write"
   },
   "devDependencies": {
     "@mariozechner/pi-ai": "^0.64.0",

@@ -1,3 +1,4 @@
 [tools]
 node = "22"
 go = "1.26"
+biome = "2.4"
