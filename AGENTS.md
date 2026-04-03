@@ -1,3 +1,5 @@
+- pi-coding-agent: https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent
+- extension 문서: 위 레포의 docs/extensions.md, 예제: examples/extensions/
 - extension 추가/수정/삭제 시 README의 EXTENSIONS 섹션 최신화
 - README는 플레인 텍스트, 박스 가운데 정렬 유지
 - 커밋 메시지는 한글로 간결하게
