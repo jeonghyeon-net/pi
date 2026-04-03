@@ -40,7 +40,7 @@ export default function (pi: ExtensionAPI) {
 		description: "인사 메시지 표시",
 		handler: async (args, ctx) => {
 			const name = args?.trim() || "세계";
-			ctx.ui.notify(`👋 안녕하세요, ${name}!`, "success");
+			ctx.ui.notify(`👋 안녕하세요, ${name}!`, "info");
 		},
 	});
 }
