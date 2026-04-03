@@ -5,36 +5,90 @@
   },
   "formatter": {
     "indentStyle": "space",
-    "indentWidth": 2
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "arrowParentheses": "always",
+      "bracketSpacing": true,
+      "bracketSameLine": false,
+      "quoteProperties": "asNeeded"
+    }
   },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
       "complexity": {
-        "recommended": true
+        "recommended": true,
+        "noForEach": "error",
+        "noUselessCatch": "error",
+        "noUselessConstructor": "error",
+        "noUselessRename": "error",
+        "noUselessSwitchCase": "error",
+        "noUselessTernary": "error",
+        "noUselessTypeConstraint": "error",
+        "noVoid": "error",
+        "useArrowFunction": "error",
+        "useFlatMap": "error",
+        "useOptionalChain": "error"
       },
       "correctness": {
         "recommended": true,
         "noUnusedImports": "error",
         "noUnusedVariables": "error",
-        "noUnusedFunctionParameters": "error"
+        "noUnusedFunctionParameters": "error",
+        "noUnusedPrivateClassMembers": "error",
+        "noSelfAssign": "error",
+        "noSwitchDeclarations": "error",
+        "noUnsafeFinally": "error",
+        "noUnsafeOptionalChaining": "error",
+        "useIsNan": "error"
       },
       "performance": {
-        "recommended": true
+        "recommended": true,
+        "noAccumulatingSpread": "error",
+        "noDelete": "error"
       },
       "security": {
-        "recommended": true
+        "recommended": true,
+        "noGlobalEval": "error"
       },
       "style": {
         "recommended": true,
         "useConst": "error",
         "useExportType": "error",
-        "useImportType": "error"
+        "useImportType": "error",
+        "useTemplate": "error",
+        "useShorthandAssign": "error",
+        "useSelfClosingElements": "error",
+        "useSingleVarDeclarator": "error",
+        "useNumberNamespace": "error",
+        "useNodejsImportProtocol": "error",
+        "useExponentiationOperator": "error",
+        "useDefaultParameterLast": "error",
+        "useForOf": "error"
       },
       "suspicious": {
         "recommended": true,
-        "noExplicitAny": "error"
+        "noExplicitAny": "error",
+        "noDoubleEquals": "error",
+        "noShadowRestrictedNames": "error",
+        "noRedeclare": "error",
+        "noDebugger": "error",
+        "noConsole": "warn",
+        "noVar": "error",
+        "noEmptyBlockStatements": "error",
+        "noConfusingVoidType": "error",
+        "noAssignInExpressions": "error",
+        "noAsyncPromiseExecutor": "error",
+        "noFallthroughSwitchClause": "error",
+        "noImplicitAnyLet": "error"
       }
     }
   }
