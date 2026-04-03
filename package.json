@@ -2,7 +2,7 @@
   "name": "@jeonghyeon-net/pi",
   "private": true,
   "scripts": {
-    "test": "go run tests/extensions_directory_structure.go ."
+    "test": "for f in tests/*.go; do go run \"$f\" . || exit 1; done"
   },
   "devDependencies": {
     "@mariozechner/pi-ai": "^0.64.0",
