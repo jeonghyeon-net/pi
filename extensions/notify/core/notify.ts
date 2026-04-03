@@ -8,7 +8,7 @@ function notifyOSC99(title: string, body: string): void {
 }
 
 export function notify(title: string, body: string): void {
-  if (process.env["KITTY_WINDOW_ID"]) {
+  if (process.env.KITTY_WINDOW_ID) {
     notifyOSC99(title, body);
   } else {
     notifyOSC777(title, body);

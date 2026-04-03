@@ -36,7 +36,8 @@
         "noVoid": "error",
         "useArrowFunction": "error",
         "useFlatMap": "error",
-        "useOptionalChain": "error"
+        "useOptionalChain": "error",
+        "useLiteralKeys": "error"
       },
       "correctness": {
         "recommended": true,
@@ -88,7 +89,7 @@
         "noShadowRestrictedNames": "error",
         "noRedeclare": "error",
         "noDebugger": "error",
-        "noConsole": "warn",
+        "noConsole": "error",
         "noVar": "error",
         "noEmptyBlockStatements": "error",
         "noConfusingVoidType": "error",
