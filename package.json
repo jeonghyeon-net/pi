@@ -2,7 +2,7 @@
   "name": "@jeonghyeon-net/pi",
   "private": true,
   "scripts": {
-    "test": "go test ./tests/..."
+    "test": "go test ./..."
   },
   "devDependencies": {
     "@mariozechner/pi-ai": "^0.64.0",
