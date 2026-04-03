@@ -1,5 +1,5 @@
 {
-  "name": "my-pi-extensions",
+  "name": "@jeonghyeon-net/pi",
   "version": "0.1.0",
   "private": true,
   "keywords": ["pi-package"],
