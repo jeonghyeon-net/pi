@@ -19,8 +19,6 @@
   PROMPTS
     (none)
 
-  THEMES
-    (none)
 
   REQUIRES
     node >= 20.6.0
