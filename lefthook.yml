@@ -1,10 +1,10 @@
 pre-commit:
   commands:
     format:
-      run: mise exec -- biome format --write && git add -u
+      run: mise exec -- npm run format && git add -u
     lint:
-      run: mise exec -- biome check
+      run: mise exec -- npm run lint
     typecheck:
-      run: mise exec -- npx tsc --noEmit
+      run: mise exec -- npm run typecheck
     test:
-      run: mise exec -- go test ./...
+      run: mise exec -- npm test
