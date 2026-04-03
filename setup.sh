@@ -13,3 +13,4 @@ command -v mise >/dev/null || {
 
 mise trust
 mise install
+npm install
