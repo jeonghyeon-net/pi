@@ -282,19 +282,80 @@ describe("getLatestActivityPreview", () => {
     assert.equal(getLatestActivityPreview([]), undefined);
   });
 
-  it("returns tool call preview for last toolCall item", () => {
+  it("formats bash tool call with $ prefix", () => {
     const messages = [
       makeAssistantMessage([
         { type: "toolCall", id: "t1", name: "bash", arguments: { command: "ls -la" } },
       ]),
     ];
-    const result = getLatestActivityPreview(messages);
-    assert.ok(result);
-    assert.ok(result.startsWith("→ bash "));
-    assert.ok(result.includes("command"));
+    assert.equal(getLatestActivityPreview(messages), "→ $ ls -la");
   });
 
-  it("truncates long tool call args", () => {
+  it("formats read tool call with path", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "read", arguments: { file_path: "/tmp/foo.ts" } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ read /tmp/foo.ts");
+  });
+
+  it("formats read with offset/limit", () => {
+    const messages = [
+      makeAssistantMessage([
+        {
+          type: "toolCall",
+          id: "t1",
+          name: "read",
+          arguments: { path: "/tmp/f.ts", offset: 10, limit: 20 },
+        },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ read /tmp/f.ts:10-29");
+  });
+
+  it("formats write tool call with line count", () => {
+    const messages = [
+      makeAssistantMessage([
+        {
+          type: "toolCall",
+          id: "t1",
+          name: "write",
+          arguments: { file_path: "/tmp/f.ts", content: "a\nb\nc" },
+        },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ write /tmp/f.ts (3 lines)");
+  });
+
+  it("formats edit tool call", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "edit", arguments: { file_path: "/tmp/f.ts" } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ edit /tmp/f.ts");
+  });
+
+  it("formats ls tool call", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "ls", arguments: { path: "/tmp" } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ ls /tmp");
+  });
+
+  it("formats default tool with JSON args", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "custom", arguments: { key: "val" } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), '→ custom {"key":"val"}');
+  });
+
+  it("truncates long default tool args", () => {
     const longArgs: Record<string, unknown> = { data: "x".repeat(100) };
     const messages = [
       makeAssistantMessage([{ type: "toolCall", id: "t1", name: "custom", arguments: longArgs }]),
@@ -302,6 +363,139 @@ describe("getLatestActivityPreview", () => {
     const result = getLatestActivityPreview(messages);
     assert.ok(result);
     assert.ok(result.endsWith("..."));
+  });
+
+  it("shortens home directory paths", () => {
+    const home = process.env.HOME ?? "/Users/test";
+    const messages = [
+      makeAssistantMessage([
+        {
+          type: "toolCall",
+          id: "t1",
+          name: "read",
+          arguments: { file_path: `${home}/project/file.ts` },
+        },
+      ]),
+    ];
+    const result = getLatestActivityPreview(messages);
+    assert.ok(result);
+    assert.ok(result.includes("~/project/file.ts"));
+  });
+
+  it("uses ... for missing path args", () => {
+    const messages = [
+      makeAssistantMessage([{ type: "toolCall", id: "t1", name: "read", arguments: {} }]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ read ...");
+  });
+
+  it("formats bash with long command truncation", () => {
+    const longCmd = "a".repeat(80);
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "bash", arguments: { command: longCmd } },
+      ]),
+    ];
+    const result = getLatestActivityPreview(messages);
+    assert.ok(result);
+    assert.ok(result.endsWith("..."));
+    assert.ok(result.length < 80);
+  });
+
+  it("formats bash with missing command", () => {
+    const messages = [
+      makeAssistantMessage([{ type: "toolCall", id: "t1", name: "bash", arguments: {} }]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ $ ...");
+  });
+
+  it("formats read with offset only (no limit)", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "read", arguments: { path: "/f.ts", offset: 5 } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ read /f.ts:5");
+  });
+
+  it("formats read with limit only (no offset)", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "read", arguments: { path: "/f.ts", limit: 10 } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ read /f.ts:1-10");
+  });
+
+  it("formats write single line", () => {
+    const messages = [
+      makeAssistantMessage([
+        {
+          type: "toolCall",
+          id: "t1",
+          name: "write",
+          arguments: { path: "/f.ts", content: "single" },
+        },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ write /f.ts");
+  });
+
+  it("formats write with no content", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "write", arguments: { path: "/f.ts" } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ write /f.ts");
+  });
+
+  it("formats ls with default path", () => {
+    const messages = [
+      makeAssistantMessage([{ type: "toolCall", id: "t1", name: "ls", arguments: {} }]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ ls .");
+  });
+
+  it("shortenPath handles null value", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "edit", arguments: { file_path: null } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ edit ...");
+  });
+
+  it("shortenPath handles numeric value via JSON.stringify", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "edit", arguments: { file_path: 42 } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ edit 42");
+  });
+
+  it("shortenPath handles non-string value via String()", () => {
+    const messages = [
+      makeAssistantMessage([
+        { type: "toolCall", id: "t1", name: "edit", arguments: { file_path: 42 } },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ edit 42");
+  });
+
+  it("write falls back to path when file_path missing", () => {
+    const messages = [
+      makeAssistantMessage([
+        {
+          type: "toolCall",
+          id: "t1",
+          name: "write",
+          arguments: { path: "/alt.ts", content: "a\nb" },
+        },
+      ]),
+    ];
+    assert.equal(getLatestActivityPreview(messages), "→ write /alt.ts (2 lines)");
   });
 
   it("returns text preview for last text item", () => {
@@ -423,7 +617,7 @@ describe("updateRunFromResult", () => {
 
     updateRunFromResult(state, result);
 
-    assert.ok(state.lastLine.startsWith("→ bash "));
+    assert.equal(state.lastLine, "→ $ ls");
   });
 
   it("uses liveText for lastLine when no preview from messages", () => {
