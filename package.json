@@ -1,8 +1,11 @@
 {
   "name": "@jeonghyeon-net/pi",
+  "type": "module",
   "private": true,
   "scripts": {
     "test": "go test ./...",
+    "test:subagent": "c8 --100 --include='extensions/subagent/**/*.ts' --exclude='extensions/subagent/__tests__/**' tsx --test extensions/subagent/__tests__/*.test.ts",
+    "test:all": "npm run test:subagent",
     "lint": "biome check",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write"
@@ -12,6 +15,8 @@
     "@mariozechner/pi-coding-agent": "^0.64.0",
     "@mariozechner/pi-tui": "^0.64.0",
     "@sinclair/typebox": "^0.34.49",
+    "c8": "^11.0.0",
+    "tsx": "^4.19.4",
     "typescript": "^6.0.2"
   }
 }

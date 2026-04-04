@@ -11,8 +11,11 @@
     pi update
 
   EXTENSIONS
+    delayed-action ···· 지정 시간 후 작업을 자동 실행하는 리마인더
     notify ···· 작업 완료 시 터미널 알림
     subagent ···· 하위 에이전트 위임 실행 레이어
+    todo-write ···· 코딩 세션 할 일 목록 관리 및 진행 표시
+    until ···· 조건 충족까지 주기적 반복 실행
 
   SKILLS
     (none)

@@ -9,3 +9,8 @@ pre-commit:
       run: mise exec -- npm run typecheck
     test:
       run: mise exec -- npm test
+    test-coverage:
+      run: mise exec -- npm run test:all
+    no-bypass:
+      run: |
+        ! grep -rn '@ts-nocheck\|biome-ignore\|c8 ignore\|as any[^A-Za-z]' extensions/ --include='*.ts' | grep -v node_modules | grep -v __tests__

@@ -2,3 +2,4 @@ node_modules/
 .pi/
 .DS_Store
 *.log
+coverage/

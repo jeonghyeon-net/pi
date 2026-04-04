@@ -1,11 +1,8 @@
-// @ts-nocheck — forked from Jonghakseo/my-pi
 /**
  * Shared state store for the Subagent extension.
- * Merges: store.ts
  */
 
 import type { Message } from "@mariozechner/pi-ai";
-import { formatToolCallPlain, truncateText } from "./format.js";
 import type {
   BatchGroupState,
   CommandRunState,
@@ -14,8 +11,6 @@ import type {
   PipelineState,
   SingleResult,
 } from "./types.js";
-
-export { truncateText };
 
 export interface SubagentStore {
   commandRuns: Map<number, CommandRunState>;
@@ -83,8 +78,7 @@ export function getFinalOutput(messages: Message[]): string {
     const msg = messages[i];
     if (msg?.role === "assistant") {
       for (const part of msg.content) {
-        if (typeof part !== "string" && part.type === "thinking" && (part as any).thinking)
-          return (part as any).thinking;
+        if (part.type === "thinking" && part.thinking) return part.thinking;
       }
     }
   }
@@ -103,10 +97,13 @@ export function getLastNonEmptyLine(text: string): string {
 
 export function getLatestActivityPreview(messages: Message[]): string | undefined {
   const items = getDisplayItems(messages);
-  if (items.length === 0) return undefined;
-  const lastItem = items[items.length - 1];
+  const lastItem = items.at(-1);
   if (!lastItem) return undefined;
-  if (lastItem.type === "toolCall") return `→ ${formatToolCallPlain(lastItem.name, lastItem.args)}`;
+  if (lastItem.type === "toolCall") {
+    const args = JSON.stringify(lastItem.args);
+    const preview = args.length > 50 ? `${args.slice(0, 50)}...` : args;
+    return `→ ${lastItem.name} ${preview}`;
+  }
   const line = getLastNonEmptyLine(lastItem.text);
   return line || undefined;
 }

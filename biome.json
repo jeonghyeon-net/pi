@@ -20,13 +20,7 @@
       "quoteProperties": "asNeeded"
     }
   },
-  "overrides": [
-    {
-      "includes": ["extensions/subagent/core/**"],
-      "linter": { "enabled": false },
-      "formatter": { "enabled": false }
-    }
-  ],
+  "overrides": [],
   "linter": {
     "enabled": true,
     "rules": {
