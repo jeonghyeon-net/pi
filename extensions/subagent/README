@@ -1,0 +1,10 @@
+Subagent — 하위 에이전트 위임 실행 레이어
+
+메인 에이전트가 직접 처리하지 않을 일을 별도 pi 프로세스로 넘기고
+완료되면 follow-up으로 결과를 돌려준다.
+
+실행 모드: single, batch, chain
+사용자 명령: /sub:isolate, /sub:main, /subagents, /sub:open 등
+빠른 입력: >>, >>>, #<runId>, <>, ><, <<, <<<
+
+포크 원본: github.com/Jonghakseo/my-pi/extensions/subagent

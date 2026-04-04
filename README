@@ -12,6 +12,7 @@
 
   EXTENSIONS
     notify ···· 작업 완료 시 터미널 알림
+    subagent ···· 하위 에이전트 위임 실행 레이어
 
   SKILLS
     (none)
