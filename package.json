@@ -5,7 +5,10 @@
   "scripts": {
     "test": "go test ./...",
     "test:subagent": "c8 --100 --include='extensions/subagent/**/*.ts' --exclude='extensions/subagent/__tests__/**' tsx --test extensions/subagent/__tests__/*.test.ts",
-    "test:all": "npm run test:subagent",
+    "test:claude-mcp-bridge": "c8 --100 --include='extensions/claude-mcp-bridge/core/tool-naming.ts' --include='extensions/claude-mcp-bridge/core/payload.ts' --include='extensions/claude-mcp-bridge/core/schema.ts' --include='extensions/claude-mcp-bridge/core/visibility.ts' --include='extensions/claude-mcp-bridge/core/config.ts' tsx --test extensions/claude-mcp-bridge/__tests__/*.test.ts",
+    "test:claude-hooks-bridge": "c8 --include='extensions/claude-hooks-bridge/core/decision.ts' --include='extensions/claude-hooks-bridge/core/matcher.ts' --include='extensions/claude-hooks-bridge/core/normalize.ts' --include='extensions/claude-hooks-bridge/core/types.ts' --include='extensions/claude-hooks-bridge/core/settings.ts' --include='extensions/claude-hooks-bridge/core/transcript.ts' --exclude='extensions/claude-hooks-bridge/__tests__/**' tsx --test extensions/claude-hooks-bridge/__tests__/*.test.ts",
+    "test:cross-agent": "c8 --100 --include='extensions/cross-agent/core/**' --exclude='extensions/cross-agent/__tests__/**' tsx --test extensions/cross-agent/__tests__/*.test.ts",
+    "test:all": "npm run test:subagent && npm run test:claude-mcp-bridge && npm run test:claude-hooks-bridge && npm run test:cross-agent",
     "lint": "biome check",
     "typecheck": "tsc --noEmit",
     "format": "biome format --write"

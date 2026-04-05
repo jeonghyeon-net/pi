@@ -9,10 +9,10 @@ interface McpToolResultDetails {
   tool: string;
   cancelled?: boolean;
   disabled?: boolean;
-  raw?: unknown;
+  raw?: unknown | undefined;
   payloadTruncated?: boolean;
   payloadOriginalLength?: number;
-  payloadFilePath?: string;
+  payloadFilePath?: string | undefined;
   isError?: boolean;
   error?: string;
   status?: string;
@@ -105,12 +105,12 @@ export async function executeMcpToolCall(args: ExecuteMcpToolCallArgs): Promise<
     const details: McpToolResultDetails = {
       server: serverName,
       tool: tool.name,
+      raw: prepared.truncated ? undefined : result,
       payloadTruncated: prepared.truncated,
       payloadOriginalLength: prepared.originalLength,
+      payloadFilePath: prepared.fullPayloadPath,
       isError: Boolean(rawFromResult),
     };
-    if (!prepared.truncated) details.raw = result;
-    if (prepared.fullPayloadPath) details.payloadFilePath = prepared.fullPayloadPath;
     return {
       content: buildMcpToolResultContent(formatted, prepared),
       details,

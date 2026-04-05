@@ -59,6 +59,8 @@ export async function setupClaudeMcpBridge(pi: ExtensionAPI): Promise<void> {
     return loaded;
   };
 
+  // IMPORTANT: register MCP tools during extension load so pi includes them in tool registry.
+  // NOTE(user-approved): 초기 연결 실패 시 재시도/도구 재등록 강화는 현재 동작을 유지한다.
   await loadAndConnect(process.cwd());
 
   pi.on("session_start", async (_event, ctx) => {
