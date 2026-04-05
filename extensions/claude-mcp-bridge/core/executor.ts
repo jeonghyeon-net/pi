@@ -28,8 +28,6 @@ const ARG_SUMMARY_TRUNCATE_AT = 77;
 
 function summarizeToolCallArgs(args: Record<string, unknown>, theme: Theme): string {
   const entries = Object.entries(args).filter(([, value]) => value !== undefined && value !== null);
-  if (entries.length === 0) return "";
-
   const firstEntry = entries[0];
   if (!firstEntry) return "";
 

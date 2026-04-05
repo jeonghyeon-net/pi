@@ -2,6 +2,11 @@ import { spawn } from "node:child_process";
 import { parseJsonFromStdout } from "./decision.js";
 import type { HookExecResult, JsonRecord } from "./types.js";
 
+/** Convert an unknown thrown value to a printable message. */
+export function errorToMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function execCommandHook(
   command: string,
   cwd: string,
@@ -50,7 +55,7 @@ export function execCommandHook(
 
     child.on("error", (error) => {
       if (timeout) clearTimeout(timeout);
-      stderr += `\n${error instanceof Error ? error.message : String(error)}`;
+      stderr += `\n${errorToMessage(error)}`;
       finalize(1);
     });
 
@@ -63,7 +68,7 @@ export function execCommandHook(
       child.stdin.write(`${JSON.stringify(payload)}\n`);
       child.stdin.end();
     } catch (error) {
-      stderr += `\nstdin write failed: ${error instanceof Error ? error.message : String(error)}`;
+      stderr += `\nstdin write failed: ${errorToMessage(error)}`;
       finalize(1);
     }
   });

@@ -24,8 +24,9 @@ export function registerEventHandlers(deps: SubagentDeps): void {
     try {
       const entries: SessionEntry[] = ctx.sessionManager?.getEntries?.() ?? [];
       for (const entry of entries) {
-        if (isCustomEntry(entry) && entry.customType === PARENT_ENTRY_TYPE) {
-          latestParentData = entry.data as Record<string, unknown> | undefined;
+        if (!isCustomEntry(entry) || entry.customType !== PARENT_ENTRY_TYPE) continue;
+        if (typeof entry.data === "object" && entry.data !== null) {
+          latestParentData = entry.data as Record<string, unknown>;
         }
       }
     } catch {

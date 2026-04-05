@@ -56,8 +56,8 @@ export async function runHooks(
   const results: HookExecResult[] = [];
 
   for (const hook of hooks) {
-    const command = hook.command;
-    if (typeof command !== "string") continue;
+    // getCommandHooks() guarantees hook.command is a non-empty string.
+    const command = hook.command as string;
     const timeoutMs = convertHookTimeoutToMs(hook.timeout);
     const result = await execCommandHook(command, ctx.cwd, payload, timeoutMs);
     results.push(result);
