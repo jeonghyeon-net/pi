@@ -65,6 +65,27 @@ describe("diagnoseRetryableResult", () => {
     assert.equal(decision.retryable, false);
   });
 
+  it("extracts first line from multiline error message", () => {
+    const result = makeResult({
+      exitCode: 1,
+      errorMessage: "503 Service Unavailable\nserver overloaded\nplease retry",
+    });
+    const decision = diagnoseRetryableResult(result);
+    assert.ok(decision.retryable);
+    if (decision.retryable) assert.equal(decision.reason, "503 Service Unavailable");
+  });
+
+  it("uses stderr as reason when errorMessage is whitespace-only", () => {
+    const result = makeResult({
+      exitCode: 1,
+      errorMessage: "   ",
+      stderr: "ECONNRESET reset by peer",
+    });
+    const decision = diagnoseRetryableResult(result);
+    assert.ok(decision.retryable);
+    if (decision.retryable) assert.equal(decision.reason, "ECONNRESET reset by peer");
+  });
+
   it("not retryable for successful result with output", () => {
     const result = makeResultWithTextOutput("All done!");
     const decision = diagnoseRetryableResult(result);
@@ -315,6 +336,25 @@ describe("invokeWithAutoRetry", () => {
     assert.equal(callCount, 3);
     assert.equal(retryCount, 2);
     assert.equal(r.exitCode, 1);
+  });
+
+  it("uses max delay tier for retry index >= 2", async () => {
+    let callCount = 0;
+    const delays: number[] = [];
+
+    await invokeWithAutoRetry({
+      invoke: async () => {
+        callCount++;
+        return makeResult({ exitCode: 1, errorMessage: "503 Service Unavailable" });
+      },
+      maxRetries: 3,
+      onRetryScheduled: async (info) => {
+        delays.push(info.delayMs);
+      },
+    });
+    // 3 retries exercise all tiers: 2000, 5000, 10000
+    assert.equal(callCount, 4);
+    assert.deepStrictEqual(delays, [2_000, 5_000, 10_000]);
   });
 
   it("does not retry non-retryable result", async () => {

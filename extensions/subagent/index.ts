@@ -7,6 +7,7 @@ import { registerCommands } from "./register/commands.js";
 import { registerEventHandlers } from "./register/events.js";
 import { registerInputHandlers } from "./register/input.js";
 import { registerTools } from "./register/tools.js";
+import { stopSpinnerTimer } from "./ui/widget.js";
 
 export default function (pi: ExtensionAPI) {
   const store = createStore();
@@ -21,5 +22,6 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async () => {
     clearInterval(hangCheckTimer);
+    stopSpinnerTimer();
   });
 }

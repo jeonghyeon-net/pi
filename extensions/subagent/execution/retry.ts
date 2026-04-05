@@ -2,16 +2,14 @@ import { getFinalOutput } from "../core/store.js";
 import type { SingleResult } from "../core/types.js";
 
 export const MAX_SUBAGENT_AUTO_RETRIES = 3;
-const RETRY_DELAYS_MS = [2_000, 5_000, 10_000] as const;
 
 function getRetryDelay(retryIndex: number): number {
-  return RETRY_DELAYS_MS[Math.min(retryIndex, RETRY_DELAYS_MS.length - 1)] as number;
+  if (retryIndex <= 0) return 2_000;
+  if (retryIndex === 1) return 5_000;
+  return 10_000;
 }
 
-export interface RetryDecision {
-  retryable: boolean;
-  reason?: string;
-}
+export type RetryDecision = { retryable: true; reason: string } | { retryable: false };
 
 export interface RetryScheduleInfo {
   retryIndex: number;
@@ -81,11 +79,11 @@ export function diagnoseRetryableResult(result: SingleResult): RetryDecision {
   if (!failureText) return { retryable: false };
   if (!matchesTransientPattern(failureText)) return { retryable: false };
 
-  const firstLine = failureText
-    .split("\n")
-    .map((line) => line.trim())
-    .find(Boolean) as string;
-  return { retryable: true, reason: firstLine };
+  // buildFailureText filters empty/whitespace-only segments and trims each,
+  // so the first character of failureText is guaranteed non-whitespace.
+  const newlineIdx = failureText.indexOf("\n");
+  const reason = newlineIdx === -1 ? failureText : failureText.slice(0, newlineIdx);
+  return { retryable: true, reason };
 }
 
 export function diagnoseRetryableError(error: unknown): RetryDecision {
@@ -139,7 +137,7 @@ export async function invokeWithAutoRetry({
         retryIndex: retryCount,
         maxRetries,
         delayMs,
-        reason: retryDecision.reason as string,
+        reason: retryDecision.reason,
       });
       await waitWithAbort(delayMs, signal);
     } catch (error) {
@@ -153,7 +151,7 @@ export async function invokeWithAutoRetry({
         retryIndex: retryCount,
         maxRetries,
         delayMs,
-        reason: retryDecision.reason as string,
+        reason: retryDecision.reason,
       });
       await waitWithAbort(delayMs, signal);
     }

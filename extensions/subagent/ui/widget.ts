@@ -139,6 +139,14 @@ function manageSpinnerTimer(store: SubagentStore): void {
   }
 }
 
+/** Stops the spinner timer if running. Called on extension shutdown. */
+export function stopSpinnerTimer(): void {
+  if (spinnerTimer) {
+    clearInterval(spinnerTimer);
+    spinnerTimer = undefined;
+  }
+}
+
 export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRenderCtx): void {
   const activeCtx = ctx ?? (store.commandWidgetCtx as WidgetRenderCtx | null);
   if (!activeCtx?.hasUI || !activeCtx.ui) return;

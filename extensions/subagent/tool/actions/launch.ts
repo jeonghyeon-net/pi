@@ -74,7 +74,8 @@ export function handleLaunchAction(
     }
   }
 
-  const resolvedAgent = (params.agent ?? continueFromRun?.agent ?? "worker") as string;
+  const paramAgent = typeof params.agent === "string" ? params.agent : undefined;
+  const resolvedAgent = paramAgent ?? continueFromRun?.agent ?? "worker";
   const rawTask = typeof params.task === "string" ? params.task : "";
   if (!rawTask.trim()) {
     return {

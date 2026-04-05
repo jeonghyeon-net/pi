@@ -3,7 +3,7 @@ import { afterEach, describe, it } from "node:test";
 import { createStore } from "../core/store.js";
 import type { CommandRunState } from "../core/types.js";
 import type { WidgetRenderCtx } from "../ui/widget.js";
-import { toWidgetCtx, updateCommandRunsWidget } from "../ui/widget.js";
+import { stopSpinnerTimer, toWidgetCtx, updateCommandRunsWidget } from "../ui/widget.js";
 
 function makeRunState(overrides: Partial<CommandRunState> = {}): CommandRunState {
   return {
@@ -933,6 +933,20 @@ describe("manageSpinnerTimer (indirect)", () => {
     // Stop again
     store.commandRuns.clear();
     updateCommandRunsWidget(store, ctx);
+  });
+
+  it("stopSpinnerTimer clears an active timer", () => {
+    const store = createStore();
+    store.commandRuns.set(1, makeRunState({ id: 1, status: "running" }));
+    const { ctx } = createMockCtx();
+    updateCommandRunsWidget(store, ctx);
+    stopSpinnerTimer();
+    // Second call is no-op
+    stopSpinnerTimer();
+  });
+
+  it("stopSpinnerTimer is no-op when no timer is active", () => {
+    stopSpinnerTimer();
   });
 
   it("handles run with empty task", () => {
