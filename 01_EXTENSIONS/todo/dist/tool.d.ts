@@ -1,4 +1,6 @@
-export declare const todoTool: {
+import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { type Persister } from "./widget.js";
+export declare function createTodoTool(pi: Persister): {
     name: string;
     label: string;
     description: string;
@@ -7,11 +9,11 @@ export declare const todoTool: {
         text: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TString>;
         id: import("@sinclair/typebox").TOptional<import("@sinclair/typebox").TNumber>;
     }>;
-    execute: (_toolCallId: string, params: {
+    execute(_toolCallId: string, params: {
         action: string;
         text?: string;
         id?: number;
-    }) => Promise<{
+    }, _signal: unknown, _onUpdate: unknown, ctx: ExtensionContext): Promise<{
         content: {
             type: "text";
             text: string;

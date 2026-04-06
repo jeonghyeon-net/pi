@@ -11,11 +11,3 @@ export function formatSummary(state) {
     ];
     return lines.join("\n");
 }
-export function formatWidgetLines(state) {
-    if (state.todos.length === 0)
-        return [];
-    return state.todos.map((t) => {
-        const marker = t.done ? "✓" : "○";
-        return `${marker} #${t.id} ${t.text}`;
-    });
-}
