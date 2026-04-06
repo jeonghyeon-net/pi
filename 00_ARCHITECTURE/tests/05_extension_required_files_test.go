@@ -12,8 +12,10 @@ var extensionRequiredFiles = []string{
 	"biome.json",
 	".gitignore",
 	"README",
+	"vitest.config.ts",
 	"src/index.ts",
 	"dist/index.js",
+	"tests",
 }
 
 func TestExtension_RequiredFiles(t *testing.T) {

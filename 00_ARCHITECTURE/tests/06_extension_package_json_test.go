@@ -26,12 +26,16 @@ func TestExtension_PackageJSON_PiExtensions(t *testing.T) {
 				Pi struct {
 					Extensions []string `json:"extensions"`
 				} `json:"pi"`
+				Scripts map[string]string `json:"scripts"`
 			}
 			if err := json.Unmarshal(data, &pkg); err != nil {
 				t.Fatalf("package.json 파싱 실패: %v", err)
 			}
 			if len(pkg.Pi.Extensions) != 1 || pkg.Pi.Extensions[0] != "dist/index.js" {
 				t.Errorf("pi.extensions는 [\"dist/index.js\"]여야 함, 실제: %v", pkg.Pi.Extensions)
+			}
+			if _, ok := pkg.Scripts["test"]; !ok {
+				t.Errorf("scripts.test 필드 누락")
 			}
 		})
 	}
