@@ -1,6 +1,6 @@
 import type { Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 export type { ThemeColor };
-type ThemeBg = Parameters<Theme["bg"]>[0];
+export type ThemeBg = Parameters<Theme["bg"]>[0];
 export declare const BAR_WIDTH = 10;
 export declare const DIRTY_CHECK_INTERVAL_MS = 3000;
 export declare const NAME_STATUS_KEY = "session-name";

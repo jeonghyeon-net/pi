@@ -1,8 +1,8 @@
 import { truncateToWidth } from "@mariozechner/pi-tui";
 import { DIRTY_CHECK_INTERVAL_MS } from "./types.js";
-import { defaultExec, getRepoName, hasUncommittedChanges, styleStatus } from "./utils.js";
+import { getRepoName, hasUncommittedChanges, styleStatus } from "./utils.js";
 import { buildFooterLineParts } from "./build.js";
-export function installFooter(ctx, exec = defaultExec) {
+export function installFooter(ctx, exec) {
     if (!ctx.hasUI)
         return;
     ctx.ui.setFooter((tui, theme, footerData) => {

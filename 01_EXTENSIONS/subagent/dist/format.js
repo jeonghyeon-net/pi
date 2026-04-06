@@ -1,0 +1,16 @@
+export function formatTokens(n) {
+    if (n >= 1_000_000)
+        return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)
+        return `${(n / 1_000).toFixed(1)}k`;
+    return String(n);
+}
+export function formatUsage(stats) {
+    return `${formatTokens(stats.inputTokens)} in / ${formatTokens(stats.outputTokens)} out / ${stats.turns} turns`;
+}
+export function formatDuration(ms) {
+    const sec = Math.floor(ms / 1000);
+    if (sec < 60)
+        return `${sec}s`;
+    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
+}

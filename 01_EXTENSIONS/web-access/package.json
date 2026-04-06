@@ -1,0 +1,22 @@
+{
+  "pi": {
+    "extensions": ["dist/index.js"]
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.5.0",
+    "linkedom": "^0.18.0",
+    "turndown": "^7.2.0"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "^0.34.0",
+    "@types/turndown": "^5.0.5",
+    "@vitest/coverage-v8": "^3.1.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  }
+}

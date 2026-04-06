@@ -13,6 +13,7 @@ var rootAllowed = map[string]bool{
 	"02_SKILLS":        true,
 	"03_PROMPTS":       true,
 	"04_THEMES":        true,
+	"docs":             true,
 	"lefthook.yml":     true,
 	"package.json":     true,
 	"README":           true,

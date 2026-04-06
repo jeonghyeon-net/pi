@@ -1,20 +1,66 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { buildWidgetLines } from "../src/widget.js";
-import { addTodo, clearTodos } from "../src/state.js";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { syncWidget, cleanupWidget, setAgentRunning, incrementTurn } from "../src/widget.js";
+import { addTodo, clearTodos, toggleTodo } from "../src/state.js";
 
-describe("widget", () => {
+function stubCtx() {
+	return {
+		hasUI: true,
+		ui: { setWidget: vi.fn() },
+	};
+}
+
+function stubPi() {
+	return { appendEntry: vi.fn() };
+}
+
+describe("syncWidget", () => {
 	beforeEach(() => {
 		clearTodos();
+		cleanupWidget(stubCtx());
 	});
 
-	it("empty when no todos", () => {
-		expect(buildWidgetLines()).toEqual([]);
+	it("clears widget when no todos", () => {
+		const ctx = stubCtx();
+		syncWidget(ctx);
+		expect(ctx.ui.setWidget).toHaveBeenCalledWith("todo", undefined);
 	});
 
-	it("returns lines for todos", () => {
+	it("sets widget factory when todos exist", () => {
 		addTodo("task");
-		const lines = buildWidgetLines();
-		expect(lines).toHaveLength(1);
-		expect(lines[0]).toContain("task");
+		const ctx = stubCtx();
+		syncWidget(ctx);
+		expect(ctx.ui.setWidget).toHaveBeenCalledWith("todo", expect.any(Function));
+	});
+
+	it("skips when hasUI is false", () => {
+		addTodo("task");
+		const ctx = { hasUI: false, ui: { setWidget: vi.fn() } };
+		syncWidget(ctx);
+		expect(ctx.ui.setWidget).not.toHaveBeenCalled();
+	});
+
+	it("hides and clears state after enough turns when all done", () => {
+		addTodo("task");
+		toggleTodo(1);
+		const pi = stubPi();
+		const ctx = stubCtx();
+		syncWidget(ctx, pi);
+		expect(ctx.ui.setWidget).toHaveBeenCalledWith("todo", expect.any(Function));
+
+		incrementTurn();
+		incrementTurn();
+		const ctx2 = stubCtx();
+		syncWidget(ctx2, pi);
+		expect(ctx2.ui.setWidget).toHaveBeenCalledWith("todo", undefined);
+		expect(pi.appendEntry).toHaveBeenCalledWith("todo-state", expect.objectContaining({ todos: [] }));
+	});
+
+	it("cleanupWidget resets all state", () => {
+		addTodo("task");
+		setAgentRunning(true);
+		incrementTurn();
+		const ctx = stubCtx();
+		cleanupWidget(ctx);
+		expect(ctx.ui.setWidget).toHaveBeenCalledWith("todo", undefined);
 	});
 });

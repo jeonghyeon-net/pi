@@ -13,11 +13,3 @@ export function formatSummary(state: TodoState): string {
 	];
 	return lines.join("\n");
 }
-
-export function formatWidgetLines(state: TodoState): string[] {
-	if (state.todos.length === 0) return [];
-	return state.todos.map((t) => {
-		const marker = t.done ? "✓" : "○";
-		return `${marker} #${t.id} ${t.text}`;
-	});
-}

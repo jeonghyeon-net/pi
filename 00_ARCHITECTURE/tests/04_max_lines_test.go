@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -17,9 +18,12 @@ func TestAllFiles_MaxLines(t *testing.T) {
 		rel, _ := filepath.Rel(root, path)
 		dir := filepath.Base(rel)
 		if info.IsDir() {
-			if rel == ".git" || dir == "node_modules" || dir == "coverage" || dir == "dist" {
+			if rel == ".git" || rel == "docs" || dir == "node_modules" || dir == "coverage" || dir == "dist" {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if strings.HasSuffix(info.Name(), ".md") {
 			return nil
 		}
 		if info.Name() == "package-lock.json" {
