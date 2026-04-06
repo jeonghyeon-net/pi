@@ -10,7 +10,7 @@ import { nextId, addRun, removeRun, listRuns } from "./store.js";
 import { addToHistory, sessionPath, type HistoryEvent } from "./session.js";
 import { MAX_RETRIES, RETRY_BASE_MS } from "./constants.js";
 import { spawnAndCollect } from "./spawn.js";
-import { syncWidget, setCurrentTool, clearToolState } from "./widget.js";
+import { syncWidget, setCurrentTool, clearToolState, startWidgetTimer, stopWidgetTimer } from "./widget.js";
 
 export interface DispatchCtx {
 	hasUI: boolean;
@@ -24,7 +24,7 @@ function makeOnEvent(id: number, ctx: DispatchCtx, collected: HistoryEvent[], te
 	return (evt: ParsedEvent) => {
 		collected.push({ type: evt.type, text: evt.text, toolName: evt.toolName });
 		if (evt.type === "tool_start") {
-			setCurrentTool(id, evt.toolName); syncWidget(ctx, listRuns());
+			setCurrentTool(id, evt.toolName, evt.toolName); syncWidget(ctx, listRuns());
 			texts.push(`→ ${evt.toolName ?? ""}`);
 			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
 		}
@@ -58,6 +58,7 @@ export function createRunner(
 		const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: promptPath, task, sessionPath: sessPath });
 		const ac = new AbortController();
 		addRun({ id, agent: agent.name, startedAt: Date.now(), abort: () => ac.abort() });
+		if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
 		const collected: HistoryEvent[] = [];
 		const texts: string[] = [];
 		const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
@@ -65,7 +66,7 @@ export function createRunner(
 			const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
 			addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessPath, events: collected });
 			return result;
-		} finally { clearToolState(id); removeRun(id); }
+		} finally { clearToolState(id); removeRun(id); if (listRuns().length === 0) stopWidgetTimer(); }
 	};
 }
 
@@ -82,6 +83,7 @@ export function createSessionRunner(
 		if (idx !== -1) args.splice(idx, 2);
 		const ac = new AbortController();
 		addRun({ id, agent: agent.name, startedAt: Date.now(), abort: () => ac.abort() });
+		if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
 		const collected: HistoryEvent[] = [];
 		const texts: string[] = [];
 		const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
@@ -89,6 +91,6 @@ export function createSessionRunner(
 			const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
 			addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessFile, events: collected });
 			return result;
-		} finally { clearToolState(id); removeRun(id); }
+		} finally { clearToolState(id); removeRun(id); if (listRuns().length === 0) stopWidgetTimer(); }
 	};
 }

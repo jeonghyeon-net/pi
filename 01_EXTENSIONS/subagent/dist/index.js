@@ -218,17 +218,36 @@ function formatDuration(ms) {
 
 // src/widget.ts
 var MAX_VISIBLE = 3;
+var SPINNER = "\u280B\u2819\u2839\u2838\u283C\u2834\u2826\u2827\u2807\u280F";
+var IDLE_THRESHOLD_MS = 12e4;
 var currentTools = /* @__PURE__ */ new Map();
-function setCurrentTool(runId, toolName) {
-  if (toolName) currentTools.set(runId, toolName);
-  else currentTools.delete(runId);
+var lastEventTime = /* @__PURE__ */ new Map();
+var frame = 0;
+var timerCtx;
+var timerRuns;
+var timerId;
+function setCurrentTool(runId, toolName, preview) {
+  lastEventTime.set(runId, Date.now());
+  if (toolName) {
+    const detail = preview ? `${toolName}: ${preview.slice(0, 30)}` : toolName;
+    currentTools.set(runId, detail);
+  } else {
+    currentTools.delete(runId);
+  }
 }
 function buildWidgetLines(runs, now) {
+  frame++;
+  const spin = SPINNER[frame % SPINNER.length];
   return runs.slice(0, MAX_VISIBLE).map((r) => {
     const elapsed = formatDuration(now - r.startedAt);
+    const lastEvt = lastEventTime.get(r.id) ?? r.startedAt;
+    const idle = now - lastEvt;
+    if (idle > IDLE_THRESHOLD_MS) {
+      return `\u26A0 ${r.agent} #${r.id} (${elapsed}) idle ${formatDuration(idle)}`;
+    }
     const tool = currentTools.get(r.id);
     const suffix = tool ? ` \u2192 ${tool}` : "";
-    return `\u27F3 ${r.agent} #${r.id} (${elapsed})${suffix}`;
+    return `${spin} ${r.agent} #${r.id} (${elapsed})${suffix}`;
   });
 }
 function syncWidget(ctx, runs) {
@@ -239,8 +258,25 @@ function syncWidget(ctx, runs) {
   }
   ctx.ui.setWidget("subagent-status", buildWidgetLines(runs, Date.now()), { placement: "belowEditor" });
 }
+function startWidgetTimer(ctx, getRuns) {
+  stopWidgetTimer();
+  timerCtx = ctx;
+  timerRuns = getRuns;
+  timerId = setInterval(() => {
+    if (timerCtx && timerRuns) syncWidget(timerCtx, timerRuns());
+  }, 150);
+}
+function stopWidgetTimer() {
+  if (timerId) {
+    clearInterval(timerId);
+    timerId = void 0;
+  }
+  timerCtx = void 0;
+  timerRuns = void 0;
+}
 function clearToolState(runId) {
   currentTools.delete(runId);
+  lastEventTime.delete(runId);
 }
 
 // src/run-factory.ts
@@ -403,7 +439,7 @@ function makeOnEvent(id, ctx, collected, texts, onUpdate) {
   return (evt) => {
     collected.push({ type: evt.type, text: evt.text, toolName: evt.toolName });
     if (evt.type === "tool_start") {
-      setCurrentTool(id, evt.toolName);
+      setCurrentTool(id, evt.toolName, evt.toolName);
       syncWidget(ctx, listRuns());
       texts.push(`\u2192 ${evt.toolName ?? ""}`);
       onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
@@ -439,6 +475,7 @@ ${mainCtx}`;
     const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: promptPath, task, sessionPath: sessPath });
     const ac = new AbortController();
     addRun({ id, agent: agent.name, startedAt: Date.now(), abort: () => ac.abort() });
+    if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
     const collected = [];
     const texts = [];
     const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
@@ -449,6 +486,7 @@ ${mainCtx}`;
     } finally {
       clearToolState(id);
       removeRun(id);
+      if (listRuns().length === 0) stopWidgetTimer();
     }
   };
 }
@@ -461,6 +499,7 @@ function createSessionRunner(sessFile, ctx, onUpdate) {
     if (idx !== -1) args.splice(idx, 2);
     const ac = new AbortController();
     addRun({ id, agent: agent.name, startedAt: Date.now(), abort: () => ac.abort() });
+    if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
     const collected = [];
     const texts = [];
     const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
@@ -471,6 +510,7 @@ function createSessionRunner(sessFile, ctx, onUpdate) {
     } finally {
       clearToolState(id);
       removeRun(id);
+      if (listRuns().length === 0) stopWidgetTimer();
     }
   };
 }
