@@ -1,16 +1,15 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { restoreFromEntries, buildEntry } from "./state.js";
-import { todoTool } from "./tool.js";
+import { onRestore, onBeforeAgentStart, onAgentStart, onAgentEnd, onMessageEnd, onCompact, onShutdown } from "./handlers.js";
+import { createTodoTool } from "./tool.js";
 
 export default function (pi: ExtensionAPI) {
-	pi.on("session_start", async (_event, ctx) => {
-		restoreFromEntries(ctx.sessionManager.getBranch());
-	});
-	pi.on("session_tree", async (_event, ctx) => {
-		restoreFromEntries(ctx.sessionManager.getBranch());
-	});
-	pi.on("agent_end", async () => {
-		pi.appendEntry("todo-state", buildEntry());
-	});
-	pi.registerTool(todoTool);
+	pi.on("session_start", onRestore(pi));
+	pi.on("session_tree", onRestore(pi));
+	pi.on("before_agent_start", onBeforeAgentStart());
+	pi.on("agent_start", onAgentStart(pi));
+	pi.on("agent_end", onAgentEnd(pi));
+	pi.on("message_end", onMessageEnd(pi));
+	pi.on("session_compact", onCompact(pi));
+	pi.on("session_shutdown", onShutdown());
+	pi.registerTool(createTodoTool(pi));
 }

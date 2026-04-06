@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatTodoLine, formatSummary, formatWidgetLines } from "../src/format.js";
+import { formatTodoLine, formatSummary } from "../src/format.js";
 
 describe("format", () => {
 	it("formats undone line", () => {
@@ -27,19 +27,4 @@ describe("format", () => {
 		expect(summary).toContain("[ ]");
 	});
 
-	it("formats empty widget", () => {
-		expect(formatWidgetLines({ todos: [], nextId: 1 })).toEqual([]);
-	});
-
-	it("formats widget lines", () => {
-		const lines = formatWidgetLines({
-			todos: [
-				{ id: 1, text: "a", done: false },
-				{ id: 2, text: "b", done: true },
-			],
-			nextId: 3,
-		});
-		expect(lines[0]).toContain("○");
-		expect(lines[1]).toContain("✓");
-	});
 });

@@ -1,10 +1,4 @@
 import type { ExecFn, FooterTheme } from "./types.js";
-export declare function defaultExec(command: string, args: string[], options?: {
-    cwd?: string;
-}): Promise<{
-    stdout: string;
-    code: number;
-}>;
 export declare function clamp(n: number, min: number, max: number): number;
 export declare function getFolderName(cwd: string): string;
 export declare function sanitizeStatusText(text: string): string;
