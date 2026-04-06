@@ -63,7 +63,7 @@ describe("createTool", () => {
 	});
 	it("batch command", async () => { expect((await exec("batch --agent scout --task find")).content[0].text).toContain("batch started"); });
 	it("chain command", async () => { expect((await exec("chain --agent scout --task find")).content[0].text).toContain("chain started"); });
-	it("continue command", async () => { expect((await exec("continue 1 -- more")).content[0].text).toContain("continue not yet implemented"); });
+	it("continue command returns error", async () => { const r = await exec("continue 1 -- more"); expect(r.content[0].text).toContain("not yet implemented"); expect(r.details.isError).toBe(true); });
 	it("result includes details", async () => {
 		const r = await exec("runs");
 		expect(r.details).toBeDefined();

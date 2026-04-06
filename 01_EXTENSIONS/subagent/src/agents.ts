@@ -34,6 +34,6 @@ export function loadAgentsFromDir(
 		.map((f: string) => loadAgentFromString(readFile(`${dir}/${f}`, "utf-8"), `${dir}/${f}`));
 }
 
-export function getAgent(name: string, agents: Pick<AgentConfig, "name">[]): typeof agents[number] | undefined {
+export function getAgent<T extends Pick<AgentConfig, "name">>(name: string, agents: T[]): T | undefined {
 	return agents.find((a) => a.name === name);
 }

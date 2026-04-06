@@ -20,15 +20,16 @@ export async function executeBatch(
 ): Promise<RunResult[]> {
 	const limit = opts.concurrency ?? MAX_CONCURRENCY;
 	const results: RunResult[] = [];
-	const pending: Promise<void>[] = [];
+	const pending = new Set<Promise<void>>();
 	for (const item of items) {
 		const agent = getAgent(item.agent, agents);
 		if (!agent) { results.push(errorResult(item.agent, `Unknown agent: ${item.agent}`)); continue; }
 		const p = opts.runner(agent as AgentConfig, item.task)
 			.then((r) => { results.push(r); })
-			.catch((e: Error) => { results.push(errorResult(item.agent, e.message)); });
-		pending.push(p);
-		if (pending.length >= limit) await Promise.race(pending);
+			.catch((e: Error) => { results.push(errorResult(item.agent, e.message)); })
+			.finally(() => { pending.delete(p); });
+		pending.add(p);
+		if (pending.size >= limit) await Promise.race(pending);
 	}
 	await Promise.all(pending);
 	return results;

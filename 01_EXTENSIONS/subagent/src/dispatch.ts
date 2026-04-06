@@ -56,15 +56,14 @@ function sendFollowUp(pi: SubagentPi, result: RunResult, customType = "subagent-
 
 export function dispatchRun(
 	agent: AgentConfig, task: string, pi: SubagentPi, ctx: DispatchCtx, main: boolean,
-): { id: number; text: string } {
+): { text: string } {
 	const runner = createRunner(main, ctx);
-	const id = listRuns().length + 1;
 	executeSingle(agent, task, { runner })
 		.then((r) => sendFollowUp(pi, r))
 		.catch((e: Error) => sendFollowUp(pi, { id: 0, agent: agent.name, output: "", error: e.message, usage: { inputTokens: 0, outputTokens: 0, turns: 0 } }))
 		.finally(() => syncWidget(ctx, listRuns()));
 	syncWidget(ctx, listRuns());
-	return { id, text: `${agent.name} started` };
+	return { text: `${agent.name} started` };
 }
 
 export function dispatchBatch(

@@ -35,12 +35,12 @@ function dispatch(cmd: Subcommand, agents: AgentConfig[], pi: SubagentPi, ctx: D
 	if (cmd.type === "run") {
 		const agent = getAgent(cmd.agent, agents);
 		if (!agent) return textResult(`Unknown agent: ${cmd.agent}`);
-		const { text } = dispatchRun(agent as AgentConfig, cmd.task, pi, ctx, cmd.main);
+		const { text } = dispatchRun(agent, cmd.task, pi, ctx, cmd.main);
 		return textResult(text);
 	}
 	if (cmd.type === "batch") return textResult(dispatchBatch(cmd.items, agents, pi, ctx, cmd.main));
 	if (cmd.type === "chain") return textResult(dispatchChain(cmd.steps, agents, pi, ctx, cmd.main));
-	return textResult(`continue not yet implemented for #${cmd.id}`);
+	return textResult(`continue not yet implemented for #${cmd.id}`, true);
 }
 
 export function createTool(pi: SubagentPi, agentsDir: string) {
