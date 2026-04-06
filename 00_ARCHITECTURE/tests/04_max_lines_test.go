@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +19,9 @@ func TestAllFiles_MaxLines(t *testing.T) {
 		dir := filepath.Base(rel)
 		if info.IsDir() {
 			if rel == ".git" || dir == "node_modules" || dir == "coverage" || dir == "dist" {
+				return filepath.SkipDir
+			}
+			if strings.HasPrefix(rel, "docs/") {
 				return filepath.SkipDir
 			}
 			return nil

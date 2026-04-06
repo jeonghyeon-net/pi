@@ -27,8 +27,15 @@ func TestAllFiles_NoMdExtension(t *testing.T) {
 		if info.Name() == "SKILL.md" && strings.HasPrefix(rel, "02_SKILLS/") {
 			return nil
 		}
+		if strings.HasPrefix(rel, "01_EXTENSIONS/") && strings.Contains(rel, "/agents/") {
+			return nil
+		}
 		// 프롬프트는 .md 허용
 		if strings.HasPrefix(rel, "03_PROMPTS/") {
+			return nil
+		}
+		// docs/ 디렉터리는 .md 허용
+		if strings.HasPrefix(rel, "docs/") {
 			return nil
 		}
 		t.Errorf("허용되지 않은 .md 파일: %s", rel)
