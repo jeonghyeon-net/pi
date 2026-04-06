@@ -5,7 +5,9 @@ export interface AgentConfig {
     name: string;
     description: string;
     model?: string;
+    /** Reasoning level passed as --thinking to pi CLI. Valid: off, minimal, low, medium, high, xhigh */
     thinking?: string;
+    /** Comma-separated in frontmatter. Available pi tools: read, bash, edit, write, grep, find, ls */
     tools?: string[];
     systemPrompt: string;
     filePath: string;

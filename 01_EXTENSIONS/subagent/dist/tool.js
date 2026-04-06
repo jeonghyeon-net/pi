@@ -23,7 +23,19 @@ function formatDetail(id) {
     const item = getRunHistory().find((r) => r.id === id);
     if (!item)
         return `Run #${id} not found`;
-    return `#${id} ${item.agent}\n${item.output ?? "(no output)"}`;
+    const parts = [`# ${item.agent} #${id}`];
+    if (item.events?.length) {
+        for (const evt of item.events) {
+            if (evt.type === "tool_start")
+                parts.push(`  → ${evt.toolName}`);
+            if (evt.type === "message" && evt.text)
+                parts.push(`  ${evt.text}`);
+        }
+    }
+    else {
+        parts.push(item.output ?? "(no output)");
+    }
+    return parts.join("\n");
 }
 function dispatch(cmd, agents, pi, ctx) {
     if (cmd.type === "runs")

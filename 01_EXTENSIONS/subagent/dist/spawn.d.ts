@@ -1,2 +1,3 @@
 import type { RunResult } from "./types.js";
-export declare function spawnAndCollect(cmd: string, args: string[], id: number, agentName: string, signal?: AbortSignal): Promise<RunResult>;
+import type { ParsedEvent } from "./parser.js";
+export declare function spawnAndCollect(cmd: string, args: string[], id: number, agentName: string, signal?: AbortSignal, onEvent?: (evt: ParsedEvent) => void): Promise<RunResult>;

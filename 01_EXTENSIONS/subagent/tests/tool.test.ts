@@ -48,12 +48,18 @@ describe("createTool", () => {
 	it("detail existing run", async () => {
 		addToHistory({ id: 5, agent: "scout", output: "result text" });
 		const r = await exec("detail 5");
-		expect(r.content[0].text).toContain("#5 scout");
+		expect(r.content[0].text).toContain("# scout #5");
 		expect(r.content[0].text).toContain("result text");
 	});
 	it("detail no output", async () => {
 		addToHistory({ id: 6, agent: "scout" });
 		expect((await exec("detail 6")).content[0].text).toContain("(no output)");
+	});
+	it("detail with events shows tool calls", async () => {
+		addToHistory({ id: 7, agent: "scout", events: [{ type: "tool_start", toolName: "Bash" }, { type: "message", text: "found it" }] });
+		const r = await exec("detail 7");
+		expect(r.content[0].text).toContain("→ Bash");
+		expect(r.content[0].text).toContain("found it");
 	});
 	it("run unknown agent", async () => { expect((await exec("run unknown -- task")).content[0].text).toContain("Unknown agent"); });
 	it("run known agent", async () => {
