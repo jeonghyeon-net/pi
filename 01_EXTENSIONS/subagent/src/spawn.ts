@@ -19,16 +19,19 @@ export function spawnAndCollect(
 			signal.addEventListener("abort", () => { proc.kill(); reject(new Error("Aborted")); });
 		}
 		const events: ParsedEvent[] = [];
+		const stderrChunks: string[] = [];
 		const rl = createInterface({ input: proc.stdout });
 		rl.on("line", (line) => {
 			const evt = parseLine(line);
 			if (evt) { events.push(evt); onEvent?.(evt); }
 		});
+		proc.stderr.on("data", (chunk: Buffer) => { stderrChunks.push(chunk.toString()); });
 		proc.on("error", (err) => reject(err));
 		proc.on("close", (code) => {
 			const { output, usage, escalation } = collectOutput(events);
 			if (code !== 0 && !output) {
-				reject(new Error(`Process exited with code ${code}`));
+				const stderr = stderrChunks.join("").trim();
+				reject(new Error(stderr || `Process exited with code ${code}`));
 				return;
 			}
 			resolve({ id, agent: agentName, output, usage, escalation });
