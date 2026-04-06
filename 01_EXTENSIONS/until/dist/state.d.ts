@@ -1,0 +1,17 @@
+import type { ExtensionUIContext } from "@mariozechner/pi-coding-agent";
+import type { UntilTask, SendMessageFn, SendUserMessageFn } from "./types.js";
+export declare function initApi(s: SendMessageFn, u: SendUserMessageFn): void;
+export declare function sendMessage(...args: Parameters<SendMessageFn>): void;
+export declare function sendUserMessage(...args: Parameters<SendUserMessageFn>): void;
+export declare function setUi(handle: ExtensionUIContext | undefined): void;
+export declare function getUi(): ExtensionUIContext | undefined;
+export declare function notify(msg: string, type?: "info" | "warning" | "error"): void;
+export declare function setAgentRunning(val: boolean): void;
+export declare function isAgentRunning(): boolean;
+export declare function getTasks(): Map<number, UntilTask>;
+export declare function getTask(id: number): UntilTask | undefined;
+export declare function allocateId(): number;
+export declare function addTask(task: UntilTask): void;
+export declare function deleteTask(id: number): void;
+export declare function clearAllTasks(): void;
+export declare function updateFooter(): void;

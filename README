@@ -11,8 +11,10 @@
     pi update
 
   EXTENSIONS
+    footer … 커스텀 footer: 모델명, 저장소/브랜치, context 사용률 표시
     notify … 에이전트 작업 완료 시 터미널 알림
     todo … LLM용 todo 관리 도구
+    until … 조건 충족까지 주기적 작업 반복 실행
 
   SKILLS
     (none)
