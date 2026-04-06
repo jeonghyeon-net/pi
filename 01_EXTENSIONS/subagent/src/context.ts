@@ -1,4 +1,4 @@
-interface Entry {
+export interface Entry {
 	type: string;
 	message?: { role: string; content: Array<{ type: string; text?: string }> };
 	summary?: string;
@@ -13,10 +13,10 @@ function extractText(entry: Entry): string {
 }
 
 export function extractMainContext(
-	entries: Array<Record<string, unknown>>,
+	entries: Entry[],
 	maxMessages: number,
 ): string {
-	const typed = entries as Entry[];
+	const typed = entries;
 	const parts: string[] = [];
 	const compaction = typed.find((e) => e.type === "compaction");
 	if (compaction?.summary) parts.push(`[Context Summary]\n${compaction.summary}`);

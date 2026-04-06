@@ -26,14 +26,17 @@ export function buildRunsEntry(): { runs: RunHistoryItem[]; updatedAt: number } 
 	return { runs: [...history], updatedAt: Date.now() };
 }
 
-export function restoreRuns(entries: Array<Record<string, unknown>>): void {
-	const relevant = entries.filter((e) => e.type === "custom" && e.customType === "subagent-runs");
+export function restoreRuns(entries: Array<{ type: string }>): void {
+	const relevant = entries.filter(
+		(e): e is { type: "custom"; customType: string; data?: Record<string, unknown> } =>
+			e.type === "custom" && "customType" in e && (e as { customType?: string }).customType === "subagent-runs",
+	);
 	const last = relevant.at(-1);
 	if (!last?.data || typeof last.data !== "object") {
 		history = [];
 		return;
 	}
-	const data = last.data as Record<string, unknown>;
+	const data = last.data;
 	if ("runs" in data && Array.isArray(data.runs)) {
 		history = [...(data.runs as RunHistoryItem[])];
 	} else {

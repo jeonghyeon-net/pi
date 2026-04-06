@@ -1,0 +1,10 @@
+import type { ActiveRun, RunResult } from "./types.js";
+export declare function nextId(): number;
+export declare function addRun(run: ActiveRun): void;
+export declare function getRun(id: number): ActiveRun | undefined;
+export declare function removeRun(id: number): void;
+export declare function listRuns(): ActiveRun[];
+export declare function completeRun(_id: number, result: RunResult): void;
+export declare function getCompleted(): RunResult[];
+export declare function drainCompleted(): RunResult[];
+export declare function resetStore(): void;

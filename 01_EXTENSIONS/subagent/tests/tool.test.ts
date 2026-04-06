@@ -43,7 +43,7 @@ describe("createTool", () => {
 		addToHistory({ id: 1, agent: "scout", output: "found" });
 		expect((await exec("runs")).content[0].text).toContain("History (1)");
 	});
-	it("unknown subcommand errors", async () => { expect((await exec("invalid")).isError).toBe(true); });
+	it("unknown subcommand errors", async () => { expect((await exec("invalid")).details.isError).toBe(true); });
 	it("detail missing run", async () => { expect((await exec("detail 999")).content[0].text).toContain("not found"); });
 	it("detail existing run", async () => {
 		addToHistory({ id: 5, agent: "scout", output: "result text" });
@@ -64,10 +64,10 @@ describe("createTool", () => {
 	it("batch command", async () => { expect((await exec("batch --agent scout --task find")).content[0].text).toContain("batch started"); });
 	it("chain command", async () => { expect((await exec("chain --agent scout --task find")).content[0].text).toContain("chain started"); });
 	it("continue command", async () => { expect((await exec("continue 1 -- more")).content[0].text).toContain("continue not yet implemented"); });
-	it("renderCall", () => {
-		const t = createTool(stubPi(), "/agents");
-		expect(t.renderCall({ command: "run scout -- find auth" })).toContain("scout");
-		expect(t.renderCall({ command: "gibberish" })).toContain("gibberish");
+	it("result includes details", async () => {
+		const r = await exec("runs");
+		expect(r.details).toBeDefined();
+		expect(r.details.isError).toBe(false);
 	});
 });
 describe("errorMsg", () => {

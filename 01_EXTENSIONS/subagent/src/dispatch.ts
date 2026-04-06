@@ -4,7 +4,7 @@ import { join, dirname } from "path";
 import type { AgentConfig, RunResult, SubagentPi } from "./types.js";
 import { getPiCommand, buildArgs } from "./runner.js";
 import { withRetry } from "./retry.js";
-import { extractMainContext } from "./context.js";
+import { extractMainContext, type Entry } from "./context.js";
 import { executeSingle, executeBatch, executeChain } from "./execute.js";
 import { nextId, addRun, removeRun, listRuns } from "./store.js";
 import { addToHistory, sessionPath } from "./session.js";
@@ -15,8 +15,8 @@ import { spawnAndCollect } from "./spawn.js";
 
 export interface DispatchCtx {
 	hasUI: boolean;
-	ui: { setWidget: (k: string, v: string[] | undefined, o?: { placement: string }) => void };
-	sessionManager: { getBranch: () => unknown[] };
+	ui: { setWidget(k: string, v: unknown, o?: unknown): void };
+	sessionManager: { getBranch(): unknown[] };
 }
 
 export function createRunner(
@@ -28,7 +28,7 @@ export function createRunner(
 		const promptPath = join(tmpdir(), `pi-sub-${agent.name}-${id}.md`);
 		let prompt = agent.systemPrompt;
 		if (main) {
-			const branch = ctx.sessionManager.getBranch() as Array<Record<string, unknown>>;
+			const branch = ctx.sessionManager.getBranch() as Entry[];
 			const mainCtx = extractMainContext(branch, 20);
 			if (mainCtx) prompt += `\n\n[Main Context]\n${mainCtx}`;
 		}

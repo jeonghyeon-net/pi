@@ -13,25 +13,25 @@
   EXTENSIONS
     footer … 커스텀 footer: 모델명, 저장소/브랜치, context 사용률 표시
     notify … 에이전트 작업 완료 시 터미널 알림
-    subagent … 서브에이전트 실행 도구
+    subagent … 서브에이전트 오케스트레이션 (비동기 실행, 세션 관리)
     todo … LLM용 todo 관리 도구
     until … 조건 충족까지 주기적 작업 반복 실행
 
   SKILLS
-    brainstorming
-    dispatching-parallel-agents
-    executing-plans
-    finishing-a-development-branch
-    receiving-code-review
-    requesting-code-review
-    subagent-driven-development
-    systematic-debugging
-    test-driven-development
-    using-git-worktrees
-    using-superpowers
-    verification-before-completion
-    writing-plans
-    writing-skills
+    brainstorming … 구현 전 디자인 탐색 및 스펙 작성
+    dispatching-parallel-agents … 독립 작업을 병렬 서브에이전트로 분배
+    executing-plans … 구현 계획을 체크포인트 기반으로 실행
+    finishing-a-development-branch … 개발 브랜치 완료 후 머지/PR 워크플로
+    receiving-code-review … 코드 리뷰 피드백 수신 및 대응
+    requesting-code-review … 코드 리뷰 요청 및 리뷰어 서브에이전트 실행
+    subagent-driven-development … 태스크별 서브에이전트 기반 구현
+    systematic-debugging … 근본 원인 추적 기반 체계적 디버깅
+    test-driven-development … Red-Green-Refactor TDD 워크플로
+    using-git-worktrees … 격리된 git worktree 생성 및 관리
+    using-superpowers … 스킬 자동 탐색 및 적용 메타 스킬
+    verification-before-completion … 완료 선언 전 증거 기반 검증
+    writing-plans … 구현 계획서 작성
+    writing-skills … 스킬 파일 작성 가이드
 
   PROMPTS
     (none)

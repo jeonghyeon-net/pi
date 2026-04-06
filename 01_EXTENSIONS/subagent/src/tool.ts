@@ -4,14 +4,13 @@ import { parseCommand } from "./cli.js";
 import { loadAgentsFromDir, getAgent } from "./agents.js";
 import { listRuns } from "./store.js";
 import { getRunHistory } from "./session.js";
-import { buildCallText } from "./render.js";
 import { dispatchRun, dispatchBatch, dispatchChain } from "./dispatch.js";
 import type { DispatchCtx } from "./dispatch.js";
 import { readdirSync, readFileSync, existsSync } from "fs";
 import type { Subcommand } from "./types.js";
 
 function textResult(text: string, isError = false) {
-	return { content: [{ type: "text" as const, text }], isError };
+	return { content: [{ type: "text" as const, text }], details: { isError } };
 }
 export function errorMsg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
 
@@ -57,6 +56,5 @@ export function createTool(pi: SubagentPi, agentsDir: string) {
 			try { return dispatch(parseCommand(params.command), agents, pi, ctx); }
 			catch (e) { return textResult(`Error: ${errorMsg(e)}`, true); }
 		},
-		renderCall: (args: { command: string }) => buildCallText(args),
 	};
 }

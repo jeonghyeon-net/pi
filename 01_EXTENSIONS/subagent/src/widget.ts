@@ -3,7 +3,7 @@ import { formatDuration } from "./format.js";
 const MAX_VISIBLE = 3;
 
 interface MinimalRun { id: number; agent: string; startedAt: number }
-interface MinimalCtx { hasUI: boolean; ui: { setWidget: (key: string, content: string[] | undefined, opts?: { placement: string }) => void } }
+interface MinimalCtx { hasUI: boolean; ui: { setWidget(key: string, content: unknown, opts?: unknown): void } }
 
 export function buildWidgetLines(runs: MinimalRun[], now: number): string[] {
 	return runs.slice(0, MAX_VISIBLE).map((r) => {
