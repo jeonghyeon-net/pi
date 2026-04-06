@@ -1,14 +1,12 @@
 {
-  "name": "@jeonghyeon-net/pi",
-  "type": "module",
-  "private": true,
-  "scripts": {},
-  "devDependencies": {
-    "@biomejs/biome": "^2.4.10",
-    "@mariozechner/pi-ai": "^0.64.0",
-    "@mariozechner/pi-coding-agent": "^0.64.0",
-    "@mariozechner/pi-tui": "^0.64.0",
-    "@modelcontextprotocol/sdk": "^1.27.0",
-    "@sinclair/typebox": "^0.34.49"
+  "pi": {
+    "extensions": ["01_EXTENSIONS"],
+    "skills": ["02_SKILLS"],
+    "prompts": ["03_PROMPTS"],
+    "themes": ["04_THEMES"]
+  },
+  "scripts": {
+    "setup": "command -v brew >/dev/null || /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\" && command -v mise >/dev/null || brew install mise && mise trust && mise install",
+    "test": "cd 00_ARCHITECTURE && go test ./..."
   }
 }

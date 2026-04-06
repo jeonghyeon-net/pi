@@ -1,0 +1,5 @@
+
+  에이전트가 온디맨드로 로드하는 워크플로우 패키지 (Agent Skills 표준).
+  시작 시 name + description만 시스템 프롬프트에 노출된다.
+  태스크가 매칭되면 에이전트가 SKILL.md 전문을 read로 로드한다.
+  /skill:<name>으로 명시 호출할 수도 있다.

@@ -1,0 +1,11 @@
+
+  Go 테스트로 프로젝트 전체의 아키텍처 규칙을 강제한다.
+
+  STRUCTURE
+    go.mod              Go 모듈 정의
+    *_test.go           구조 검증 테스트
+
+  PRINCIPLE
+    규칙은 문서가 아니라 테스트로 강제한다.
+    README에 적힌 STRUCTURE/RULES가 코드로 검증되어야 한다.
+    테스트가 깨지면 구조가 틀린 것이다.
