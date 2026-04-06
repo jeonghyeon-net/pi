@@ -13,8 +13,9 @@ func TestAllFiles_NoMdExtension(t *testing.T) {
 			return err
 		}
 		rel, _ := filepath.Rel(root, path)
+		dir := filepath.Base(rel)
 		if info.IsDir() {
-			if rel == ".git" {
+			if rel == ".git" || dir == "node_modules" || dir == "coverage" {
 				return filepath.SkipDir
 			}
 			return nil

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { notify } from "../src/notify.js";
 
 describe("notify", () => {
-	let writeSpy: ReturnType<typeof vi.spyOn>;
+	let writeSpy: ReturnType<typeof vi.fn>;
 	const originalEnv = process.env;
 
 	beforeEach(() => {

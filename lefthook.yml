@@ -7,5 +7,7 @@ pre-commit:
 
 pre-push:
   commands:
+    extension-build:
+      run: if ls -d 01_EXTENSIONS/*/ >/dev/null 2>&1; then for dir in 01_EXTENSIONS/*/; do [ -f "$dir/package.json" ] && (cd "$dir" && npm run build); done && git add 01_EXTENSIONS/*/dist/ && git diff --cached --quiet || git commit -m "dist 빌드 반영"; fi
     extension-tests:
       run: if ls -d 01_EXTENSIONS/*/ >/dev/null 2>&1; then for dir in 01_EXTENSIONS/*/; do [ -f "$dir/package.json" ] && (cd "$dir" && npm test); done; fi

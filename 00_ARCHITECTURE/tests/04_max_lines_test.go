@@ -15,10 +15,14 @@ func TestAllFiles_MaxLines(t *testing.T) {
 			return err
 		}
 		rel, _ := filepath.Rel(root, path)
+		dir := filepath.Base(rel)
 		if info.IsDir() {
-			if rel == ".git" {
+			if rel == ".git" || dir == "node_modules" || dir == "coverage" || dir == "dist" {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if info.Name() == "package-lock.json" {
 			return nil
 		}
 		data, err := os.ReadFile(path)
