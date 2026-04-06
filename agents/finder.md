@@ -2,7 +2,7 @@
 name: finder
 description: Fast file/code locator — use for exploring codebases, finding files, locating specific code patterns
 tools: read, grep, find, ls
-model: anthropic/claude-sonnet-4-6
+model: openai/gpt-5.4-mini
 thinking: low
 ---
 

@@ -28,48 +28,19 @@ function makeAgent(name: string, description = "test agent"): AgentConfig {
 
 describe("normalizeTools", () => {
   it("returns undefined for undefined input", () => {
-    assert.equal(normalizeTools(undefined, "pi"), undefined);
+    assert.equal(normalizeTools(undefined), undefined);
   });
 
   it("returns undefined for empty string", () => {
-    assert.equal(normalizeTools("", "pi"), undefined);
+    assert.equal(normalizeTools(""), undefined);
   });
 
   it("returns undefined for only-commas string", () => {
-    assert.equal(normalizeTools(",,,", "pi"), undefined);
+    assert.equal(normalizeTools(",,,"), undefined);
   });
 
-  it("splits and trims tools in pi format", () => {
-    assert.deepStrictEqual(normalizeTools("bash, read, edit", "pi"), ["bash", "read", "edit"]);
-  });
-
-  it("maps known tools in claude format", () => {
-    const result = normalizeTools("bash,read,edit", "claude");
-    assert.deepStrictEqual(result, ["bash", "read", "edit"]);
-  });
-
-  it("deduplicates in claude format", () => {
-    const result = normalizeTools("bash,bash", "claude");
-    assert.deepStrictEqual(result, ["bash"]);
-  });
-
-  it("filters unmappable tools in claude format", () => {
-    const result = normalizeTools("skill", "claude");
-    assert.equal(result, undefined);
-  });
-
-  it("returns undefined when all claude tools are unmappable", () => {
-    assert.equal(normalizeTools("skill", "claude"), undefined);
-  });
-
-  it("maps glob to find in claude format", () => {
-    const result = normalizeTools("glob", "claude");
-    assert.deepStrictEqual(result, ["find"]);
-  });
-
-  it("maps todowrite and todoread to todo in claude format", () => {
-    const result = normalizeTools("todowrite,todoread", "claude");
-    assert.deepStrictEqual(result, ["todo"]);
+  it("splits and trims tools", () => {
+    assert.deepStrictEqual(normalizeTools("bash, read, edit"), ["bash", "read", "edit"]);
   });
 });
 
@@ -77,37 +48,20 @@ describe("normalizeTools", () => {
 
 describe("normalizeModel", () => {
   it("returns undefined for undefined input", () => {
-    assert.equal(normalizeModel(undefined, "pi"), undefined);
+    assert.equal(normalizeModel(undefined), undefined);
   });
 
   it("returns undefined for empty string", () => {
-    assert.equal(normalizeModel("", "pi"), undefined);
+    assert.equal(normalizeModel(""), undefined);
   });
 
   it("returns undefined for whitespace-only", () => {
-    assert.equal(normalizeModel("   ", "pi"), undefined);
+    assert.equal(normalizeModel("   "), undefined);
   });
 
-  it("returns raw model in pi format", () => {
-    assert.equal(normalizeModel("my-model", "pi"), "my-model");
-  });
-
-  it("maps alias to model in claude format", () => {
-    assert.equal(normalizeModel("opus", "claude"), "claude-opus-4-6");
-    assert.equal(normalizeModel("sonnet", "claude"), "claude-sonnet-4-5");
-    assert.equal(normalizeModel("haiku", "claude"), "claude-haiku-4-5");
-  });
-
-  it("is case-insensitive for claude aliases", () => {
-    assert.equal(normalizeModel("OPUS", "claude"), "claude-opus-4-6");
-  });
-
-  it("passes through model with / in claude format", () => {
-    assert.equal(normalizeModel("anthropic/opus", "claude"), "anthropic/opus");
-  });
-
-  it("passes through unknown model in claude format", () => {
-    assert.equal(normalizeModel("gpt-4o", "claude"), "gpt-4o");
+  it("returns model as-is", () => {
+    assert.equal(normalizeModel("my-model"), "my-model");
+    assert.equal(normalizeModel("openai/gpt-5.4"), "openai/gpt-5.4");
   });
 });
 
@@ -442,24 +396,22 @@ describe("discoverAgents", () => {
     }
   });
 
-  it("discovers agents from .claude/agents directory recursively", () => {
+  it("discovers agents from project agents/ directory", () => {
     const tmpDir = createTempDir();
     try {
-      const claudeDir = path.join(tmpDir, ".claude", "agents");
-      const subDir = path.join(claudeDir, "nested");
+      const agentsDir = path.join(tmpDir, "agents");
       writeMd(
-        subDir,
-        "deep-agent.md",
-        "---\nname: deep-agent\ndescription: A deeply nested agent\ntools: bash\nmodel: sonnet\n---\nSystem prompt.",
+        agentsDir,
+        "my-agent.md",
+        "---\nname: my-agent\ndescription: A project agent\ntools: bash\nmodel: openai/gpt-5.4\n---\nSystem prompt.",
       );
 
       const result = discoverAgents(tmpDir);
-      const deepAgent = result.agents.find((a) => a.name === "deep-agent");
-      assert.ok(deepAgent);
-      assert.equal(deepAgent.description, "A deeply nested agent");
-      // claude format: bash -> bash, model alias mapping
-      assert.deepStrictEqual(deepAgent.tools, ["bash"]);
-      assert.equal(deepAgent.model, "claude-sonnet-4-5");
+      const agent = result.agents.find((a) => a.name === "my-agent");
+      assert.ok(agent);
+      assert.equal(agent.description, "A project agent");
+      assert.deepStrictEqual(agent.tools, ["bash"]);
+      assert.equal(agent.model, "openai/gpt-5.4");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -514,11 +466,10 @@ describe("discoverAgents", () => {
     }
   });
 
-  it("uses default pi format when format option is not specified", () => {
+  it("returns tools and model as-is", () => {
     const tmpDir = createTempDir();
     try {
-      // .pi/agents uses default format (pi)
-      const agentsDir = path.join(tmpDir, ".pi", "agents");
+      const agentsDir = path.join(tmpDir, "agents");
       writeMd(
         agentsDir,
         "default-fmt.md",
@@ -527,9 +478,7 @@ describe("discoverAgents", () => {
       const result = discoverAgents(tmpDir);
       const agent = result.agents.find((a) => a.name === "default-fmt");
       assert.ok(agent);
-      // In pi format, tools are returned as-is
       assert.deepStrictEqual(agent.tools, ["bash", "read"]);
-      // In pi format, model is returned as-is
       assert.equal(agent.model, "custom-model");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -632,19 +581,17 @@ describe("discoverAgents", () => {
     }
   });
 
-  it("listMarkdownFiles non-recursive mode does not descend into subdirs", () => {
+  it("does not descend into subdirs", () => {
     const tmpDir = createTempDir();
     try {
-      const agentsDir = path.join(tmpDir, ".pi", "agents");
+      const agentsDir = path.join(tmpDir, "agents");
       writeMd(agentsDir, "top.md", "---\nname: top\ndescription: Top agent\n---\nTop.");
       const subDir = path.join(agentsDir, "sub");
       writeMd(subDir, "nested.md", "---\nname: nested\ndescription: Nested agent\n---\nNested.");
 
-      // .pi/agents uses non-recursive mode in pi format
       const result = discoverAgents(tmpDir);
       const names = result.agents.map((a) => a.name);
       assert.ok(names.includes("top"));
-      // nested should NOT be found since .pi/agents is non-recursive
       assert.ok(!names.includes("nested"));
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -663,40 +610,18 @@ describe("discoverAgents", () => {
     }
   });
 
-  it("handles unreadable directory in listMarkdownFiles gracefully", () => {
+  it("handles unreadable agents directory gracefully", () => {
     const tmpDir = createTempDir();
     try {
-      const agentsDir = path.join(tmpDir, ".pi", "agents");
+      const agentsDir = path.join(tmpDir, "agents");
       fs.mkdirSync(agentsDir, { recursive: true });
-      // Create a subdirectory that we make unreadable
-      // (we test the catch block in listMarkdownFiles via .claude/agents recursive mode)
-      const claudeDir = path.join(tmpDir, ".claude", "agents");
-      writeMd(claudeDir, "visible.md", "---\nname: visible\ndescription: Visible\n---\nVisible.");
+      fs.chmodSync(agentsDir, 0o000);
 
       const result = discoverAgents(tmpDir);
-      const names = result.agents.map((a) => a.name);
-      assert.ok(names.includes("visible"));
-    } finally {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-  });
+      // agents dir exists but is unreadable — no agents loaded, no crash
+      assert.equal(result.agents.length, 0);
 
-  it("listMarkdownFiles catch branch — unreadable subdirectory in recursive mode", () => {
-    const tmpDir = createTempDir();
-    try {
-      const claudeDir = path.join(tmpDir, ".claude", "agents");
-      writeMd(claudeDir, "ok.md", "---\nname: ok\ndescription: OK\n---\nOK.");
-      // Create a subdirectory and make it unreadable
-      const unreadableDir = path.join(claudeDir, "unreadable");
-      fs.mkdirSync(unreadableDir, { recursive: true });
-      fs.chmodSync(unreadableDir, 0o000);
-
-      const result = discoverAgents(tmpDir);
-      const names = result.agents.map((a) => a.name);
-      assert.ok(names.includes("ok"));
-
-      // Restore permissions for cleanup
-      fs.chmodSync(unreadableDir, 0o755);
+      fs.chmodSync(agentsDir, 0o755);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

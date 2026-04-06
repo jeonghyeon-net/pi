@@ -6,7 +6,6 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
-import { CLAUDE_MODEL_ALIAS_MAP, CLAUDE_TOOL_MAP } from "../core/constants.js";
 import type {
   AgentAliasMatch,
   AgentConfig,
@@ -17,35 +16,19 @@ import { AGENT_THINKING_LEVELS } from "../core/types.js";
 
 // ━━━ Normalization ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-export function normalizeTools(
-  rawTools: string | undefined,
-  format: "pi" | "claude",
-): string[] | undefined {
+export function normalizeTools(rawTools: string | undefined): string[] | undefined {
   if (!rawTools) return undefined;
   const parsed = rawTools
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
-  if (parsed.length === 0) return undefined;
-  if (format === "pi") return parsed;
-  const mapped = parsed
-    .map((tool) => CLAUDE_TOOL_MAP[tool.toLowerCase()] ?? undefined)
-    .filter((t): t is string => Boolean(t));
-  return mapped.length === 0 ? undefined : Array.from(new Set(mapped));
+  return parsed.length === 0 ? undefined : parsed;
 }
 
-export function normalizeModel(
-  rawModel: string | undefined,
-  format: "pi" | "claude",
-): string | undefined {
+export function normalizeModel(rawModel: string | undefined): string | undefined {
   if (!rawModel) return undefined;
   const model = rawModel.trim();
-  if (!model) return undefined;
-  if (format === "claude") {
-    if (model.includes("/")) return model;
-    return CLAUDE_MODEL_ALIAS_MAP[model.toLowerCase()] ?? model;
-  }
-  return model;
+  return model || undefined;
 }
 
 export function normalizeThinkingLevel(
@@ -99,39 +82,27 @@ function attachCommonSubagentRule(systemPrompt: string): string {
 
 // ━━━ Discovery ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-function listMarkdownFiles(dir: string, recursive: boolean): string[] {
+function listMarkdownFiles(dir: string): string[] {
   const files: string[] = [];
-  const stack: string[] = [dir];
-  while (stack.length > 0) {
-    const currentDir = stack.pop() as string;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        if (recursive) stack.push(fullPath);
-        continue;
-      }
-      if (!entry.name.endsWith(".md")) continue;
-      files.push(fullPath);
-    }
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return files;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) continue;
+    if (!entry.name.endsWith(".md")) continue;
+    files.push(path.join(dir, entry.name));
   }
   files.sort((a, b) => a.localeCompare(b));
   return files;
 }
 
-function loadAgentsFromDir(
-  dir: string,
-  source: "user" | "project",
-  options: { recursive?: boolean; format: "pi" | "claude" },
-): AgentConfig[] {
+function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
   const agents: AgentConfig[] = [];
   if (!fs.existsSync(dir)) return agents;
-  const files = listMarkdownFiles(dir, options.recursive ?? false);
+  const files = listMarkdownFiles(dir);
   for (const filePath of files) {
     let content: string;
     try {
@@ -141,8 +112,8 @@ function loadAgentsFromDir(
     }
     const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
     if (!frontmatter.name || !frontmatter.description) continue;
-    const tools = normalizeTools(frontmatter.tools, options.format);
-    const model = normalizeModel(frontmatter.model, options.format);
+    const tools = normalizeTools(frontmatter.tools);
+    const model = normalizeModel(frontmatter.model);
     const thinking = normalizeThinkingLevel(frontmatter.thinking);
     const character = frontmatter.character || undefined;
     const config: AgentConfig = {
@@ -182,19 +153,15 @@ function findNearestDir(cwd: string, ...segments: string[]): string | null {
 
 export function discoverAgents(cwd: string): AgentDiscoveryResult {
   const userDir = path.join(os.homedir(), ".pi", "agent", "agents");
-  const projectAgentsDir = findNearestDir(cwd, ".pi", "agents");
-  const claudeAgentsDir = findNearestDir(cwd, ".claude", "agents");
-  const userAgents = loadAgentsFromDir(userDir, "user", { format: "pi" });
-  const projectPiAgents = projectAgentsDir
-    ? loadAgentsFromDir(projectAgentsDir, "project", { format: "pi" })
-    : [];
-  const projectClaudeAgents = claudeAgentsDir
-    ? loadAgentsFromDir(claudeAgentsDir, "project", { format: "claude", recursive: true })
-    : [];
+  const projectPiDir = findNearestDir(cwd, ".pi", "agents");
+  const projectAgentsDir = findNearestDir(cwd, "agents");
+  const userAgents = loadAgentsFromDir(userDir, "user");
+  const projectAgents = projectAgentsDir ? loadAgentsFromDir(projectAgentsDir, "project") : [];
+  const projectPiAgents = projectPiDir ? loadAgentsFromDir(projectPiDir, "project") : [];
   const agentMap = new Map<string, AgentConfig>();
-  for (const agent of [...userAgents, ...projectClaudeAgents, ...projectPiAgents])
+  for (const agent of [...userAgents, ...projectAgents, ...projectPiAgents])
     agentMap.set(agent.name, agent);
-  const projectSources = [projectAgentsDir, claudeAgentsDir].filter((d): d is string => Boolean(d));
+  const projectSources = [projectAgentsDir, projectPiDir].filter((d): d is string => Boolean(d));
   return {
     agents: Array.from(agentMap.values()),
     projectAgentsDir: projectSources.length > 0 ? projectSources.join(", ") : null,

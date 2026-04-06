@@ -2,7 +2,7 @@
 name: code-cleaner
 description: Code cleanup analyst — scans for code reuse opportunities, quality issues, and efficiency problems. Reports findings only (read-only).
 tools: read, grep, find, ls, bash
-model: openai-codex/gpt-5.4
+model: openai/gpt-5.4
 thinking: xhigh
 ---
 

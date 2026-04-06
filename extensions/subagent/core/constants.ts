@@ -17,25 +17,6 @@ export const AGENT_SYMBOL_MAP: Record<string, string> = {
   $: "simplifier",
 };
 
-export const CLAUDE_TOOL_MAP: Record<string, string | undefined> = {
-  bash: "bash",
-  read: "read",
-  edit: "edit",
-  write: "write",
-  grep: "grep",
-  glob: "find",
-  ls: "ls",
-  todowrite: "todo",
-  todoread: "todo",
-  skill: undefined,
-};
-
-export const CLAUDE_MODEL_ALIAS_MAP: Record<string, string> = {
-  opus: "claude-opus-4-6",
-  sonnet: "claude-sonnet-4-5",
-  haiku: "claude-haiku-4-5",
-};
-
 // ━━━ Constants ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export const MS_PER_SECOND = 1_000;

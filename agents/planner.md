@@ -2,7 +2,7 @@
 name: planner
 description: Strategic planning agent — clarifies scope, researches codebase evidence, produces executable implementation plans, and returns the saved plan file path
 tools: read, grep, find, ls, bash, write
-model: anthropic/claude-opus-4-6
+model: openai/gpt-5.4-pro
 thinking: high
 ---
 

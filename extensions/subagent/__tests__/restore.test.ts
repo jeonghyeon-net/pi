@@ -399,7 +399,7 @@ describe("restoreRunsFromSession", () => {
           contextTokens: 500,
           turns: 2,
         },
-        model: "claude-sonnet-4-5",
+        model: "gpt-5.4",
       }),
     ];
     const ctx = makeMockCtx(entries);
@@ -408,7 +408,7 @@ describe("restoreRunsFromSession", () => {
     assert.ok(run?.usage);
     assert.equal(run.usage.input, 100);
     assert.equal(run.usage.contextTokens, 500);
-    assert.equal(run.model, "claude-sonnet-4-5");
+    assert.equal(run.model, "gpt-5.4");
   });
 
   // ── Status detection with "completed" alias ────────────────────────
