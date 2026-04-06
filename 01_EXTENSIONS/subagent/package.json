@@ -1,0 +1,18 @@
+{
+  "pi": {
+    "extensions": ["dist/index.js"]
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --coverage"
+  },
+  "dependencies": {
+    "yargs-parser": "^21.1.1"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0",
+    "@vitest/coverage-v8": "^3.1.0"
+  }
+}
