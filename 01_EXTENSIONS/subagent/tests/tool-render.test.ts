@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("../src/spawn.js", () => ({ spawnAndCollect: vi.fn() }));
 import { createTool } from "../src/tool.js";
 
-const stubPi = () => ({ sendMessage: vi.fn(), appendEntry: vi.fn() });
+const stubPi = () => ({ appendEntry: vi.fn() });
 const stubCtx = () => ({ hasUI: false, ui: { setWidget: vi.fn() }, sessionManager: { getBranch: () => [] } });
 
 describe("createTool renderCall/renderResult", () => {

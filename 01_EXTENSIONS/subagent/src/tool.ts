@@ -9,7 +9,6 @@ import type { DispatchCtx } from "./dispatch.js";
 import { readdirSync, readFileSync, existsSync } from "fs";
 import type { Subcommand } from "./types.js";
 import { renderCall, renderResult, buildResultText } from "./render.js";
-import { formatUsage } from "./format.js";
 
 function textResult(text: string, isError = false) {
 	return { content: [{ type: "text" as const, text }], details: { isError } };
