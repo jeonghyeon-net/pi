@@ -4,6 +4,7 @@ import { buildRunsEntry } from "./session.js";
 import { syncWidget } from "./widget.js";
 import { listRuns } from "./store.js";
 import { onSessionRestore } from "./dispatch.js";
+import { buildSubCommand } from "./commands.js";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -15,4 +16,5 @@ export default function (pi: ExtensionAPI) {
 		syncWidget(ctx, listRuns());
 	});
 	pi.registerTool(createTool(pi, join(dirname(fileURLToPath(import.meta.url)), "..", "agents")));
+	pi.registerCommand("sub", buildSubCommand(join(dirname(fileURLToPath(import.meta.url)), "..", "agents")));
 }

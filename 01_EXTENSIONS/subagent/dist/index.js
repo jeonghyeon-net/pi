@@ -634,6 +634,36 @@ function createTool(pi, agentsDir) {
   };
 }
 
+// src/commands.ts
+import { readdirSync as readdirSync2, readFileSync as readFileSync2, existsSync as existsSync3 } from "fs";
+function buildHelpText(agentsDir) {
+  const agents = existsSync3(agentsDir) ? loadAgentsFromDir(agentsDir, (d) => readdirSync2(d).map(String), readFileSync2) : [];
+  const lines = [
+    "subagent \u2014 \uC11C\uBE0C\uC5D0\uC774\uC804\uD2B8 \uC624\uCF00\uC2A4\uD2B8\uB808\uC774\uC158",
+    "",
+    "\uC0AC\uC6A9\uBC95:",
+    "  /sub run <agent> [--main] -- <task>    \uC5D0\uC774\uC804\uD2B8 \uC2E4\uD589",
+    "  /sub batch --agent <a> --task <t> ...  \uBCD1\uB82C \uC2E4\uD589",
+    "  /sub chain --agent <a> --task <t> ...  \uC21C\uCC28 \uC2E4\uD589",
+    "  /sub continue <id> -- <task>           \uC138\uC158 \uC774\uC5B4\uD558\uAE30",
+    "  /sub abort <id>                        \uC2E4\uD589 \uC911\uB2E8",
+    "  /sub detail <id>                       \uC0C1\uC138 \uD788\uC2A4\uD1A0\uB9AC",
+    "  /sub runs                              \uC2E4\uD589 \uBAA9\uB85D",
+    "",
+    "\uC5D0\uC774\uC804\uD2B8:",
+    ...agents.map((a) => `  ${a.name.padEnd(18)} ${a.description}`)
+  ];
+  return lines.join("\n");
+}
+function buildSubCommand(agentsDir) {
+  return {
+    description: "\uC11C\uBE0C\uC5D0\uC774\uC804\uD2B8 \uBA85\uB839 (run, batch, chain, continue, abort, detail, runs)",
+    handler: async (_args, ctx) => {
+      ctx.ui.notify(buildHelpText(agentsDir), "info");
+    }
+  };
+}
+
 // src/index.ts
 import { dirname as dirname2, join as join3 } from "path";
 import { fileURLToPath } from "url";
@@ -645,6 +675,7 @@ function index_default(pi) {
     syncWidget(ctx, listRuns());
   });
   pi.registerTool(createTool(pi, join3(dirname2(fileURLToPath(import.meta.url)), "..", "agents")));
+  pi.registerCommand("sub", buildSubCommand(join3(dirname2(fileURLToPath(import.meta.url)), "..", "agents")));
 }
 export {
   index_default as default
