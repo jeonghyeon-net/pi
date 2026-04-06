@@ -45,4 +45,26 @@ describe("extractMainContext", () => {
 		const ctx = extractMainContext(entries, 20);
 		expect(ctx).toBe("");
 	});
+
+	it("handles message with no content", () => {
+		const entries = [{ type: "message", message: { role: "user" } }];
+		const ctx = extractMainContext(entries, 20);
+		expect(ctx).toBe("");
+	});
+
+	it("handles message with undefined role", () => {
+		const entries = [
+			{ type: "message", message: { content: [{ type: "text", text: "hello" }] } },
+		];
+		const ctx = extractMainContext(entries, 20);
+		expect(ctx).toContain("[unknown] hello");
+	});
+
+	it("handles content item with undefined text", () => {
+		const entries = [
+			{ type: "message", message: { role: "user", content: [{ type: "text" }] } },
+		];
+		const ctx = extractMainContext(entries, 20);
+		expect(ctx).toBe("");
+	});
 });

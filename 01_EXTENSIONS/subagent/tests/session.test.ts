@@ -78,4 +78,9 @@ describe("entry persistence", () => {
 		restoreRuns([{ type: "custom", customType: "subagent-runs" }]);
 		expect(getRunHistory()).toEqual([]);
 	});
+
+	it("handles data object without runs array", () => {
+		restoreRuns([{ type: "custom", customType: "subagent-runs", data: { other: true } }]);
+		expect(getRunHistory()).toEqual([]);
+	});
 });

@@ -47,4 +47,36 @@ describe("parseLine", () => {
 	it("returns null for empty line", () => {
 		expect(parseLine("")).toBeNull();
 	});
+
+	it("handles message_end with no content", () => {
+		const event = parseLine(JSON.stringify({
+			type: "message_end",
+			message: { role: "assistant", usage: { inputTokens: 5, outputTokens: 3 } },
+		}));
+		expect(event?.type).toBe("message");
+		expect(event?.text).toBe("");
+	});
+
+	it("handles message_end with no usage", () => {
+		const event = parseLine(JSON.stringify({
+			type: "message_end",
+			message: { role: "assistant", content: [{ type: "text", text: "hi" }] },
+		}));
+		expect(event?.type).toBe("message");
+		expect(event?.usage).toBeUndefined();
+	});
+
+	it("handles message_end with partial usage", () => {
+		const event = parseLine(JSON.stringify({
+			type: "message_end",
+			message: { role: "assistant", content: [{ type: "text", text: "hi" }], usage: {} },
+		}));
+		expect(event?.usage?.inputTokens).toBe(0);
+		expect(event?.usage?.outputTokens).toBe(0);
+	});
+
+	it("handles message_end without message", () => {
+		const event = parseLine(JSON.stringify({ type: "message_end" }));
+		expect(event).toBeNull();
+	});
 });

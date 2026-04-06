@@ -56,4 +56,25 @@ describe("parseCommand", () => {
 		const cmd = parseCommand("batch --main --agent w --task t");
 		expect(cmd.type === "batch" && cmd.main).toBe(true);
 	});
+
+	it("batch with no agent/task flags yields empty items", () => {
+		const cmd = parseCommand("batch --main");
+		expect(cmd.type === "batch" && cmd.items).toEqual([]);
+	});
+
+	it("throws on empty command", () => {
+		expect(() => parseCommand("--flag")).toThrow("Unknown subcommand");
+	});
+
+	it("run with no agent gives empty agent", () => {
+		const cmd = parseCommand("run -- task");
+		expect(cmd.type === "run" && cmd.agent).toBe("");
+	});
+
+	it("batch with more agents than tasks fills empty task", () => {
+		const cmd = parseCommand("batch --agent a --agent b --task t1");
+		if (cmd.type === "batch") {
+			expect(cmd.items[1].task).toBe("");
+		}
+	});
 });

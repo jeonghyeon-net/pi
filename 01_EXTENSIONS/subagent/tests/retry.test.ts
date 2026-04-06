@@ -47,4 +47,9 @@ describe("withRetry", () => {
 		await expect(withRetry(fn, 3, 1)).rejects.toThrow("Invalid key");
 		expect(fn).toHaveBeenCalledTimes(1);
 	});
+
+	it("wraps non-Error throws", async () => {
+		const fn = vi.fn().mockRejectedValue("string error");
+		await expect(withRetry(fn, 0, 1)).rejects.toThrow("string error");
+	});
 });
