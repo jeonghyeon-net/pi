@@ -25,13 +25,13 @@ describe("createAgentEndHandler", () => {
 		expect(notify).toHaveBeenCalledWith("notify", "로그인 문구 수정 완료");
 	});
 
-	it("drops a summary that repeats the session title", async () => {
-		resolveKoreanNotificationSummary.mockResolvedValue("로그인 문구 수정 완료");
+	it("strips a leading session title from the summary", async () => {
+		resolveKoreanNotificationSummary.mockResolvedValue("서브에이전트 2개로 가위바위보 실행 서브에이전트 두 명이 모두 가위를 내 무승부로 끝났어");
 		await createAgentEndHandler()(
-			{ messages: [{ role: "assistant", content: "로그인 문구 수정 완료" }] },
-			{ model: undefined, modelRegistry: { getApiKeyAndHeaders: vi.fn() }, sessionManager: { getSessionName: () => "로그인 문구 수정" } },
+			{ messages: [{ role: "assistant", content: "result" }] },
+			{ model: undefined, modelRegistry: { getApiKeyAndHeaders: vi.fn() }, sessionManager: { getSessionName: () => "서브에이전트 2개로 가위바위보 실행" } },
 		);
-		expect(notify).toHaveBeenCalledWith("로그인 문구 수정", "");
+		expect(notify).toHaveBeenCalledWith("서브에이전트 2개로 가위바위보 실행", "서브에이전트 두 명이 모두 가위를 내 무승부로 끝났어");
 	});
 
 	it("falls back to the local Korean body", async () => {

@@ -48,6 +48,14 @@ function hasKoreanText(text) {
 function normalizeForComparison(text) {
   return sanitizeNotificationText(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 }
+function stripLeadingTitle(body, title) {
+  const safeBody = sanitizeNotificationText(body);
+  const safeTitle = sanitizeNotificationText(title);
+  if (!safeBody || !safeTitle) return safeBody;
+  const escaped = safeTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const stripped = safeBody.replace(new RegExp(`^${escaped}(?:\\s*[:\uFF1A\\-\u2013\u2014|\xB7,/]\\s*|\\s+)`, "u"), "").trim();
+  return /^(?:완료|완료됨|작업 완료|끝남|끝났어)$/u.test(stripped) ? "" : stripped;
+}
 function containsTitleText(body, title) {
   const bodyNorm = normalizeForComparison(body);
   const titleNorm = normalizeForComparison(title);
@@ -87,7 +95,7 @@ function summarizeNotificationBody(text, maxLength = MAX_BODY_LENGTH) {
 }
 function buildCompletionNotification(sessionName, messages = []) {
   const title = sanitizeNotificationText(sessionName || "") || FALLBACK_TITLE;
-  const summary = summarizeNotificationBody(extractAssistantText(messages));
+  const summary = stripLeadingTitle(summarizeNotificationBody(extractAssistantText(messages)), title);
   return {
     title,
     body: summary && hasKoreanText(summary) && !containsTitleText(summary, title) ? summary : ""
@@ -165,7 +173,8 @@ function createAgentEndHandler() {
       ctx.model,
       ctx.modelRegistry
     );
-    notify(fallback.title, koreanBody && !containsTitleText(koreanBody, fallback.title) ? koreanBody : fallback.body);
+    const body = stripLeadingTitle(koreanBody || "", fallback.title);
+    notify(fallback.title, body && !containsTitleText(body, fallback.title) ? body : fallback.body);
   };
 }
 

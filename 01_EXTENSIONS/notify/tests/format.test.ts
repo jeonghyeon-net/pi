@@ -17,6 +17,13 @@ describe("notify formatting", () => {
 			title: "로그인 문구 수정",
 			body: "",
 		});
+		expect(buildCompletionNotification("서브에이전트 2개로 가위바위보 실행", [{
+			role: "assistant",
+			content: "서브에이전트 2개로 가위바위보 실행 서브에이전트 두 명이 모두 가위를 내 무승부로 끝났어",
+		}])).toEqual({
+			title: "서브에이전트 2개로 가위바위보 실행",
+			body: "서브에이전트 두 명이 모두 가위를 내 무승부로 끝났어",
+		});
 	});
 
 	it("falls back for empty assistant output", () => {
