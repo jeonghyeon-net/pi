@@ -7312,7 +7312,7 @@ var ProxySchema = Type.Object({
     Type.Literal("connect")
   ]),
   tool: Type.Optional(Type.String({ description: "Tool name (for call/describe)" })),
-  args: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: "Tool arguments (for call)" })),
+  args: Type.Optional(Type.String({ description: 'Tool arguments as JSON string, e.g. {"jql":"project = COM"}' })),
   server: Type.Optional(Type.String({ description: "Target server (for list/connect/call)" })),
   query: Type.Optional(Type.String({ description: "Search query (for search)" }))
 });
@@ -7332,7 +7332,8 @@ function routeAction(params, deps) {
       if (!params.tool) {
         return Promise.resolve(text("Tool name is required for call action."));
       }
-      return deps.call(params.tool, params.args);
+      const parsed = parseArgs(params.args);
+      return deps.call(params.tool, parsed);
     }
   }
 }
@@ -7360,6 +7361,15 @@ function createProxyTool(_pi, buildDesc, makeDeps) {
       return { ...result, details: { ...result.details, ...desc ? { description: desc } : {} } };
     }
   };
+}
+function parseArgs(args) {
+  if (!args) return void 0;
+  if (typeof args === "object") return args;
+  try {
+    return JSON.parse(args);
+  } catch {
+    return void 0;
+  }
 }
 function text(msg) {
   return { content: [{ type: "text", text: msg }] };

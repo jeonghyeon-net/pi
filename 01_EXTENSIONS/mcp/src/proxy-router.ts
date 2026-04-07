@@ -20,7 +20,7 @@ const ProxySchema = Type.Object({
 		Type.Literal("search"), Type.Literal("status"), Type.Literal("connect"),
 	]),
 	tool: Type.Optional(Type.String({ description: "Tool name (for call/describe)" })),
-	args: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: "Tool arguments (for call)" })),
+	args: Type.Optional(Type.String({ description: 'Tool arguments as JSON string, e.g. {"jql":"project = COM"}' })),
 	server: Type.Optional(Type.String({ description: "Target server (for list/connect/call)" })),
 	query: Type.Optional(Type.String({ description: "Search query (for search)" })),
 });
@@ -36,7 +36,8 @@ export function routeAction(params: ProxyParams, deps: ActionDeps): Promise<Prox
 			if (!params.tool) {
 				return Promise.resolve(text("Tool name is required for call action."));
 			}
-			return deps.call(params.tool, params.args);
+			const parsed = parseArgs(params.args);
+			return deps.call(params.tool, parsed);
 		}
 	}
 }
@@ -66,6 +67,12 @@ export function createProxyTool(
 			return { ...result, details: { ...result.details, ...(desc ? { description: desc } : {}) } };
 		},
 	};
+}
+
+function parseArgs(args: string | Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+	if (!args) return undefined;
+	if (typeof args === "object") return args;
+	try { return JSON.parse(args) as Record<string, unknown>; } catch { return undefined; }
 }
 
 function text(msg: string): ProxyToolResult {

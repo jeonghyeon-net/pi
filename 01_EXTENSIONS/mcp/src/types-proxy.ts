@@ -3,7 +3,7 @@ export type ProxyAction = "call" | "list" | "describe" | "search" | "status" | "
 export interface ProxyParams {
 	action: ProxyAction;
 	tool?: string;
-	args?: Record<string, unknown>;
+	args?: string | Record<string, unknown>;
 	server?: string;
 	query?: string;
 }

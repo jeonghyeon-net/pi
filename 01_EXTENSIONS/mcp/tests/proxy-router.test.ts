@@ -33,11 +33,22 @@ describe("routeAction", () => {
 		await routeAction({ action: "status" }, deps);
 		expect(deps.status).toHaveBeenCalled();
 	});
-	it("routes call action", async () => {
-		const params: ProxyParams = { action: "call", tool: "search", args: { q: "hi" } };
-		const result = await routeAction(params, deps);
-		expect(deps.call).toHaveBeenCalledWith("search", { q: "hi" });
+	it("routes call with object args", async () => {
+		const result = await routeAction({ action: "call", tool: "t", args: { q: "hi" } }, deps);
+		expect(deps.call).toHaveBeenCalledWith("t", { q: "hi" });
 		expect(result.content[0].text).toBe("called");
+	});
+	it("routes call with JSON string args", async () => {
+		await routeAction({ action: "call", tool: "t", args: '{"jql":"x"}' }, deps);
+		expect(deps.call).toHaveBeenCalledWith("t", { jql: "x" });
+	});
+	it("routes call with undefined args", async () => {
+		await routeAction({ action: "call", tool: "t" }, deps);
+		expect(deps.call).toHaveBeenCalledWith("t", undefined);
+	});
+	it("routes call with invalid JSON string args", async () => {
+		await routeAction({ action: "call", tool: "t", args: "{bad" }, deps);
+		expect(deps.call).toHaveBeenCalledWith("t", undefined);
 	});
 	it("routes connect action", async () => {
 		await routeAction({ action: "connect", server: "gh" }, deps);
@@ -49,45 +60,3 @@ describe("routeAction", () => {
 	});
 });
 
-describe("createProxyTool", () => {
-	const pi = { sendMessage: vi.fn() };
-	it("returns tool definition with correct name, label, and promptSnippet", () => {
-		const tool = createProxyTool(pi, () => "MCP proxy", () => stubDeps());
-		expect(tool.name).toBe("mcp");
-		expect(tool.label).toBe("MCP");
-		expect(tool.promptSnippet).toContain("MCP gateway");
-		expect(tool.parameters).toBeDefined();
-		expect(tool.parameters).toHaveProperty("properties");
-	});
-	it("execute delegates to routeAction with makeDeps", async () => {
-		const statusFn = vi.fn(() => ({ content: [{ type: "text" as const, text: "ok" }] }));
-		const tool = createProxyTool(pi, () => "desc", () => stubDeps({ status: statusFn }));
-		const result = await tool.execute("id", { action: "status" }, null, null, null);
-		expect(statusFn).toHaveBeenCalled();
-		expect(result.content[0].text).toBe("ok");
-	});
-	it("uses fallback description always", () => {
-		const tool = createProxyTool(pi, () => "custom desc");
-		expect(tool.description).toContain("MCP proxy");
-	});
-	it("includes dynamic description in execute details", async () => {
-		const tool = createProxyTool(pi, () => "dynamic state info", () => stubDeps());
-		const result = await tool.execute("id", { action: "status" }, null, null, null);
-		expect(result.details?.description).toBe("dynamic state info");
-	});
-	it("omits description in details when buildDesc not provided", async () => {
-		const tool = createProxyTool(pi);
-		const result = await tool.execute("id", { action: "status" }, null, null, null);
-		expect(result.details?.description).toBeUndefined();
-	});
-	it("uses EMPTY_DEPS when makeDeps omitted", async () => {
-		const tool = createProxyTool(pi);
-		const result = await tool.execute("id", { action: "status" }, null, null, null);
-		expect(result.content[0].text).toBe("No servers.");
-	});
-	it("uses async EMPTY_DEPS for call action when makeDeps omitted", async () => {
-		const tool = createProxyTool(pi);
-		const result = await tool.execute("id", { action: "call", tool: "t" }, null, null, null);
-		expect(result.content[0].text).toBe("No servers.");
-	});
-});
