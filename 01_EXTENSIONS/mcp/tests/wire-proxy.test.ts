@@ -17,8 +17,15 @@ vi.mock("../src/state.js", () => ({
 }));
 vi.mock("../src/failure-tracker.js", () => ({ getBackoffMs: vi.fn().mockReturnValue(0), getFailure: vi.fn().mockReturnValue(undefined) }));
 vi.mock("../src/wire-command.js", () => ({ wireCommandConnect: vi.fn().mockReturnValue(vi.fn().mockResolvedValue(undefined)) }));
+vi.mock("../src/proxy-description.js", () => ({ buildDescription: vi.fn().mockReturnValue("MCP proxy tool.") }));
+vi.mock("../src/consent.js", () => ({
+	createConsentManager: vi.fn().mockReturnValue({
+		needsConsent: vi.fn().mockReturnValue(false),
+		recordApproval: vi.fn(),
+	}),
+}));
 
-import { wireProxyDeps, findToolInMetadata, buildServerStatuses, buildCallDeps } from "../src/wire-proxy.js";
+import { wireProxyDeps, findToolInMetadata, buildServerStatuses, buildCallDeps, buildProxyDescription } from "../src/wire-proxy.js";
 import { getConfig, getAllMetadata, getConnections } from "../src/state.js";
 
 describe("wireProxyDeps", () => {
@@ -34,6 +41,19 @@ describe("wireProxyDeps", () => {
 	it("connect no server", async () => { expect((await wireProxyDeps().connect(undefined)).content[0].text).toContain("required"); });
 	it("connect unknown", async () => { expect((await wireProxyDeps().connect("x")).content[0].text).toContain("not found"); });
 	it("connect no config", async () => { vi.mocked(getConfig).mockReturnValue(null); expect((await wireProxyDeps().connect("s1")).content[0].text).toContain("No config"); });
+});
+
+describe("buildProxyDescription", () => {
+	it("returns description string", () => {
+		expect(buildProxyDescription()).toBe("MCP proxy tool.");
+	});
+	it("passes state accessors to buildDescription", async () => {
+		const { buildDescription } = await import("../src/proxy-description.js");
+		buildProxyDescription();
+		const state = vi.mocked(buildDescription).mock.calls[0][0];
+		expect(state.getServers()).toEqual(expect.any(Array));
+		expect(state.getMetadataMap()).toBeInstanceOf(Map);
+	});
 });
 
 describe("findToolInMetadata", () => {
@@ -58,5 +78,19 @@ describe("buildCallDeps", () => {
 	it("connectServer skips unknown", async () => { vi.mocked(getConfig).mockReturnValue({ mcpServers: {} }); const f = vi.fn(); await buildCallDeps(f).connectServer("x"); expect(f).not.toHaveBeenCalled(); });
 	it("getOrConnect returns conn", async () => { const c = { name: "s1", client: {}, transport: {}, status: "connected", lastUsedAt: 0, inFlight: 0 }; vi.mocked(getConnections).mockReturnValue(new Map([["s1", c]])); expect(await buildCallDeps(vi.fn()).getOrConnect("s1")).toBe(c); });
 	it("getOrConnect throws", async () => { vi.mocked(getConnections).mockReturnValue(new Map()); await expect(buildCallDeps(vi.fn()).getOrConnect("s1")).rejects.toThrow("not connected"); });
-	it("checkConsent true", async () => { expect(await buildCallDeps(vi.fn()).checkConsent("s1")).toBe(true); });
+	it("checkConsent returns true", async () => { expect(await buildCallDeps(vi.fn()).checkConsent("s1")).toBe(true); });
+	it("checkConsent records approval when needsConsent is true", async () => {
+		const { createConsentManager } = await import("../src/consent.js");
+		const mgr = { needsConsent: vi.fn().mockReturnValue(true), recordApproval: vi.fn() };
+		vi.mocked(createConsentManager).mockReturnValue(mgr as ReturnType<typeof createConsentManager>);
+		const deps = buildCallDeps(vi.fn());
+		await expect(deps.checkConsent("s1")).resolves.toBe(true);
+		expect(mgr.recordApproval).toHaveBeenCalledWith("s1");
+	});
+	it("reads consent mode from config settings", async () => {
+		vi.mocked(getConfig).mockReturnValue({ mcpServers: {}, settings: { consent: "always" } });
+		const { createConsentManager } = await import("../src/consent.js");
+		buildCallDeps(vi.fn());
+		expect(createConsentManager).toHaveBeenCalledWith("always");
+	});
 });

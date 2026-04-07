@@ -7563,6 +7563,7 @@ var DEFAULT_USER_CONFIG = "~/.pi/agent/mcp.json";
 var DEFAULT_PROJECT_CONFIG = ".pi/mcp.json";
 var CACHE_FILE_PATH = "~/.pi/agent/mcp-cache.json";
 var OAUTH_TOKEN_DIR = "~/.pi/agent/mcp-oauth";
+var STATUS_KEY = "mcp";
 var HASH_EXCLUDE_FIELDS = /* @__PURE__ */ new Set(["lifecycle", "idleTimeout", "debug"]);
 
 // src/state.ts
@@ -7600,6 +7601,11 @@ function setMetadata(server, tools) {
 function getAllMetadata() {
   return metadata;
 }
+function updateFooterStatus(ui, totalServers) {
+  const connected = connections.size;
+  const text4 = ui.theme.fg("accent", `MCP: ${connected}/${totalServers} servers`);
+  ui.setStatus(STATUS_KEY, text4);
+}
 function resetState() {
   generation = 0;
   config = null;
@@ -7609,8 +7615,20 @@ function resetState() {
 
 // src/failure-tracker.ts
 var failures = /* @__PURE__ */ new Map();
+function recordFailure(server) {
+  const existing = failures.get(server);
+  if (existing) {
+    existing.at = Date.now();
+    existing.count++;
+  } else {
+    failures.set(server, { at: Date.now(), count: 1 });
+  }
+}
 function getFailure(server) {
   return failures.get(server);
+}
+function clearFailure(server) {
+  failures.delete(server);
 }
 var BASE_BACKOFF_MS = 1e3;
 var MAX_BACKOFF_MS = 5 * 60 * 1e3;
@@ -7694,68 +7712,6 @@ function showHelp(notify) {
 async function noopConnect() {
 }
 async function noopClose() {
-}
-
-// src/lifecycle-init.ts
-function classifyServers(config3) {
-  const eager = [];
-  const lazy2 = [];
-  for (const [name, entry] of Object.entries(config3.mcpServers)) {
-    const mode = entry.lifecycle ?? "lazy";
-    (mode === "lazy" ? lazy2 : eager).push({ name, entry, mode });
-  }
-  return { eager, lazy: lazy2 };
-}
-async function connectAndDiscover(gen, server, deps) {
-  try {
-    const conn = await deps.connectServer(server.name, server.entry);
-    if (deps.getGeneration() !== gen) return;
-    deps.setConnection(server.name, conn);
-    try {
-      const tools = await deps.buildMetadata(server.name, conn.client);
-      if (deps.getGeneration() !== gen) return;
-      deps.setMetadata(server.name, tools);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      deps.logger.warn(`Tool discovery failed for ${server.name}: ${msg}`);
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    deps.logger.warn(`Failed to connect ${server.name}: ${msg}`);
-  }
-}
-function onSessionStart(pi, deps) {
-  return async (_event, _ctx) => {
-    if (!deps) return;
-    const gen = deps.incrementGeneration();
-    deps.logger.info("Session start: loading config");
-    let config3;
-    try {
-      config3 = deps.applyDirectToolsEnv(deps.mergeConfigs(await deps.loadConfig()));
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      deps.logger.error(`Config load failed: ${msg}`);
-      return;
-    }
-    deps.setConfig(config3);
-    const hash2 = deps.computeHash(config3);
-    const cache = deps.loadCache();
-    const cacheHit = deps.isCacheValid(cache, hash2);
-    const { eager } = classifyServers(config3);
-    const total = Object.keys(config3.mcpServers).length;
-    const toConnect = cacheHit ? [] : eager;
-    await Promise.allSettled(toConnect.map((s) => connectAndDiscover(gen, s, deps)));
-    if (deps.getGeneration() !== gen) return;
-    const directSpecs = deps.resolveDirectTools(deps.getAllMetadata(), config3);
-    const deduped = deps.deduplicateTools(directSpecs);
-    deps.registerDirectTools(pi, deduped, deps);
-    deps.startIdleTimer(config3);
-    deps.startKeepalive(config3);
-    deps.saveCache(hash2, deps.getAllMetadata()).catch(() => {
-    });
-    deps.updateFooter();
-    deps.logger.info(`Session started: ${eager.length}/${total} servers connected`);
-  };
 }
 
 // src/lifecycle-shutdown.ts
@@ -7934,6 +7890,68 @@ function stopKeepalive() {
     clearInterval(timer2);
     timer2 = null;
   }
+}
+
+// src/lifecycle-init.ts
+function classifyServers(config3) {
+  const eager = [];
+  const lazy2 = [];
+  for (const [name, entry] of Object.entries(config3.mcpServers)) {
+    const mode = entry.lifecycle ?? "lazy";
+    (mode === "lazy" ? lazy2 : eager).push({ name, entry, mode });
+  }
+  return { eager, lazy: lazy2 };
+}
+async function connectAndDiscover(gen, server, deps) {
+  try {
+    const conn = await deps.connectServer(server.name, server.entry);
+    if (deps.getGeneration() !== gen) return;
+    deps.setConnection(server.name, conn);
+    try {
+      const tools = await deps.buildMetadata(server.name, conn.client);
+      if (deps.getGeneration() !== gen) return;
+      deps.setMetadata(server.name, tools);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      deps.logger.warn(`Tool discovery failed for ${server.name}: ${msg}`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    deps.logger.warn(`Failed to connect ${server.name}: ${msg}`);
+  }
+}
+function onSessionStart(pi, deps) {
+  return async (_event, _ctx) => {
+    if (!deps) return;
+    const gen = deps.incrementGeneration();
+    deps.logger.info("Session start: loading config");
+    let config3;
+    try {
+      config3 = deps.applyDirectToolsEnv(deps.mergeConfigs(await deps.loadConfig()));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      deps.logger.error(`Config load failed: ${msg}`);
+      return;
+    }
+    deps.setConfig(config3);
+    const hash2 = deps.computeHash(config3);
+    const cache = deps.loadCache();
+    const cacheHit = deps.isCacheValid(cache, hash2);
+    const { eager } = classifyServers(config3);
+    const total = Object.keys(config3.mcpServers).length;
+    const toConnect = cacheHit ? [] : eager;
+    await Promise.allSettled(toConnect.map((s) => connectAndDiscover(gen, s, deps)));
+    if (deps.getGeneration() !== gen) return;
+    const directSpecs = deps.resolveDirectTools(deps.getAllMetadata(), config3);
+    const deduped = deps.deduplicateTools(directSpecs);
+    deps.registerDirectTools(pi, deduped, deps);
+    deps.startIdleTimer(config3);
+    deps.startKeepalive(config3);
+    deps.saveCache(hash2, deps.getAllMetadata()).catch(() => {
+    });
+    deps.updateFooter();
+    deps.logger.info(`Session started: ${eager.length}/${total} servers connected`);
+  };
 }
 
 // src/logger-format.ts
@@ -8334,6 +8352,15 @@ function toolRawToMetadata(raw, serverName) {
     inputSchema: raw.inputSchema
   };
 }
+function resourceRawToMetadata(raw, serverName) {
+  return {
+    name: raw.name,
+    originalName: raw.name,
+    serverName,
+    description: raw.description ?? "",
+    resourceUri: raw.uri
+  };
+}
 async function buildToolMetadata(client, serverName) {
   const all = [];
   let cursor;
@@ -8348,10 +8375,66 @@ async function buildToolMetadata(client, serverName) {
   } while (cursor);
   return all;
 }
+async function buildResourceMetadata(client, serverName) {
+  const all = [];
+  let cursor;
+  do {
+    const result = await client.listResources(
+      cursor ? { cursor } : void 0
+    );
+    for (const res of result.resources) {
+      all.push(resourceRawToMetadata(res, serverName));
+    }
+    cursor = result.nextCursor;
+  } while (cursor);
+  return all;
+}
+
+// src/consent.ts
+function createConsentManager(mode) {
+  const approved = /* @__PURE__ */ new Set();
+  const denied = /* @__PURE__ */ new Set();
+  return {
+    needsConsent(server) {
+      if (mode === "never") return false;
+      if (mode === "always") return true;
+      return !approved.has(server) && !denied.has(server);
+    },
+    recordApproval(server) {
+      approved.add(server);
+      denied.delete(server);
+    },
+    recordDenial(server) {
+      denied.add(server);
+      approved.delete(server);
+    },
+    isDenied(server) {
+      return denied.has(server);
+    },
+    ensureApproved(server) {
+      if (denied.has(server)) {
+        throw new McpError("CONSENT_DENIED", `Server "${server}" is denied`, { server });
+      }
+      if (mode !== "never" && !approved.has(server)) {
+        throw new McpError("CONSENT_PENDING", `Server "${server}" not yet approved`, { server });
+      }
+    },
+    reset() {
+      approved.clear();
+      denied.clear();
+    }
+  };
+}
 
 // src/wire-init-tools.ts
+function isMcpClient(v) {
+  return typeof v === "object" && v !== null && "listTools" in v && "callTool" in v;
+}
 function wireBuildMetadata() {
-  return async (name, client) => buildToolMetadata(client, name);
+  return async (name, client) => {
+    if (!isMcpClient(client)) return [];
+    return buildToolMetadata(client, name);
+  };
 }
 function wireResolveDirectTools() {
   return (metadata2, config3) => {
@@ -8372,7 +8455,14 @@ function wireResolveDirectTools() {
 function wireRegisterDirectTools() {
   return (pi, specs) => {
     const getConn = (name) => getConnections().get(name);
-    const consent = async () => true;
+    const cfg = getConfig();
+    const mode = cfg?.settings?.consent ?? "never";
+    const cm = createConsentManager(mode);
+    const consent = async (server) => {
+      if (!cm.needsConsent(server)) return true;
+      cm.recordApproval(server);
+      return true;
+    };
     for (const spec of specs) {
       const executor = createExecutor(spec, getConn, consent);
       const schema = spec.inputSchema ?? { type: "object", properties: {} };
@@ -8381,7 +8471,10 @@ function wireRegisterDirectTools() {
   };
 }
 function wireBuildResourceTools() {
-  return () => [];
+  return async (name, client) => {
+    if (!isMcpClient(client)) return [];
+    return buildResourceMetadata(client, name);
+  };
 }
 function wireDeduplicateTools() {
   return (tools) => {
@@ -24680,10 +24773,16 @@ function makeConnectDeps() {
 function wireCommandConnect() {
   const deps = makeConnectDeps();
   return async (name, entry) => {
-    const result = await connectServer(name, entry, deps);
-    setConnection(name, result);
-    const tools = await buildToolMetadata(result.client, name);
-    setMetadata(name, tools);
+    try {
+      const result = await connectServer(name, entry, deps);
+      setConnection(name, result);
+      clearFailure(name);
+      const tools = await buildToolMetadata(result.client, name);
+      setMetadata(name, tools);
+    } catch (err) {
+      recordFailure(name);
+      throw err;
+    }
   };
 }
 function wireCommandClose() {
@@ -24764,11 +24863,21 @@ var ServerPool = class {
 };
 
 // src/wire-init.ts
+var capturedUi = null;
+function setCapturedUi(ui) {
+  capturedUi = ui;
+}
+function getCapturedUi() {
+  return capturedUi;
+}
 function isConfig(v) {
   return typeof v === "object" && v !== null && "mcpServers" in v;
 }
 function isServerConn(v) {
   return typeof v === "object" && v !== null && "client" in v && "transport" in v;
+}
+function isFooterUi(v) {
+  return typeof v === "object" && v !== null && "setStatus" in v && "theme" in v;
 }
 function wrapIdleTimer(opts) {
   if (!isConfig(opts)) return;
@@ -24785,10 +24894,18 @@ function wrapIdleTimer(opts) {
 }
 function wrapKeepalive(opts) {
   if (!isConfig(opts)) return;
+  const doConnect = wireCommandConnect();
   startKeepalive({
     connections: getConnections(),
     servers: opts.mcpServers,
-    reconnectFn: async () => {
+    reconnectFn: async (name) => {
+      const entry = opts.mcpServers[name];
+      if (!entry) return;
+      try {
+        await doConnect(name, entry);
+      } catch {
+        recordFailure(name);
+      }
     },
     intervalMs: KEEPALIVE_INTERVAL_MS
   });
@@ -24821,8 +24938,18 @@ function wireInitDeps() {
     incrementGeneration,
     getGeneration,
     updateFooter: () => {
+      const ui = getCapturedUi();
+      const cfg = getConfig();
+      if (ui && cfg) updateFooterStatus(ui, Object.keys(cfg.mcpServers).length);
     },
     logger
+  };
+}
+function wireSessionStart(pi) {
+  const handler = onSessionStart(pi, wireInitDeps());
+  return async (event, ctx) => {
+    if (isFooterUi(ctx)) setCapturedUi(ctx);
+    await handler(event, ctx);
   };
 }
 
@@ -24847,8 +24974,12 @@ async function closeAllConnections() {
 }
 function wireShutdownOps() {
   const logger = createLogger("info", { module: "shutdown" });
+  const save = wireSaveCache();
   return {
     saveCache: async () => {
+      const cfg = getConfig();
+      if (!cfg) return;
+      await save(computeConfigHash(cfg), getAllMetadata());
     },
     closeAll: closeAllConnections,
     stopIdle: stopIdleTimer,
@@ -25084,6 +25215,25 @@ function formatProp(name, prop, isRequired) {
   return parts.join(" ");
 }
 
+// src/proxy-description.ts
+var BASE = "MCP proxy tool. Actions: call, list, describe, search, status, connect.";
+function buildDescription(state) {
+  const servers = state.getServers();
+  if (servers.length === 0) return `${BASE}
+No servers configured.`;
+  const lines = servers.map((s) => formatServer(s, state.getMetadataMap()));
+  return `${BASE}
+Servers:
+${lines.join("\n")}`;
+}
+function formatServer(server, metadata2) {
+  const tools = metadata2.get(server.name);
+  const count = tools ? tools.length : 0;
+  const toolStr = count > 0 ? `${count} tool${count === 1 ? "" : "s"}` : "no tools";
+  if (server.status === "connected") return `  - ${server.name}: ${toolStr}`;
+  return `  - ${server.name}: ${toolStr} (${server.status})`;
+}
+
 // src/wire-proxy.ts
 function findToolInMetadata(name) {
   for (const tools of getAllMetadata().values()) {
@@ -25102,14 +25252,17 @@ function buildServerStatuses() {
   });
 }
 function buildCallDeps(doConnect) {
+  const cfg = getConfig();
+  const mode = cfg?.settings?.consent ?? "never";
+  const consent = createConsentManager(mode);
   return {
     findTool: findToolInMetadata,
     getAllMetadata,
     getConfig,
     connectServer: async (name) => {
-      const cfg = getConfig();
-      if (!cfg) return;
-      const entry = cfg.mcpServers[name];
+      const c = getConfig();
+      if (!c) return;
+      const entry = c.mcpServers[name];
       if (entry) await doConnect(name, entry);
     },
     getBackoffMs,
@@ -25119,7 +25272,11 @@ function buildCallDeps(doConnect) {
       if (conn) return conn;
       throw new Error(`Server "${server}" not connected`);
     },
-    checkConsent: async () => true,
+    checkConsent: async (server) => {
+      if (!consent.needsConsent(server)) return true;
+      consent.recordApproval(server);
+      return true;
+    },
     transform: transformContent
   };
 }
@@ -25144,16 +25301,22 @@ async function connectAction(server, doConnect) {
   await doConnect(server, entry);
   return text3(`Connected to "${server}".`);
 }
+function buildProxyDescription() {
+  return buildDescription({
+    getServers: () => buildServerStatuses(),
+    getMetadataMap: () => getAllMetadata()
+  });
+}
 function text3(msg) {
   return { content: [{ type: "text", text: msg }] };
 }
 
 // src/index.ts
 function index_default(pi) {
-  pi.registerTool(createProxyTool(pi, void 0, wireProxyDeps));
+  pi.registerTool(createProxyTool(pi, buildProxyDescription, wireProxyDeps));
   pi.registerCommand("mcp", createMcpCommand(pi, wireCommandConnect(), wireCommandClose()));
   pi.registerFlag("mcp-config", MCP_CONFIG_FLAG);
-  pi.on("session_start", onSessionStart(pi, wireInitDeps()));
+  pi.on("session_start", wireSessionStart(pi));
   pi.on("session_shutdown", onSessionShutdown(wireShutdownOps()));
 }
 export {

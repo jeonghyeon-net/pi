@@ -8,6 +8,7 @@ import { createStdioTransport } from "./transport-stdio.js";
 import { createHttpTransport } from "./transport-http.js";
 import { createSdkStdioTransport, createSdkStreamableHttpTransport, createSdkSseTransport } from "./sdk-transport.js";
 import { createSdkClient } from "./sdk-client.js";
+import { recordFailure, clearFailure } from "./failure-tracker.js";
 
 type ConnectFn = (name: string, entry: ServerEntry) => Promise<void>;
 type CloseFn = (name: string) => Promise<void>;
@@ -30,10 +31,16 @@ export function makeConnectDeps(): ConnectDeps {
 export function wireCommandConnect(): ConnectFn {
 	const deps = makeConnectDeps();
 	return async (name: string, entry: ServerEntry): Promise<void> => {
-		const result = await connectServer(name, entry, deps);
-		setConnection(name, result);
-		const tools = await buildToolMetadata(result.client, name);
-		setMetadata(name, tools);
+		try {
+			const result = await connectServer(name, entry, deps);
+			setConnection(name, result);
+			clearFailure(name);
+			const tools = await buildToolMetadata(result.client, name);
+			setMetadata(name, tools);
+		} catch (err) {
+			recordFailure(name);
+			throw err;
+		}
 	};
 }
 

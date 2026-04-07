@@ -1,19 +1,27 @@
 import { resolveDirectTools } from "./tool-direct.js";
 import { createExecutor, createDirectToolDef } from "./tool-direct-register.js";
 import { buildResourceToolSpecs } from "./tool-resource.js";
-import { buildToolMetadata } from "./tool-metadata.js";
+import { buildToolMetadata, buildResourceMetadata } from "./tool-metadata.js";
 import type { McpConfig, ToolPrefix } from "./types-config.js";
 import type { ToolMetadata, DirectToolSpec } from "./types-tool.js";
 import type { McpClient } from "./types-server.js";
 import type { InitDeps } from "./lifecycle-init.js";
-import { getConnections } from "./state.js";
+import { getConnections, getConfig } from "./state.js";
+import { createConsentManager } from "./consent.js";
 
 interface InitPi {
 	registerTool(tool: { name: string; parameters: Record<string, unknown>; execute: Function }): void;
 }
 
+function isMcpClient(v: unknown): v is McpClient {
+	return typeof v === "object" && v !== null && "listTools" in v && "callTool" in v;
+}
+
 export function wireBuildMetadata(): (name: string, client: unknown) => Promise<ToolMetadata[]> {
-	return async (name, client) => buildToolMetadata(client as McpClient, name);
+	return async (name, client) => {
+		if (!isMcpClient(client)) return [];
+		return buildToolMetadata(client, name);
+	};
 }
 
 export function wireResolveDirectTools(): (metadata: Map<string, ToolMetadata[]>, config: McpConfig) => DirectToolSpec[] {
@@ -35,7 +43,14 @@ export function wireResolveDirectTools(): (metadata: Map<string, ToolMetadata[]>
 export function wireRegisterDirectTools(): (pi: InitPi, specs: DirectToolSpec[], deps: InitDeps) => void {
 	return (pi, specs) => {
 		const getConn = (name: string) => getConnections().get(name);
-		const consent = async () => true;
+		const cfg = getConfig();
+		const mode = cfg?.settings?.consent ?? "never";
+		const cm = createConsentManager(mode);
+		const consent = async (server: string) => {
+			if (!cm.needsConsent(server)) return true;
+			cm.recordApproval(server);
+			return true;
+		};
 		for (const spec of specs) {
 			const executor = createExecutor(spec, getConn, consent);
 			const schema = spec.inputSchema ?? { type: "object", properties: {} };
@@ -44,8 +59,11 @@ export function wireRegisterDirectTools(): (pi: InitPi, specs: DirectToolSpec[],
 	};
 }
 
-export function wireBuildResourceTools(): (name: string, client: unknown) => ToolMetadata[] {
-	return () => [];
+export function wireBuildResourceTools(): (name: string, client: unknown) => Promise<ToolMetadata[]> {
+	return async (name, client) => {
+		if (!isMcpClient(client)) return [];
+		return buildResourceMetadata(client, name);
+	};
 }
 
 export function wireDeduplicateTools(): (tools: DirectToolSpec[]) => DirectToolSpec[] {

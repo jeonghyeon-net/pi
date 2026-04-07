@@ -2,6 +2,8 @@ import { stopIdleTimer } from "./lifecycle-idle.js";
 import { stopKeepalive } from "./lifecycle-keepalive.js";
 import { resetState, getConnections, getConfig, getAllMetadata } from "./state.js";
 import { createLogger } from "./logger.js";
+import { wireSaveCache } from "./wire-init-config.js";
+import { computeConfigHash } from "./config-hash.js";
 
 interface Logger { info(m: string): void; warn(m: string): void; error(m: string): void; debug(m: string): void }
 
@@ -29,8 +31,13 @@ async function closeAllConnections(): Promise<void> {
 
 export function wireShutdownOps(): ShutdownOps {
 	const logger = createLogger("info", { module: "shutdown" });
+	const save = wireSaveCache();
 	return {
-		saveCache: async () => { /* cache save wired separately if needed */ },
+		saveCache: async () => {
+			const cfg = getConfig();
+			if (!cfg) return;
+			await save(computeConfigHash(cfg), getAllMetadata());
+		},
 		closeAll: closeAllConnections,
 		stopIdle: stopIdleTimer,
 		stopKeepalive,

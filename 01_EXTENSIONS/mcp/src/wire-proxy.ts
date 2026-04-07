@@ -10,6 +10,8 @@ import { transformContent } from "./content-transform.js";
 import { getAllMetadata, getMetadata, getConfig, getConnections } from "./state.js";
 import { getBackoffMs, getFailure } from "./failure-tracker.js";
 import { wireCommandConnect } from "./wire-command.js";
+import { buildDescription } from "./proxy-description.js";
+import { createConsentManager } from "./consent.js";
 import type { ServerEntry } from "./types-config.js";
 
 type ConnectFn = (name: string, entry: ServerEntry) => Promise<void>;
@@ -33,14 +35,17 @@ export function buildServerStatuses() {
 }
 
 export function buildCallDeps(doConnect: ConnectFn): CallDeps {
+	const cfg = getConfig();
+	const mode = cfg?.settings?.consent ?? "never";
+	const consent = createConsentManager(mode);
 	return {
 		findTool: findToolInMetadata,
 		getAllMetadata,
 		getConfig,
 		connectServer: async (name: string) => {
-			const cfg = getConfig();
-			if (!cfg) return;
-			const entry = cfg.mcpServers[name];
+			const c = getConfig();
+			if (!c) return;
+			const entry = c.mcpServers[name];
 			if (entry) await doConnect(name, entry);
 		},
 		getBackoffMs,
@@ -50,7 +55,11 @@ export function buildCallDeps(doConnect: ConnectFn): CallDeps {
 			if (conn) return conn;
 			throw new Error(`Server "${server}" not connected`);
 		},
-		checkConsent: async () => true,
+		checkConsent: async (server: string) => {
+			if (!consent.needsConsent(server)) return true;
+			consent.recordApproval(server);
+			return true;
+		},
 		transform: transformContent,
 	};
 }
@@ -76,6 +85,13 @@ async function connectAction(server: string | undefined, doConnect: ConnectFn): 
 	if (!entry) return text(`Server "${server}" not found in config.`);
 	await doConnect(server, entry);
 	return text(`Connected to "${server}".`);
+}
+
+export function buildProxyDescription(): string {
+	return buildDescription({
+		getServers: () => buildServerStatuses(),
+		getMetadataMap: () => getAllMetadata(),
+	});
 }
 
 function text(msg: string): ProxyToolResult {

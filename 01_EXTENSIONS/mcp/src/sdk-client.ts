@@ -1,12 +1,12 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { ConnectableClient } from "./server-connect.js";
 import type { McpTransport, CallToolResult, ListToolsResult, ListResourcesResult, ReadResourceResult } from "./types-server.js";
-import type { SdkTransport } from "./sdk-transport.js";
 
 const CLIENT_INFO = { name: "pi-mcp", version: "1.0.0" };
 
-function asSdkTransport(t: McpTransport): SdkTransport {
-	const st = t as SdkTransport;
+function asSdkTransport(t: McpTransport): Transport {
+	const st = t as Transport;
 	if (typeof st.start !== "function" || typeof st.send !== "function") {
 		throw new Error("Transport is not an SDK transport");
 	}

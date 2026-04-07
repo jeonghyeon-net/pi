@@ -22,7 +22,7 @@ export interface InitDeps {
 	buildMetadata: (name: string, client: unknown) => Promise<ToolMetadata[]>;
 	resolveDirectTools: (metadata: Map<string, ToolMetadata[]>, config: McpConfig) => DirectToolSpec[];
 	registerDirectTools: (pi: InitPi, specs: DirectToolSpec[], deps: InitDeps) => void;
-	buildResourceTools: (name: string, client: unknown) => ToolMetadata[];
+	buildResourceTools: (name: string, client: unknown) => Promise<ToolMetadata[]>;
 	deduplicateTools: (tools: DirectToolSpec[]) => DirectToolSpec[];
 	startIdleTimer: (opts: unknown) => void; startKeepalive: (opts: unknown) => void;
 	setConfig: (config: McpConfig) => void;
