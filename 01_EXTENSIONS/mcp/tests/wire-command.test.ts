@@ -13,17 +13,47 @@ vi.mock("../src/state.js", () => ({
 	getConnections: vi.fn().mockReturnValue(new Map()),
 }));
 
+const mockStdio = vi.fn().mockReturnValue({ close: vi.fn() });
+const mockStreamable = vi.fn().mockReturnValue({ close: vi.fn() });
+const mockSse = vi.fn().mockReturnValue({ close: vi.fn() });
+const mockClient = vi.fn().mockReturnValue({ connect: vi.fn() });
+
+vi.mock("../src/sdk-transport.js", () => ({
+	createSdkStdioTransport: (...a: unknown[]) => mockStdio(...a),
+	createSdkStreamableHttpTransport: (...a: unknown[]) => mockStreamable(...a),
+	createSdkSseTransport: (...a: unknown[]) => mockSse(...a),
+}));
+vi.mock("../src/sdk-client.js", () => ({
+	createSdkClient: () => mockClient(),
+}));
+
 import { wireCommandConnect, wireCommandClose, makeConnectDeps } from "../src/wire-command.js";
 import { connectServer } from "../src/server-connect.js";
 import { setConnection, getConnections, removeConnection, setMetadata } from "../src/state.js";
 import { buildToolMetadata } from "../src/tool-metadata.js";
 
 describe("makeConnectDeps", () => {
-	it("transport and client factories throw not-wired errors", async () => {
+	beforeEach(() => vi.clearAllMocks());
+	it("creates stdio transport via SDK factory", () => {
 		const d = makeConnectDeps();
-		expect(() => d.createStdioTransport({ command: "x" }, {})).toThrow("stdio");
-		await expect(d.createHttpTransport("http://x", undefined)).rejects.toThrow("http");
-		expect(() => d.createClient()).toThrow("client");
+		d.createStdioTransport({ command: "node", args: ["s.js"] }, {});
+		expect(mockStdio).toHaveBeenCalledWith("node", ["s.js"], undefined, undefined);
+	});
+	it("creates http transport via streamable SDK factory", async () => {
+		const d = makeConnectDeps();
+		await d.createHttpTransport("http://x", { "x-key": "v" });
+		expect(mockStreamable).toHaveBeenCalledWith("http://x", { "x-key": "v" });
+	});
+	it("falls back to SSE when streamable throws", async () => {
+		mockStreamable.mockImplementationOnce(() => { throw new Error("fail"); });
+		const d = makeConnectDeps();
+		await d.createHttpTransport("http://x", undefined);
+		expect(mockSse).toHaveBeenCalledWith("http://x", undefined);
+	});
+	it("creates client via SDK factory and exposes processEnv", () => {
+		const d = makeConnectDeps();
+		d.createClient();
+		expect(mockClient).toHaveBeenCalled();
 		expect(d.processEnv).toBeDefined();
 	});
 });
@@ -49,26 +79,20 @@ describe("wireCommandClose", () => {
 		status: "connected", lastUsedAt: 0, inFlight: 0,
 	});
 
-	it("closes server and removes connection", async () => {
+	it("closes and removes connection; no-ops for unknown", async () => {
 		const conn = mkConn();
 		vi.mocked(getConnections).mockReturnValue(new Map([["s1", conn]]));
 		await wireCommandClose()("s1");
 		expect(conn.status).toBe("closed");
 		expect(removeConnection).toHaveBeenCalledWith("s1");
-	});
-
-	it("no-ops for unknown server", async () => {
 		vi.mocked(getConnections).mockReturnValue(new Map());
+		vi.mocked(removeConnection).mockClear();
 		await wireCommandClose()("unknown");
 		expect(removeConnection).not.toHaveBeenCalled();
 	});
-
-	it("swallows client close error", async () => {
+	it("swallows client and transport close errors", async () => {
 		vi.mocked(getConnections).mockReturnValue(new Map([["s1", mkConn(true)]]));
 		await expect(wireCommandClose()("s1")).resolves.toBeUndefined();
-	});
-
-	it("swallows transport close error", async () => {
 		vi.mocked(getConnections).mockReturnValue(new Map([["s1", mkConn(false, true)]]));
 		await expect(wireCommandClose()("s1")).resolves.toBeUndefined();
 	});

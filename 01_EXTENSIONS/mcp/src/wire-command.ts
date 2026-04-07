@@ -4,15 +4,25 @@ import { setConnection, removeConnection, getConnections } from "./state.js";
 import { buildToolMetadata } from "./tool-metadata.js";
 import { setMetadata } from "./state.js";
 import type { ServerEntry } from "./types-config.js";
+import { createStdioTransport } from "./transport-stdio.js";
+import { createHttpTransport } from "./transport-http.js";
+import { createSdkStdioTransport, createSdkStreamableHttpTransport, createSdkSseTransport } from "./sdk-transport.js";
+import { createSdkClient } from "./sdk-client.js";
 
 type ConnectFn = (name: string, entry: ServerEntry) => Promise<void>;
 type CloseFn = (name: string) => Promise<void>;
 
 export function makeConnectDeps(): ConnectDeps {
 	return {
-		createStdioTransport: () => { throw new Error("stdio transport not wired"); },
-		createHttpTransport: async () => { throw new Error("http transport not wired"); },
-		createClient: () => { throw new Error("client factory not wired"); },
+		createStdioTransport: (entry, env) =>
+			createStdioTransport(entry, env, (cmd, args, opts) =>
+				createSdkStdioTransport(cmd, args, opts.env, opts.cwd)),
+		createHttpTransport: (url, headers) =>
+			createHttpTransport(url, headers, {
+				createStreamableHttp: async (u, h) => createSdkStreamableHttpTransport(u, h),
+				createSse: async (u, h) => createSdkSseTransport(u, h),
+			}),
+		createClient: () => createSdkClient(),
 		processEnv: process.env as Record<string, string | undefined>,
 	};
 }
