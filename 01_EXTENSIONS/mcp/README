@@ -31,7 +31,7 @@ mcp … MCP 서버 통합 (proxy tool, lazy connection, metadata caching)
   bearerToken            직접 토큰 지정
   bearerTokenEnv         환경변수에서 토큰 읽기
   lifecycle              "lazy" (기본) | "eager" | "keep-alive"
-  idleTimeout            유휴 타임아웃 (분, 기본 10)
+  idleTimeout            유휴 타임아웃 (밀리초, 기본 600000=10분)
   directTools            true | ["tool1", "tool2"] (proxy 우회 직접 등록)
   exposeResources        리소스를 get_ tool로 노출 (기본 true)
   debug                  서버 디버그 출력
@@ -60,5 +60,5 @@ direct tools
     github_create_issue({ title: "bug", body: "..." })
 
 환경변수
-  MCP_DIRECT_TOOLS   direct tool 오버라이드 ("__none__"=전체 비활성화)
+  PI_MCP_DIRECT_TOOLS  direct tool 오버라이드 ("__none__"=전체 비활성화)
   ${VAR}             서버 command args, env, headers에서 치환

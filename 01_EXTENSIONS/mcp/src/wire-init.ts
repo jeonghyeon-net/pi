@@ -1,4 +1,5 @@
 import type { InitDeps } from "./lifecycle-init.js";
+import type { ServerConnection } from "./types-server.js";
 import { connectServer } from "./server-connect.js";
 import { startIdleTimer } from "./lifecycle-idle.js";
 import { startKeepalive } from "./lifecycle-keepalive.js";
@@ -69,7 +70,7 @@ export function wireInitDeps(): InitDeps {
 		registerDirectTools: wireRegisterDirectTools(),
 		buildResourceTools: wireBuildResourceTools(), deduplicateTools: wireDeduplicateTools(),
 		startIdleTimer: wrapIdleTimer, startKeepalive: wrapKeepalive, setConfig,
-		setConnection: (name, conn) => { setConnection(name, conn); },
+		setConnection: (name, conn) => { setConnection(name, conn as ServerConnection); },
 		setMetadata, getAllMetadata, incrementGeneration, getGeneration,
 		updateFooter: () => {
 			const ui = getCapturedUi(); const cfg = getConfig();

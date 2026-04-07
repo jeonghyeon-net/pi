@@ -18948,7 +18948,13 @@ var SSEClientTransport = class {
 
 // src/sdk-transport.ts
 function createSdkStdioTransport(command, args, env, cwd) {
-  const mergedEnv = env ? { ...process.env, ...env } : void 0;
+  const merged = {};
+  if (env) {
+    for (const [k, v] of Object.entries({ ...process.env, ...env })) {
+      if (v) merged[k] = v;
+    }
+  }
+  const mergedEnv = env ? merged : void 0;
   return new StdioClientTransport({
     command,
     args,

@@ -12,7 +12,9 @@ export function createSdkStdioTransport(
 	env: Record<string, string> | undefined,
 	cwd: string | undefined,
 ): SdkTransport {
-	const mergedEnv = env ? { ...process.env, ...env } : undefined;
+	const merged: Record<string, string> = {};
+	if (env) { for (const [k, v] of Object.entries({ ...process.env, ...env })) { if (v) merged[k] = v; } }
+	const mergedEnv = env ? merged : undefined;
 	return new StdioClientTransport({
 		command,
 		args,
