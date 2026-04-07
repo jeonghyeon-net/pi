@@ -64,15 +64,10 @@ describe("lifecycle-init", () => {
 		await run(deps);
 		expect(deps.registerDirectTools).toHaveBeenCalled();
 	});
-	it("starts idle and keepalive timers", async () => {
-		const deps = makeDeps();
-		await run(deps);
+	it("starts idle and keepalive timers and updates footer", async () => {
+		const deps = makeDeps(); await run(deps);
 		expect(deps.startIdleTimer).toHaveBeenCalled();
 		expect(deps.startKeepalive).toHaveBeenCalled();
-	});
-	it("updates footer status", async () => {
-		const deps = makeDeps();
-		await run(deps);
 		expect(deps.updateFooter).toHaveBeenCalled();
 	});
 	it("skips connecting when cache is valid", async () => {
@@ -93,7 +88,9 @@ describe("lifecycle-init", () => {
 		expect(deps.resolveDirectTools).toHaveBeenCalledWith(meta, expect.anything());
 	});
 	it("returns no-op handler when deps not provided", async () => {
-		const pi = mockPi();
-		await onSessionStart(pi)(undefined, undefined);
+		await onSessionStart(mockPi())(undefined, undefined);
+	});
+	it("calls applyDirectToolsEnv during config load", async () => {
+		const d = makeDeps(); await run(d); expect(d.applyDirectToolsEnv).toHaveBeenCalled();
 	});
 });

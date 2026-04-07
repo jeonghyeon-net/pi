@@ -52,6 +52,7 @@ export function writeServerConfig(
 	} catch {
 		existing = { mcpServers: {} };
 	}
+	existing.mcpServers ??= {};
 	existing.mcpServers[server] = { ...existing.mcpServers[server], ...update };
 	writeConfigAtomic(path, existing, fs);
 }

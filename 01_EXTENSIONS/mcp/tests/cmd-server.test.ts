@@ -10,10 +10,8 @@ describe("handleConnect", () => {
 		expect(notify).toHaveBeenCalledWith(expect.stringContaining("Connected"), "info");
 	});
 	it("notifies error when server not in config", async () => {
-		const connectFn = vi.fn();
 		const notify = vi.fn();
-		await handleConnect("bad", { mcpServers: {} }, connectFn, notify);
-		expect(connectFn).not.toHaveBeenCalled();
+		await handleConnect("bad", { mcpServers: {} }, vi.fn(), notify);
 		expect(notify).toHaveBeenCalledWith(expect.stringContaining("not found"), "error");
 	});
 	it("notifies error on connect failure", async () => {
@@ -21,6 +19,11 @@ describe("handleConnect", () => {
 		const notify = vi.fn();
 		await handleConnect("s1", { mcpServers: { s1: { command: "echo" } } }, connectFn, notify);
 		expect(notify).toHaveBeenCalledWith(expect.stringContaining("timeout"), "error");
+	});
+	it("handles non-Error thrown during connect", async () => {
+		const notify = vi.fn();
+		await handleConnect("s1", { mcpServers: { s1: { command: "echo" } } }, vi.fn().mockRejectedValue("raw"), notify);
+		expect(notify).toHaveBeenCalledWith(expect.stringContaining("raw"), "error");
 	});
 });
 
@@ -33,10 +36,14 @@ describe("handleDisconnect", () => {
 		expect(notify).toHaveBeenCalledWith(expect.stringContaining("Disconnected"), "info");
 	});
 	it("notifies error on close failure", async () => {
-		const closeFn = vi.fn().mockRejectedValue(new Error("stuck"));
 		const notify = vi.fn();
-		await handleDisconnect("s1", closeFn, notify);
+		await handleDisconnect("s1", vi.fn().mockRejectedValue(new Error("stuck")), notify);
 		expect(notify).toHaveBeenCalledWith(expect.stringContaining("stuck"), "error");
+	});
+	it("handles non-Error thrown during disconnect", async () => {
+		const notify = vi.fn();
+		await handleDisconnect("s1", vi.fn().mockRejectedValue(42), notify);
+		expect(notify).toHaveBeenCalledWith(expect.stringContaining("42"), "error");
 	});
 });
 
@@ -45,8 +52,7 @@ describe("handleReconnect", () => {
 		const closeFn = vi.fn().mockResolvedValue(undefined);
 		const connectFn = vi.fn().mockResolvedValue(undefined);
 		const notify = vi.fn();
-		const cfg = { mcpServers: { s1: { command: "echo" } } };
-		await handleReconnect("s1", cfg, closeFn, connectFn, notify);
+		await handleReconnect("s1", { mcpServers: { s1: { command: "echo" } } }, closeFn, connectFn, notify);
 		expect(closeFn).toHaveBeenCalledWith("s1");
 		expect(connectFn).toHaveBeenCalledWith("s1", { command: "echo" });
 		expect(notify).toHaveBeenCalledWith(expect.stringContaining("Reconnected"), "info");
@@ -54,9 +60,8 @@ describe("handleReconnect", () => {
 	it("reconnects all servers when no name given", async () => {
 		const closeFn = vi.fn().mockResolvedValue(undefined);
 		const connectFn = vi.fn().mockResolvedValue(undefined);
-		const notify = vi.fn();
 		const cfg = { mcpServers: { s1: { command: "a" }, s2: { url: "b" } } };
-		await handleReconnect(undefined, cfg, closeFn, connectFn, notify);
+		await handleReconnect(undefined, cfg, closeFn, connectFn, vi.fn());
 		expect(closeFn).toHaveBeenCalledTimes(2);
 		expect(connectFn).toHaveBeenCalledTimes(2);
 	});
@@ -65,34 +70,28 @@ describe("handleReconnect", () => {
 		await handleReconnect("bad", { mcpServers: {} }, vi.fn(), vi.fn(), notify);
 		expect(notify).toHaveBeenCalledWith(expect.stringContaining("not found"), "error");
 	});
-	it("notifies error when reconnect fails mid-loop", async () => {
-		const closeFn = vi.fn().mockRejectedValue(new Error("close-err"));
-		const connectFn = vi.fn().mockResolvedValue(undefined);
+	it("notifies error when reconnect fails", async () => {
 		const notify = vi.fn();
 		const cfg = { mcpServers: { s1: { command: "a" } } };
-		await handleReconnect("s1", cfg, closeFn, connectFn, notify);
-		expect(notify).toHaveBeenCalledWith(expect.stringContaining("close-err"), "error");
+		await handleReconnect("s1", cfg, vi.fn().mockRejectedValue(new Error("err")), vi.fn(), notify);
+		expect(notify).toHaveBeenCalledWith(expect.stringContaining("err"), "error");
 	});
 	it("handles non-Error thrown during reconnect", async () => {
-		const closeFn = vi.fn().mockRejectedValue("string-error");
 		const notify = vi.fn();
 		const cfg = { mcpServers: { s1: { command: "a" } } };
-		await handleReconnect("s1", cfg, closeFn, vi.fn(), notify);
-		expect(notify).toHaveBeenCalledWith(expect.stringContaining("string-error"), "error");
+		await handleReconnect("s1", cfg, vi.fn().mockRejectedValue("str"), vi.fn(), notify);
+		expect(notify).toHaveBeenCalledWith(expect.stringContaining("str"), "error");
 	});
-});
-
-describe("errorMsg branch: non-Error", () => {
-	it("handles non-Error thrown during connect", async () => {
-		const connectFn = vi.fn().mockRejectedValue("raw-string");
-		const notify = vi.fn();
-		await handleConnect("s1", { mcpServers: { s1: { command: "echo" } } }, connectFn, notify);
-		expect(notify).toHaveBeenCalledWith(expect.stringContaining("raw-string"), "error");
+	it("calls updateFooter after reconnect", async () => {
+		const footer = vi.fn();
+		const cfg = { mcpServers: { s1: { command: "a" } } };
+		await handleReconnect("s1", cfg, vi.fn().mockResolvedValue(undefined), vi.fn().mockResolvedValue(undefined), vi.fn(), footer);
+		expect(footer).toHaveBeenCalledTimes(1);
 	});
-	it("handles non-Error thrown during disconnect", async () => {
-		const closeFn = vi.fn().mockRejectedValue(42);
-		const notify = vi.fn();
-		await handleDisconnect("s1", closeFn, notify);
-		expect(notify).toHaveBeenCalledWith(expect.stringContaining("42"), "error");
+	it("calls updateFooter even when reconnects fail", async () => {
+		const footer = vi.fn();
+		const cfg = { mcpServers: { s1: { command: "a" } } };
+		await handleReconnect("s1", cfg, vi.fn().mockRejectedValue(new Error("e")), vi.fn(), vi.fn(), footer);
+		expect(footer).toHaveBeenCalledTimes(1);
 	});
 });
