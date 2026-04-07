@@ -1,31 +1,25 @@
+import type { ProviderConfig } from "@mariozechner/pi-coding-agent";
 import { streamSimpleAnthropic, streamSimpleAzureOpenAIResponses, streamSimpleGoogle, streamSimpleGoogleGeminiCli, streamSimpleGoogleVertex, streamSimpleMistral, streamSimpleOpenAICodexResponses, streamSimpleOpenAICompletions, streamSimpleOpenAIResponses, type Api, type AssistantMessageEventStream, type Context, type Model, type SimpleStreamOptions } from "@mariozechner/pi-ai";
 import { streamSimpleBedrock } from "../node_modules/@mariozechner/pi-ai/dist/providers/amazon-bedrock.js";
 import { wrapStream } from "./stream.js";
 
 type AnyStream = (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => AssistantMessageEventStream;
 
-const baseStreams: Record<string, AnyStream> = {
-	"anthropic-messages": streamSimpleAnthropic as AnyStream,
-	"azure-openai-responses": streamSimpleAzureOpenAIResponses as AnyStream,
-	"bedrock-converse-stream": streamSimpleBedrock as AnyStream,
-	"google-generative-ai": streamSimpleGoogle as AnyStream,
-	"google-gemini-cli": streamSimpleGoogleGeminiCli as AnyStream,
-	"google-vertex": streamSimpleGoogleVertex as AnyStream,
-	"mistral-conversations": streamSimpleMistral as AnyStream,
-	"openai-codex-responses": streamSimpleOpenAICodexResponses as AnyStream,
-	"openai-completions": streamSimpleOpenAICompletions as AnyStream,
-	"openai-responses": streamSimpleOpenAIResponses as AnyStream,
-};
-const wrappedStreams = Object.fromEntries(Object.entries(baseStreams).map(([api, stream]) => [api, wrapStream(stream)])) as Record<string, AnyStream>;
-
-export const safeProviderConfig = {
-	streamSimple(model: Model<Api>, context: Context, options?: SimpleStreamOptions) {
-		const stream = wrappedStreams[model.api];
-		if (!stream) throw new Error(`Unsupported provider api: ${model.api}`);
-		return stream(model, context, options);
-	},
+export const wrappedStreams: Record<string, AnyStream> = {
+	"anthropic-messages": wrapStream(streamSimpleAnthropic as AnyStream),
+	"azure-openai-responses": wrapStream(streamSimpleAzureOpenAIResponses as AnyStream),
+	"bedrock-converse-stream": wrapStream(streamSimpleBedrock as AnyStream),
+	"google-generative-ai": wrapStream(streamSimpleGoogle as AnyStream),
+	"google-gemini-cli": wrapStream(streamSimpleGoogleGeminiCli as AnyStream),
+	"google-vertex": wrapStream(streamSimpleGoogleVertex as AnyStream),
+	"mistral-conversations": wrapStream(streamSimpleMistral as AnyStream),
+	"openai-codex-responses": wrapStream(streamSimpleOpenAICodexResponses as AnyStream),
+	"openai-completions": wrapStream(streamSimpleOpenAICompletions as AnyStream),
+	"openai-responses": wrapStream(streamSimpleOpenAIResponses as AnyStream),
 };
 
-export function createSafeProviderConfig() {
-	return safeProviderConfig;
+export function createSafeProviderConfig(api: Api): ProviderConfig {
+	const streamSimple = wrappedStreams[api];
+	if (!streamSimple) throw new Error(`Unsupported provider api: ${api}`);
+	return { api, streamSimple };
 }

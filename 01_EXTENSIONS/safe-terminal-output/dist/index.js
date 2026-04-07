@@ -69684,52 +69684,36 @@ function wrapStream(base) {
 }
 
 // src/provider.ts
-var baseStreams = {
-  "anthropic-messages": streamSimpleAnthropic,
-  "azure-openai-responses": streamSimpleAzureOpenAIResponses,
-  "bedrock-converse-stream": streamSimpleBedrock,
-  "google-generative-ai": streamSimpleGoogle,
-  "google-gemini-cli": streamSimpleGoogleGeminiCli,
-  "google-vertex": streamSimpleGoogleVertex,
-  "mistral-conversations": streamSimpleMistral,
-  "openai-codex-responses": streamSimpleOpenAICodexResponses,
-  "openai-completions": streamSimpleOpenAICompletions,
-  "openai-responses": streamSimpleOpenAIResponses
+var wrappedStreams = {
+  "anthropic-messages": wrapStream(streamSimpleAnthropic),
+  "azure-openai-responses": wrapStream(streamSimpleAzureOpenAIResponses),
+  "bedrock-converse-stream": wrapStream(streamSimpleBedrock),
+  "google-generative-ai": wrapStream(streamSimpleGoogle),
+  "google-gemini-cli": wrapStream(streamSimpleGoogleGeminiCli),
+  "google-vertex": wrapStream(streamSimpleGoogleVertex),
+  "mistral-conversations": wrapStream(streamSimpleMistral),
+  "openai-codex-responses": wrapStream(streamSimpleOpenAICodexResponses),
+  "openai-completions": wrapStream(streamSimpleOpenAICompletions),
+  "openai-responses": wrapStream(streamSimpleOpenAIResponses)
 };
-var wrappedStreams = Object.fromEntries(Object.entries(baseStreams).map(([api, stream]) => [api, wrapStream(stream)]));
-var safeProviderConfig = {
-  streamSimple(model, context, options) {
-    const stream = wrappedStreams[model.api];
-    if (!stream) throw new Error(`Unsupported provider api: ${model.api}`);
-    return stream(model, context, options);
-  }
-};
+function createSafeProviderConfig(api) {
+  const streamSimple = wrappedStreams[api];
+  if (!streamSimple) throw new Error(`Unsupported provider api: ${api}`);
+  return { api, streamSimple };
+}
 
 // src/index.ts
 function index_default(pi) {
-  pi.registerProvider("amazon-bedrock", safeProviderConfig);
-  pi.registerProvider("anthropic", safeProviderConfig);
-  pi.registerProvider("azure-openai-responses", safeProviderConfig);
-  pi.registerProvider("cerebras", safeProviderConfig);
-  pi.registerProvider("github-copilot", safeProviderConfig);
-  pi.registerProvider("google", safeProviderConfig);
-  pi.registerProvider("google-antigravity", safeProviderConfig);
-  pi.registerProvider("google-gemini-cli", safeProviderConfig);
-  pi.registerProvider("google-vertex", safeProviderConfig);
-  pi.registerProvider("groq", safeProviderConfig);
-  pi.registerProvider("huggingface", safeProviderConfig);
-  pi.registerProvider("kimi-coding", safeProviderConfig);
-  pi.registerProvider("minimax", safeProviderConfig);
-  pi.registerProvider("minimax-cn", safeProviderConfig);
-  pi.registerProvider("mistral", safeProviderConfig);
-  pi.registerProvider("opencode", safeProviderConfig);
-  pi.registerProvider("opencode-go", safeProviderConfig);
-  pi.registerProvider("openai", safeProviderConfig);
-  pi.registerProvider("openai-codex", safeProviderConfig);
-  pi.registerProvider("openrouter", safeProviderConfig);
-  pi.registerProvider("vercel-ai-gateway", safeProviderConfig);
-  pi.registerProvider("xai", safeProviderConfig);
-  pi.registerProvider("zai", safeProviderConfig);
+  pi.registerProvider("safe-terminal-output-anthropic-messages", createSafeProviderConfig("anthropic-messages"));
+  pi.registerProvider("safe-terminal-output-azure-openai-responses", createSafeProviderConfig("azure-openai-responses"));
+  pi.registerProvider("safe-terminal-output-bedrock-converse-stream", createSafeProviderConfig("bedrock-converse-stream"));
+  pi.registerProvider("safe-terminal-output-google-generative-ai", createSafeProviderConfig("google-generative-ai"));
+  pi.registerProvider("safe-terminal-output-google-gemini-cli", createSafeProviderConfig("google-gemini-cli"));
+  pi.registerProvider("safe-terminal-output-google-vertex", createSafeProviderConfig("google-vertex"));
+  pi.registerProvider("safe-terminal-output-mistral-conversations", createSafeProviderConfig("mistral-conversations"));
+  pi.registerProvider("safe-terminal-output-openai-codex-responses", createSafeProviderConfig("openai-codex-responses"));
+  pi.registerProvider("safe-terminal-output-openai-completions", createSafeProviderConfig("openai-completions"));
+  pi.registerProvider("safe-terminal-output-openai-responses", createSafeProviderConfig("openai-responses"));
 }
 export {
   index_default as default

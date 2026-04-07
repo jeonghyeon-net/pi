@@ -26,16 +26,18 @@ describe("provider", () => {
 		expect(wrapStream).toHaveBeenCalledWith(bedrockBase);
 	});
 
-	it("reuses one shared provider config", () => {
-		expect(mod.createSafeProviderConfig()).toBe(mod.safeProviderConfig);
+	it("creates a provider config pinned to one api", () => {
+		const config = mod.createSafeProviderConfig("anthropic-messages");
+		expect(config.api).toBe("anthropic-messages");
+		expect(config.streamSimple({ api: "anthropic-messages" }, {}, undefined)).toBe("anthropic-stream");
 	});
 
-	it("routes supported APIs through wrapped streams", () => {
-		expect(mod.safeProviderConfig.streamSimple({ api: "anthropic-messages" }, {}, undefined)).toBe("anthropic-stream");
-		expect(mod.safeProviderConfig.streamSimple({ api: "bedrock-converse-stream" }, {}, undefined)).toBe("bedrock-stream");
+	it("uses the wrapped stream for the requested api", () => {
+		const config = mod.createSafeProviderConfig("bedrock-converse-stream");
+		expect(config.streamSimple({ api: "bedrock-converse-stream" }, {}, undefined)).toBe("bedrock-stream");
 	});
 
 	it("throws for unsupported APIs", () => {
-		expect(() => mod.safeProviderConfig.streamSimple({ api: "unknown-api" }, {}, undefined)).toThrow("Unsupported provider api: unknown-api");
+		expect(() => mod.createSafeProviderConfig("unknown-api")).toThrow("Unsupported provider api: unknown-api");
 	});
 });
