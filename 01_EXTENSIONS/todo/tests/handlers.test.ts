@@ -67,16 +67,14 @@ describe("handlers", () => {
 		expect(pi.sendMessage).not.toHaveBeenCalled();
 	});
 
-	it("onCompact with active todos sends follow-up message", async () => {
+	it("onCompact with active todos only syncs widget", async () => {
 		const entry = { type: "custom", customType: "todo-state",
 			data: { todos: [{ id: 1, text: "pending item", done: false }], nextId: 2, updatedAt: Date.now() } };
 		const pi = stubPi();
 		const ctx = stubCtx([entry]);
 		await onCompact(pi)(undefined, ctx as StubCtx);
-		expect(pi.sendMessage).toHaveBeenCalledWith(
-			expect.objectContaining({ customType: "todo-compaction-reminder" }),
-			expect.objectContaining({ deliverAs: "followUp" }),
-		);
+		expect(pi.sendMessage).not.toHaveBeenCalled();
+		expect(ctx.ui.setWidget).toHaveBeenCalled();
 	});
 
 	it("onShutdown calls cleanupWidget", async () => {

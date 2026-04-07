@@ -9,22 +9,10 @@ export function buildTurnContext(): { content: string; display: boolean } | null
 	const directive = active
 		? `Active: #${active.id} ${active.text}`
 		: "All items complete.";
-	return {
-		content: [
-			"[todo-reminder] current todo state",
-			summary,
-			directive,
-		].join("\n"),
-		display: false,
-	};
+	return { content: [summary, directive].join("\n"), display: false };
 }
 
 export function buildCompactionReminder(): string | null {
 	const todos = getTodos();
-	const remaining = todos.filter((t) => !t.done);
-	if (remaining.length === 0) return null;
-	return [
-		"[todo-reminder] remaining items after compaction",
-		formatSummary(getState()),
-	].join("\n");
+	return todos.some((t) => !t.done) ? formatSummary(getState()) : null;
 }

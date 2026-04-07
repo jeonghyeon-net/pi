@@ -62,23 +62,7 @@ function buildTurnContext() {
   const summary = formatSummary(getState());
   const active = todos2.find((t) => !t.done);
   const directive = active ? `Active: #${active.id} ${active.text}` : "All items complete.";
-  return {
-    content: [
-      "[todo-reminder] current todo state",
-      summary,
-      directive
-    ].join("\n"),
-    display: false
-  };
-}
-function buildCompactionReminder() {
-  const todos2 = getTodos();
-  const remaining = todos2.filter((t) => !t.done);
-  if (remaining.length === 0) return null;
-  return [
-    "[todo-reminder] remaining items after compaction",
-    formatSummary(getState())
-  ].join("\n");
+  return { content: [summary, directive].join("\n"), display: false };
 }
 
 // src/render.ts
@@ -236,12 +220,6 @@ function onCompact(pi) {
   return async (_e, ctx) => {
     restoreFromEntries(ctx.sessionManager.getBranch());
     syncWidget(ctx, pi);
-    const reminder = buildCompactionReminder();
-    if (!reminder) return;
-    pi.sendMessage(
-      { customType: "todo-compaction-reminder", content: reminder, display: true },
-      { deliverAs: "followUp", triggerTurn: true }
-    );
   };
 }
 function onShutdown() {

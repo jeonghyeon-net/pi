@@ -4,12 +4,10 @@ vi.mock("../src/state.js", () => ({
 	initApi: vi.fn(),
 	getTask: vi.fn(),
 	deleteTask: vi.fn(),
-	notify: vi.fn(),
-	sendMessage: vi.fn(),
 }));
 
 import { createReportTool } from "../src/tool.js";
-import { initApi, getTask, deleteTask, notify, sendMessage } from "../src/state.js";
+import { initApi, getTask, deleteTask } from "../src/state.js";
 
 const sendMsg = vi.fn();
 const sendUserMsg = vi.fn();
@@ -49,15 +47,13 @@ describe("createReportTool", () => {
 			.toThrow("until #99 작업을 찾을 수 없습니다. 이미 완료/취소/만료되었을 수 있습니다.");
 	});
 
-	it("execute with done=true sends message, notifies, deletes, returns done", async () => {
+	it("execute with done=true deletes task and returns done", async () => {
 		const task = makeTask();
 		vi.mocked(getTask).mockReturnValue(task);
 		const tool = createReportTool(sendMsg, sendUserMsg);
 		const result = await tool.execute("call-2", { taskId: 1, done: true, summary: "ok" });
 		expect(task.inFlight).toBe(false);
 		expect(task.lastSummary).toBe("ok");
-		expect(sendMessage).toHaveBeenCalledOnce();
-		expect(notify).toHaveBeenCalledOnce();
 		expect(deleteTask).toHaveBeenCalledWith(1);
 		expect(result.details.done).toBe(true);
 		expect(result.details.elapsed).toBeDefined();
@@ -71,8 +67,6 @@ describe("createReportTool", () => {
 		const result = await tool.execute("call-3", { taskId: 1, done: false, summary: "wip" });
 		expect(task.inFlight).toBe(false);
 		expect(task.lastSummary).toBe("wip");
-		expect(sendMessage).not.toHaveBeenCalled();
-		expect(notify).not.toHaveBeenCalled();
 		expect(deleteTask).not.toHaveBeenCalled();
 		expect(result.details.done).toBe(false);
 		expect(result.details.nextRunAt).toBe(999);

@@ -1,8 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { SendMessageFn, SendUserMessageFn } from "./types.js";
-import { CUSTOM_TYPE } from "./constants.js";
 import { formatKoreanDuration, formatClock } from "./time-utils.js";
-import { initApi, getTask, deleteTask, notify, sendMessage } from "./state.js";
+import { initApi, getTask, deleteTask } from "./state.js";
 
 interface ReportDetails {
 	done: boolean;
@@ -45,12 +44,6 @@ function handleReport(params: { taskId: number; done: boolean; summary: string }
 	task.lastSummary = params.summary;
 	if (params.done) {
 		const elapsed = formatKoreanDuration(Date.now() - task.createdAt);
-		sendMessage({
-			customType: CUSTOM_TYPE,
-			content: `[until #${task.id}] ✅ 조건 충족! (${task.runCount}회 실행, ${elapsed} 경과)\n결과: ${params.summary}`,
-			display: true,
-		});
-		notify(`✅ until #${task.id} 완료: ${params.summary}`, "info");
 		const details: ReportDetails = { done: true, summary: params.summary, taskId: task.id, runCount: task.runCount, elapsed };
 		deleteTask(task.id);
 		return { content: [{ type: "text", text: `until #${task.id} 조건 충족으로 종료됨. ${params.summary}` }], details };

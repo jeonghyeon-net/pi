@@ -32,7 +32,7 @@ describe("context", () => {
 		addTodo("pending");
 		const reminder = buildCompactionReminder();
 		expect(reminder).toContain("pending");
-		expect(reminder).toContain("compaction");
+		expect(reminder).toContain("Progress:");
 	});
 
 	it("no compaction reminder when all done", () => {

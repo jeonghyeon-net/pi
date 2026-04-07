@@ -1,9 +1,7 @@
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { restoreFromEntries, buildEntry } from "./state.js";
-import { buildTurnContext, buildCompactionReminder } from "./context.js";
+import { buildTurnContext } from "./context.js";
 import { syncWidget, setAgentRunning, incrementTurn, cleanupWidget, type Persister } from "./widget.js";
-
-type Messenger = Persister & { sendMessage(msg: unknown, opts?: unknown): void };
 
 export function onRestore(pi: Persister) {
 	return async (_e: unknown, ctx: ExtensionContext) => {
@@ -44,16 +42,10 @@ export function onMessageEnd(pi: Persister) {
 	};
 }
 
-export function onCompact(pi: Messenger) {
+export function onCompact(pi: Persister) {
 	return async (_e: unknown, ctx: ExtensionContext) => {
 		restoreFromEntries(ctx.sessionManager.getBranch());
 		syncWidget(ctx, pi);
-		const reminder = buildCompactionReminder();
-		if (!reminder) return;
-		pi.sendMessage(
-			{ customType: "todo-compaction-reminder", content: reminder, display: true },
-			{ deliverAs: "followUp", triggerTurn: true },
-		);
 	};
 }
 

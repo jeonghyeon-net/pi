@@ -4,7 +4,6 @@ vi.mock("../src/state.js", () => ({
 	getTasks: vi.fn(),
 	addTask: vi.fn(),
 	allocateId: vi.fn(),
-	sendMessage: vi.fn(),
 	updateFooter: vi.fn(),
 }));
 vi.mock("../src/runner.js", () => ({
@@ -12,7 +11,7 @@ vi.mock("../src/runner.js", () => ({
 }));
 
 import { registerTask } from "../src/register.js";
-import { getTasks, addTask, allocateId, sendMessage, updateFooter } from "../src/state.js";
+import { getTasks, addTask, allocateId, updateFooter } from "../src/state.js";
 import { executeRun } from "../src/runner.js";
 
 const notifyFn = vi.fn();
@@ -55,7 +54,6 @@ describe("registerTask", () => {
 		expect(task.intervalLabel).toBe("2분");
 		expect(task.runCount).toBe(0);
 		expect(task.inFlight).toBe(false);
-		expect(sendMessage).toHaveBeenCalledOnce();
 		expect(notifyFn).toHaveBeenCalledWith(expect.stringContaining("#7"), "info");
 		expect(updateFooter).toHaveBeenCalledOnce();
 		clearTimeout(task.timer);

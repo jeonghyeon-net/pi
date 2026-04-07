@@ -1,14 +1,6 @@
 // src/tool.ts
 import { Type } from "@sinclair/typebox";
 
-// src/constants.ts
-var CUSTOM_TYPE = "until";
-var STATUS_KEY = "until-footer";
-var MAX_TASKS = 3;
-var MIN_INTERVAL_MS = 6e4;
-var MAX_EXPIRY_MS = 24 * 60 * 60 * 1e3;
-var JITTER_RATIO = 0.1;
-
 // src/time-utils.ts
 function formatKoreanDuration(ms) {
   if (ms < 6e4) return `${Math.max(1, Math.round(ms / 1e3))}\uCD08`;
@@ -26,6 +18,14 @@ function formatClock(ts) {
     hour12: false
   });
 }
+
+// src/constants.ts
+var CUSTOM_TYPE = "until";
+var STATUS_KEY = "until-footer";
+var MAX_TASKS = 3;
+var MIN_INTERVAL_MS = 6e4;
+var MAX_EXPIRY_MS = 24 * 60 * 60 * 1e3;
+var JITTER_RATIO = 0.1;
 
 // src/state.ts
 var tasks = /* @__PURE__ */ new Map();
@@ -46,9 +46,6 @@ function sendUserMessage(...args) {
 }
 function setUi(handle) {
   ui = handle;
-}
-function notify(msg, type) {
-  ui?.notify(msg, type);
 }
 function setAgentRunning(val) {
   agentRunning = val;
@@ -120,13 +117,6 @@ function handleReport(params) {
   task.lastSummary = params.summary;
   if (params.done) {
     const elapsed = formatKoreanDuration(Date.now() - task.createdAt);
-    sendMessage({
-      customType: CUSTOM_TYPE,
-      content: `[until #${task.id}] \u2705 \uC870\uAC74 \uCDA9\uC871! (${task.runCount}\uD68C \uC2E4\uD589, ${elapsed} \uACBD\uACFC)
-\uACB0\uACFC: ${params.summary}`,
-      display: true
-    });
-    notify(`\u2705 until #${task.id} \uC644\uB8CC: ${params.summary}`, "info");
     const details = { done: true, summary: params.summary, taskId: task.id, runCount: task.runCount, elapsed };
     deleteTask(task.id);
     return { content: [{ type: "text", text: `until #${task.id} \uC870\uAC74 \uCDA9\uC871\uC73C\uB85C \uC885\uB8CC\uB428. ${params.summary}` }], details };
@@ -273,13 +263,6 @@ function executeRun(id) {
   if (!task) return;
   const now = Date.now();
   if (now >= task.expiresAt) {
-    notify(`\u23F3 until #${task.id} \uB9CC\uB8CC\uB428 (24\uC2DC\uAC04 \uCD08\uACFC)`, "warning");
-    sendMessage({
-      customType: CUSTOM_TYPE,
-      content: `[until #${task.id}] 24\uC2DC\uAC04 \uB9CC\uB8CC\uB85C \uC790\uB3D9 \uC885\uB8CC\uB428
-\uB9C8\uC9C0\uB9C9 \uC0C1\uD0DC: ${task.lastSummary ?? "\uC5C6\uC74C"}`,
-      display: true
-    });
     deleteTask(id);
     return;
   }
@@ -290,7 +273,6 @@ function executeRun(id) {
   task.runCount++;
   const elapsed = formatKoreanDuration(now - task.createdAt);
   const prompt = buildPrompt(task, elapsed);
-  notify(`\u23F3 until #${task.id} \uC2E4\uD589 ${task.runCount}\uD68C\uCC28`, "info");
   task.inFlight = true;
   try {
     if (isAgentRunning()) {
@@ -329,14 +311,6 @@ function registerTask(intervalMs, intervalLabel, prompt, notifyFn) {
     timer: setTimeout(() => executeRun(id), 0)
   };
   addTask(task);
-  sendMessage({
-    customType: CUSTOM_TYPE,
-    content: `[until #${id}] \uB4F1\uB85D\uB428: ${intervalLabel}\uB9C8\uB2E4 \uBC18\uBCF5
-\uB9CC\uB8CC: ${formatClock(task.expiresAt)}
-Task: ${prompt}`,
-    display: true,
-    details: { id, prompt, intervalMs, intervalLabel }
-  });
   notifyFn(`\u23F3 until #${id} \uB4F1\uB85D\uB428 (${intervalLabel}\uB9C8\uB2E4)`, "info");
   updateFooter();
   return true;

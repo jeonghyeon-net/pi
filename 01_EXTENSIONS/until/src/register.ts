@@ -1,7 +1,7 @@
 import type { UntilTask } from "./types.js";
-import { CUSTOM_TYPE, MAX_TASKS, MIN_INTERVAL_MS, MAX_EXPIRY_MS } from "./constants.js";
-import { formatKoreanDuration, formatClock } from "./time-utils.js";
-import { getTasks, addTask, allocateId, sendMessage, updateFooter } from "./state.js";
+import { MAX_TASKS, MIN_INTERVAL_MS, MAX_EXPIRY_MS } from "./constants.js";
+import { formatKoreanDuration } from "./time-utils.js";
+import { getTasks, addTask, allocateId, updateFooter } from "./state.js";
 import { executeRun } from "./runner.js";
 
 export function registerTask(
@@ -33,12 +33,6 @@ export function registerTask(
 		timer: setTimeout(() => executeRun(id), 0),
 	};
 	addTask(task);
-	sendMessage({
-		customType: CUSTOM_TYPE,
-		content: `[until #${id}] 등록됨: ${intervalLabel}마다 반복\n만료: ${formatClock(task.expiresAt)}\nTask: ${prompt}`,
-		display: true,
-		details: { id, prompt, intervalMs, intervalLabel },
-	});
 	notifyFn(`⏳ until #${id} 등록됨 (${intervalLabel}마다)`, "info");
 	updateFooter();
 	return true;

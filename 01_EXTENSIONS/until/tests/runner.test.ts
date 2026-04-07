@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { jitter, scheduleNext, executeRun } from "../src/runner.js";
-import { getTask, deleteTask, isAgentRunning, sendMessage, sendUserMessage, notify, updateFooter } from "../src/state.js";
+import { getTask, deleteTask, isAgentRunning, sendUserMessage, updateFooter } from "../src/state.js";
 import type { UntilTask } from "../src/types.js";
 
 vi.mock("../src/state.js", () => ({ getTask: vi.fn(), deleteTask: vi.fn(), isAgentRunning: vi.fn(),
-	sendMessage: vi.fn(), sendUserMessage: vi.fn(), notify: vi.fn(), updateFooter: vi.fn() }));
+	sendUserMessage: vi.fn(), updateFooter: vi.fn() }));
 function makeTask(o: Partial<UntilTask> = {}): UntilTask {
 	return { id: 1, prompt: "test", intervalMs: 120000, intervalLabel: "2분", createdAt: Date.now() - 60000,
 		expiresAt: Date.now() + 86400000, nextRunAt: Date.now() + 120000, runCount: 0,
@@ -45,19 +45,17 @@ describe("executeRun", () => {
 	it("returns immediately when task not found", () => {
 		vi.mocked(getTask).mockReturnValue(undefined);
 		executeRun(99);
-		expect(notify).not.toHaveBeenCalled();
+		expect(deleteTask).not.toHaveBeenCalled();
 	});
-	it("handles expiration with lastSummary", () => {
+	it("handles expiration by deleting the task", () => {
 		vi.mocked(getTask).mockReturnValue(makeTask({ expiresAt: Date.now() - 1, lastSummary: "done" }));
 		executeRun(1);
-		expect(notify).toHaveBeenCalledWith(expect.stringContaining("만료"), "warning");
-		expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining("done") }));
 		expect(deleteTask).toHaveBeenCalledWith(1);
 	});
-	it("handles expiration without lastSummary (nullish coalescing)", () => {
+	it("handles expiration without lastSummary", () => {
 		vi.mocked(getTask).mockReturnValue(makeTask({ expiresAt: Date.now() - 1 }));
 		executeRun(1);
-		expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining("없음") }));
+		expect(deleteTask).toHaveBeenCalledWith(1);
 	});
 	it("reschedules when inFlight without incrementing runCount", () => {
 		const task = makeTask({ inFlight: true });
@@ -75,7 +73,6 @@ describe("executeRun", () => {
 		executeRun(1);
 		expect(task.runCount).toBe(1);
 		expect(task.inFlight).toBe(true);
-		expect(notify).toHaveBeenCalledWith(expect.stringContaining("1회차"), "info");
 		expect(sendUserMessage).toHaveBeenCalledWith(expect.stringContaining("until_report"), { deliverAs: "followUp" });
 	});
 	it("normal run without agent running sends plain message", () => {

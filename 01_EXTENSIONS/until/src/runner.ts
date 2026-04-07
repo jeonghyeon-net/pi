@@ -1,15 +1,7 @@
 import type { UntilTask } from "./types.js";
-import { CUSTOM_TYPE, MIN_INTERVAL_MS, JITTER_RATIO } from "./constants.js";
+import { MIN_INTERVAL_MS, JITTER_RATIO } from "./constants.js";
 import { formatKoreanDuration } from "./time-utils.js";
-import {
-	getTask,
-	deleteTask,
-	isAgentRunning,
-	sendMessage,
-	sendUserMessage,
-	notify,
-	updateFooter,
-} from "./state.js";
+import { getTask, deleteTask, isAgentRunning, sendUserMessage, updateFooter } from "./state.js";
 
 export function jitter(ms: number): number {
 	const offset = ms * JITTER_RATIO * (Math.random() * 2 - 1);
@@ -44,12 +36,6 @@ export function executeRun(id: number): void {
 	if (!task) return;
 	const now = Date.now();
 	if (now >= task.expiresAt) {
-		notify(`⏳ until #${task.id} 만료됨 (24시간 초과)`, "warning");
-		sendMessage({
-			customType: CUSTOM_TYPE,
-			content: `[until #${task.id}] 24시간 만료로 자동 종료됨\n마지막 상태: ${task.lastSummary ?? "없음"}`,
-			display: true,
-		});
 		deleteTask(id);
 		return;
 	}
@@ -60,7 +46,6 @@ export function executeRun(id: number): void {
 	task.runCount++;
 	const elapsed = formatKoreanDuration(now - task.createdAt);
 	const prompt = buildPrompt(task, elapsed);
-	notify(`⏳ until #${task.id} 실행 ${task.runCount}회차`, "info");
 	task.inFlight = true;
 	try {
 		if (isAgentRunning()) {
