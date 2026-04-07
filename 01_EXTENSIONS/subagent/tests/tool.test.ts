@@ -13,7 +13,7 @@ vi.mock("../src/spawn.js", () => ({
 import { createTool, errorMsg } from "../src/tool.js";
 import type { SubagentPi } from "../src/types.js";
 import { existsSync } from "fs";
-const stubPi = (): SubagentPi => ({ sendMessage: vi.fn(), appendEntry: vi.fn() });
+const stubPi = (): SubagentPi => ({ appendEntry: vi.fn() });
 const stubCtx = () => ({ hasUI: false, ui: { setWidget: vi.fn() }, sessionManager: { getBranch: (): unknown[] => [] } });
 const exec = async (cmd: string) => {
 	const tool = createTool(stubPi(), "/agents");

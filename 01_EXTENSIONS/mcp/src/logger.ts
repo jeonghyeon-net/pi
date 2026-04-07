@@ -1,6 +1,5 @@
 import type { LogLevel } from "./logger-format.js";
 import { shouldLog, formatEntry } from "./logger-format.js";
-
 export type { LogLevel };
 
 export interface Logger {
@@ -11,7 +10,10 @@ export interface Logger {
 	child(context: Record<string, string>): Logger;
 }
 
-export function createLogger(minLevel: LogLevel, context?: Record<string, string>): Logger {
+export function createLogger(
+	minLevel: LogLevel,
+	context?: Record<string, string>,
+): Logger {
 	const log = (level: LogLevel, msg: string) => {
 		if (!shouldLog(level, minLevel)) return;
 		const line = formatEntry(level, msg, context);

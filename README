@@ -13,7 +13,7 @@
 
   EXTENSIONS
     footer … 커스텀 footer: 모델명, 저장소/브랜치, context 사용률 표시
-    mcp … MCP 서버 연동 (로깅, 포맷팅, 클라이언트)
+    mcp … MCP 서버 통합 (proxy tool, lazy connection, metadata caching)
     notify … 에이전트 작업 완료 시 터미널 알림
     subagent … 서브에이전트 오케스트레이션 (비동기 실행, 세션 관리)
     todo … LLM용 todo 관리 도구

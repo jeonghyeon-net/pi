@@ -9,7 +9,6 @@ import type { DispatchCtx } from "./dispatch.js";
 import { readdirSync, readFileSync, existsSync } from "fs";
 import type { Subcommand } from "./types.js";
 import { renderCall, renderResult, buildResultText } from "./render.js";
-import { formatUsage } from "./format.js";
 
 function textResult(text: string, isError = false) {
 	return { content: [{ type: "text" as const, text }], details: { isError } };
@@ -38,21 +37,23 @@ function formatDetail(id: number): string {
 	return parts.join("\n");
 }
 
-async function dispatch(cmd: Subcommand, agents: AgentConfig[], pi: SubagentPi, ctx: DispatchCtx) {
+type UpdateFn = ((partial: { content: Array<{ type: string; text: string }> }) => void) | undefined;
+
+async function dispatch(cmd: Subcommand, agents: AgentConfig[], pi: SubagentPi, ctx: DispatchCtx, onUpdate: UpdateFn) {
 	if (cmd.type === "runs") return textResult(formatRunsList());
 	if (cmd.type === "detail") return textResult(formatDetail(cmd.id));
 	if (cmd.type === "abort") return textResult(dispatchAbort(cmd.id));
 	if (cmd.type === "run") {
 		const agent = getAgent(cmd.agent, agents);
 		if (!agent) return textResult(`Unknown agent: ${cmd.agent}`);
-		return textResult(buildResultText(await dispatchRun(agent, cmd.task, ctx, cmd.main)));
+		return textResult(buildResultText(await dispatchRun(agent, cmd.task, ctx, cmd.main, onUpdate)));
 	}
 	if (cmd.type === "batch") {
-		const results = await dispatchBatch(cmd.items, agents, ctx, cmd.main);
+		const results = await dispatchBatch(cmd.items, agents, ctx, cmd.main, onUpdate);
 		return textResult(results.map((r) => buildResultText(r)).join("\n---\n"));
 	}
-	if (cmd.type === "chain") return textResult(buildResultText(await dispatchChain(cmd.steps, agents, ctx, cmd.main)));
-	const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx);
+	if (cmd.type === "chain") return textResult(buildResultText(await dispatchChain(cmd.steps, agents, ctx, cmd.main, onUpdate)));
+	const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx, onUpdate);
 	return typeof cont === "string" ? textResult(cont) : textResult(buildResultText(cont));
 }
 
@@ -82,8 +83,8 @@ export function createTool(pi: SubagentPi, agentsDir: string) {
 		promptSnippet: buildSnippet(agents),
 		promptGuidelines: buildGuidelines(agents),
 		parameters: SubagentParams,
-		async execute(_id: string, params: { command: string }, _signal: unknown, _onUpdate: unknown, ctx: DispatchCtx) {
-			try { return await dispatch(parseCommand(params.command), agents, pi, ctx); }
+		async execute(_id: string, params: { command: string }, _signal: unknown, onUpdate: UpdateFn, ctx: DispatchCtx) {
+			try { return await dispatch(parseCommand(params.command), agents, pi, ctx, onUpdate); }
 			catch (e) { return textResult(`Error: ${errorMsg(e)}`, true); }
 		},
 		renderCall: (args: { command: string }) => renderCall(args),

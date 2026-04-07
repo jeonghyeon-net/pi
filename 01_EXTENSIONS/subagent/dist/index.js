@@ -218,17 +218,35 @@ function formatDuration(ms) {
 
 // src/widget.ts
 var MAX_VISIBLE = 3;
+var SPINNER = "\u280B\u2819\u2839\u2838\u283C\u2834\u2826\u2827\u2807\u280F";
+var IDLE_THRESHOLD_MS = 12e4;
 var currentTools = /* @__PURE__ */ new Map();
-function setCurrentTool(runId, toolName) {
-  if (toolName) currentTools.set(runId, toolName);
-  else currentTools.delete(runId);
+var lastEventTime = /* @__PURE__ */ new Map();
+var frame = 0;
+var timerCtx;
+var timerRuns;
+var timerId;
+function setCurrentTool(runId, toolName, preview) {
+  lastEventTime.set(runId, Date.now());
+  if (toolName) {
+    const detail = preview ? `${toolName}: ${preview.slice(0, 30)}` : toolName;
+    currentTools.set(runId, detail);
+  } else {
+    currentTools.delete(runId);
+  }
 }
 function buildWidgetLines(runs, now) {
+  const spin = SPINNER[frame % SPINNER.length];
   return runs.slice(0, MAX_VISIBLE).map((r) => {
     const elapsed = formatDuration(now - r.startedAt);
+    const lastEvt = lastEventTime.get(r.id) ?? r.startedAt;
+    const idle = now - lastEvt;
+    if (idle > IDLE_THRESHOLD_MS) {
+      return `\u26A0 ${r.agent} #${r.id} (${elapsed}) idle ${formatDuration(idle)}`;
+    }
     const tool = currentTools.get(r.id);
     const suffix = tool ? ` \u2192 ${tool}` : "";
-    return `\u27F3 ${r.agent} #${r.id} (${elapsed})${suffix}`;
+    return `${spin} ${r.agent} #${r.id} (${elapsed})${suffix}`;
   });
 }
 function syncWidget(ctx, runs) {
@@ -239,8 +257,26 @@ function syncWidget(ctx, runs) {
   }
   ctx.ui.setWidget("subagent-status", buildWidgetLines(runs, Date.now()), { placement: "belowEditor" });
 }
+function startWidgetTimer(ctx, getRuns) {
+  stopWidgetTimer();
+  timerCtx = ctx;
+  timerRuns = getRuns;
+  timerId = setInterval(() => {
+    frame++;
+    if (timerCtx && timerRuns) syncWidget(timerCtx, timerRuns());
+  }, 150);
+}
+function stopWidgetTimer() {
+  if (timerId) {
+    clearInterval(timerId);
+    timerId = void 0;
+  }
+  timerCtx = void 0;
+  timerRuns = void 0;
+}
 function clearToolState(runId) {
   currentTools.delete(runId);
+  lastEventTime.delete(runId);
 }
 
 // src/run-factory.ts
@@ -399,20 +435,35 @@ function spawnAndCollect(cmd, args, id, agentName, signal, onEvent) {
 }
 
 // src/run-factory.ts
-function makeOnEvent(id, ctx, collected) {
+function registerRun(id, agent, ctx, ac) {
+  addRun({ id, agent, startedAt: Date.now(), abort: () => ac.abort() });
+  if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
+}
+function unregisterRun(id) {
+  clearToolState(id);
+  removeRun(id);
+  if (listRuns().length === 0) stopWidgetTimer();
+}
+function makeOnEvent(id, ctx, collected, texts, onUpdate) {
   return (evt) => {
     collected.push({ type: evt.type, text: evt.text, toolName: evt.toolName });
     if (evt.type === "tool_start") {
       setCurrentTool(id, evt.toolName);
       syncWidget(ctx, listRuns());
+      texts.push(`\u2192 ${evt.toolName ?? ""}`);
+      onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
     }
     if (evt.type === "tool_end") {
       setCurrentTool(id, void 0);
       syncWidget(ctx, listRuns());
     }
+    if (evt.type === "message" && evt.text) {
+      texts.push(evt.text);
+      onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
+    }
   };
 }
-function createRunner(main, ctx) {
+function createRunner(main, ctx, onUpdate) {
   return async (agent, task) => {
     const id = nextId();
     const promptPath = join2(tmpdir(), `pi-sub-${agent.name}-${id}.md`);
@@ -432,20 +483,20 @@ ${mainCtx}`;
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: promptPath, task, sessionPath: sessPath });
     const ac = new AbortController();
-    addRun({ id, agent: agent.name, startedAt: Date.now(), abort: () => ac.abort() });
+    registerRun(id, agent.name, ctx, ac);
     const collected = [];
-    const onEvent = makeOnEvent(id, ctx, collected);
+    const texts = [];
+    const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
     try {
       const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
       addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessPath, events: collected });
       return result;
     } finally {
-      clearToolState(id);
-      removeRun(id);
+      unregisterRun(id);
     }
   };
 }
-function createSessionRunner(sessFile, ctx) {
+function createSessionRunner(sessFile, ctx, onUpdate) {
   return async (agent, task) => {
     const id = nextId();
     const { cmd, base } = getPiCommand(process.execPath, process.argv[1], existsSync);
@@ -453,39 +504,39 @@ function createSessionRunner(sessFile, ctx) {
     const idx = args.indexOf("--append-system-prompt");
     if (idx !== -1) args.splice(idx, 2);
     const ac = new AbortController();
-    addRun({ id, agent: agent.name, startedAt: Date.now(), abort: () => ac.abort() });
+    registerRun(id, agent.name, ctx, ac);
     const collected = [];
-    const onEvent = makeOnEvent(id, ctx, collected);
+    const texts = [];
+    const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
     try {
       const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
       addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessFile, events: collected });
       return result;
     } finally {
-      clearToolState(id);
-      removeRun(id);
+      unregisterRun(id);
     }
   };
 }
 
 // src/dispatch.ts
-async function dispatchRun(agent, task, ctx, main) {
-  const runner = createRunner(main, ctx);
+async function dispatchRun(agent, task, ctx, main, onUpdate) {
+  const runner = createRunner(main, ctx, onUpdate);
   try {
     return await executeSingle(agent, task, { runner });
   } finally {
     syncWidget(ctx, listRuns());
   }
 }
-async function dispatchBatch(items, agents, ctx, main) {
-  const runner = createRunner(main, ctx);
+async function dispatchBatch(items, agents, ctx, main, onUpdate) {
+  const runner = createRunner(main, ctx, onUpdate);
   try {
     return await executeBatch(items, agents, { runner });
   } finally {
     syncWidget(ctx, listRuns());
   }
 }
-async function dispatchChain(steps, agents, ctx, main) {
-  const runner = createRunner(main, ctx);
+async function dispatchChain(steps, agents, ctx, main, onUpdate) {
+  const runner = createRunner(main, ctx, onUpdate);
   try {
     return await executeChain(steps, agents, { runner });
   } finally {
@@ -499,14 +550,14 @@ function dispatchAbort(id) {
   removeRun(id);
   return `Run #${id} (${run.agent}) aborted`;
 }
-async function dispatchContinue(id, task, agents, ctx) {
+async function dispatchContinue(id, task, agents, ctx, onUpdate) {
   const hist = getRunHistory().find((r) => r.id === id);
   if (!hist) return `Run #${id} not found in history`;
   const sessFile = getSessionFile(id);
   if (!sessFile) return `Run #${id} not found in history`;
   const agent = getAgent(hist.agent, agents);
   if (!agent) return `Agent for run #${id} not found`;
-  const runner = createSessionRunner(sessFile, ctx);
+  const runner = createSessionRunner(sessFile, ctx, onUpdate);
   try {
     return await executeSingle(agent, task, { runner });
   } finally {
@@ -595,21 +646,21 @@ function formatDetail(id) {
   }
   return parts.join("\n");
 }
-async function dispatch(cmd, agents, pi, ctx) {
+async function dispatch(cmd, agents, pi, ctx, onUpdate) {
   if (cmd.type === "runs") return textResult(formatRunsList());
   if (cmd.type === "detail") return textResult(formatDetail(cmd.id));
   if (cmd.type === "abort") return textResult(dispatchAbort(cmd.id));
   if (cmd.type === "run") {
     const agent = getAgent(cmd.agent, agents);
     if (!agent) return textResult(`Unknown agent: ${cmd.agent}`);
-    return textResult(buildResultText(await dispatchRun(agent, cmd.task, ctx, cmd.main)));
+    return textResult(buildResultText(await dispatchRun(agent, cmd.task, ctx, cmd.main, onUpdate)));
   }
   if (cmd.type === "batch") {
-    const results = await dispatchBatch(cmd.items, agents, ctx, cmd.main);
+    const results = await dispatchBatch(cmd.items, agents, ctx, cmd.main, onUpdate);
     return textResult(results.map((r) => buildResultText(r)).join("\n---\n"));
   }
-  if (cmd.type === "chain") return textResult(buildResultText(await dispatchChain(cmd.steps, agents, ctx, cmd.main)));
-  const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx);
+  if (cmd.type === "chain") return textResult(buildResultText(await dispatchChain(cmd.steps, agents, ctx, cmd.main, onUpdate)));
+  const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx, onUpdate);
   return typeof cont === "string" ? textResult(cont) : textResult(buildResultText(cont));
 }
 function buildSnippet(agents) {
@@ -635,9 +686,9 @@ function createTool(pi, agentsDir) {
     promptSnippet: buildSnippet(agents),
     promptGuidelines: buildGuidelines(agents),
     parameters: SubagentParams,
-    async execute(_id, params, _signal, _onUpdate, ctx) {
+    async execute(_id, params, _signal, onUpdate, ctx) {
       try {
-        return await dispatch(parseCommand(params.command), agents, pi, ctx);
+        return await dispatch(parseCommand(params.command), agents, pi, ctx, onUpdate);
       } catch (e) {
         return textResult(`Error: ${errorMsg(e)}`, true);
       }

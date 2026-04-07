@@ -7,10 +7,13 @@ import { syncWidget } from "./widget.js";
 import { createRunner, createSessionRunner } from "./run-factory.js";
 export type { DispatchCtx } from "./run-factory.js";
 
+type OnUpdate = Parameters<typeof createRunner>[2];
+
 export async function dispatchRun(
 	agent: AgentConfig, task: string, ctx: Parameters<typeof createRunner>[1], main: boolean,
+	onUpdate?: OnUpdate,
 ): Promise<RunResult> {
-	const runner = createRunner(main, ctx);
+	const runner = createRunner(main, ctx, onUpdate);
 	try { return await executeSingle(agent, task, { runner }); }
 	finally { syncWidget(ctx, listRuns()); }
 }
@@ -18,8 +21,9 @@ export async function dispatchRun(
 export async function dispatchBatch(
 	items: Array<{ agent: string; task: string }>, agents: AgentConfig[],
 	ctx: Parameters<typeof createRunner>[1], main: boolean,
+	onUpdate?: OnUpdate,
 ): Promise<RunResult[]> {
-	const runner = createRunner(main, ctx);
+	const runner = createRunner(main, ctx, onUpdate);
 	try { return await executeBatch(items, agents, { runner }); }
 	finally { syncWidget(ctx, listRuns()); }
 }
@@ -27,8 +31,9 @@ export async function dispatchBatch(
 export async function dispatchChain(
 	steps: Array<{ agent: string; task: string }>, agents: AgentConfig[],
 	ctx: Parameters<typeof createRunner>[1], main: boolean,
+	onUpdate?: OnUpdate,
 ): Promise<RunResult> {
-	const runner = createRunner(main, ctx);
+	const runner = createRunner(main, ctx, onUpdate);
 	try { return await executeChain(steps, agents, { runner }); }
 	finally { syncWidget(ctx, listRuns()); }
 }
@@ -44,6 +49,7 @@ export function dispatchAbort(id: number): string {
 export async function dispatchContinue(
 	id: number, task: string, agents: AgentConfig[],
 	ctx: Parameters<typeof createRunner>[1],
+	onUpdate?: OnUpdate,
 ): Promise<RunResult | string> {
 	const hist = getRunHistory().find((r) => r.id === id);
 	if (!hist) return `Run #${id} not found in history`;
@@ -51,7 +57,7 @@ export async function dispatchContinue(
 	if (!sessFile) return `Run #${id} not found in history`;
 	const agent = getAgent(hist.agent, agents);
 	if (!agent) return `Agent for run #${id} not found`;
-	const runner = createSessionRunner(sessFile, ctx);
+	const runner = createSessionRunner(sessFile, ctx, onUpdate);
 	try { return await executeSingle(agent, task, { runner }); }
 	finally { syncWidget(ctx, listRuns()); }
 }

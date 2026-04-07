@@ -13,10 +13,7 @@ export function formatEntry(
 ): string {
 	const prefix = `[mcp:${level}]`;
 	const ctxStr = context
-		? Object.entries(context)
-				.filter(([, v]) => v !== undefined)
-				.map(([k, v]) => `${k}=${v}`)
-				.join(" ")
+		? Object.entries(context).filter(([, v]) => v !== undefined).map(([k, v]) => `${k}=${v}`).join(" ")
 		: "";
 	return ctxStr ? `${prefix} ${message} (${ctxStr})` : `${prefix} ${message}`;
 }

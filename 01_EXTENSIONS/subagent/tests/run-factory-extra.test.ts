@@ -14,6 +14,7 @@ const agent: AgentConfig = { name: "scout", description: "", systemPrompt: "find
 const ok: RunResult = { id: 1, agent: "scout", output: "done", usage: { inputTokens: 10, outputTokens: 5, turns: 1 } };
 const mock = () => (spawnAndCollect as ReturnType<typeof vi.fn>);
 const ctx = () => ({ hasUI: false, ui: { setWidget: vi.fn() }, sessionManager: { getBranch: () => [] } });
+type EvtFn = (e: Record<string, string | undefined>) => void;
 
 describe("onEvent integration", () => {
 	beforeEach(() => { vi.clearAllMocks(); resetStore(); resetSession(); resetWidgetState(); });
@@ -35,7 +36,7 @@ describe("onEvent integration", () => {
 	it("onEvent updates widget on tool_start/tool_end", async () => {
 		const c = ctx();
 		c.hasUI = true;
-		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: (e: Record<string, string | undefined>) => void) => {
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
 			onEvt({ type: "tool_start", toolName: "Bash" });
 			onEvt({ type: "tool_end", toolName: "Bash" });
 			onEvt({ type: "message", text: "hello" });
@@ -46,7 +47,7 @@ describe("onEvent integration", () => {
 	});
 
 	it("collects events in history for createRunner", async () => {
-		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvent: (e: Record<string, string | undefined>) => void) => {
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvent: EvtFn) => {
 			onEvent({ type: "tool_start", toolName: "Read" });
 			return Promise.resolve(ok);
 		});
@@ -57,7 +58,7 @@ describe("onEvent integration", () => {
 	});
 
 	it("collects events in history for createSessionRunner", async () => {
-		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvent: (e: Record<string, string | undefined>) => void) => {
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvent: EvtFn) => {
 			onEvent({ type: "message", text: "hi" });
 			return Promise.resolve(ok);
 		});
@@ -65,5 +66,67 @@ describe("onEvent integration", () => {
 		const hist = getRunHistory();
 		expect(hist[hist.length - 1].events).toHaveLength(1);
 		expect(hist[hist.length - 1].events?.[0].text).toBe("hi");
+	});
+
+	it("calls onUpdate on tool_start event in createRunner", async () => {
+		const onUpdate = vi.fn();
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
+			onEvt({ type: "tool_start", toolName: "Bash" });
+			return Promise.resolve(ok);
+		});
+		await createRunner(false, ctx(), onUpdate)(agent, "task");
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ Bash" }] });
+	});
+
+	it("calls onUpdate on message event in createRunner", async () => {
+		const onUpdate = vi.fn();
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
+			onEvt({ type: "message", text: "progress update" });
+			return Promise.resolve(ok);
+		});
+		await createRunner(false, ctx(), onUpdate)(agent, "task");
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "progress update" }] });
+	});
+
+	it("calls onUpdate on tool_start event in createSessionRunner", async () => {
+		const onUpdate = vi.fn();
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
+			onEvt({ type: "tool_start", toolName: "Write" });
+			return Promise.resolve(ok);
+		});
+		await createSessionRunner("/tmp/s.json", ctx(), onUpdate)(agent, "task");
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ Write" }] });
+	});
+
+	it("calls onUpdate on message event in createSessionRunner", async () => {
+		const onUpdate = vi.fn();
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
+			onEvt({ type: "message", text: "session message" });
+			return Promise.resolve(ok);
+		});
+		await createSessionRunner("/tmp/s.json", ctx(), onUpdate)(agent, "task");
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "session message" }] });
+	});
+
+	it("accumulates multiple texts in onUpdate calls", async () => {
+		const onUpdate = vi.fn();
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
+			onEvt({ type: "tool_start", toolName: "Bash" });
+			onEvt({ type: "message", text: "output" });
+			return Promise.resolve(ok);
+		});
+		await createRunner(false, ctx(), onUpdate)(agent, "task");
+		expect(onUpdate).toHaveBeenCalledTimes(2);
+		expect(onUpdate.mock.calls[1][0].content[0].text).toBe("→ Bash\noutput");
+	});
+
+	it("uses empty string when toolName is undefined on tool_start", async () => {
+		const onUpdate = vi.fn();
+		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
+			onEvt({ type: "tool_start", toolName: undefined });
+			return Promise.resolve(ok);
+		});
+		await createRunner(false, ctx(), onUpdate)(agent, "task");
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ " }] });
 	});
 });

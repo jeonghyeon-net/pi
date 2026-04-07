@@ -1,32 +1,28 @@
 import { describe, it, expect } from "vitest";
 import { shouldLog, formatEntry } from "../src/logger-format.js";
+import type { LogLevel } from "../src/logger-format.js";
 
 describe("shouldLog", () => {
-	it("debug at debug level returns true", () => {
-		expect(shouldLog("debug", "debug")).toBe(true);
-	});
-
-	it("debug at info level returns false", () => {
-		expect(shouldLog("debug", "info")).toBe(false);
-	});
-
-	it("error at any level returns true", () => {
-		expect(shouldLog("error", "debug")).toBe(true);
-		expect(shouldLog("error", "info")).toBe(true);
-		expect(shouldLog("error", "warn")).toBe(true);
-		expect(shouldLog("error", "error")).toBe(true);
-	});
-
-	it("warn at error level returns false", () => {
-		expect(shouldLog("warn", "error")).toBe(false);
-	});
-
-	it("info at info level returns true", () => {
+	it("allows same level", () => {
 		expect(shouldLog("info", "info")).toBe(true);
 	});
 
-	it("warn at warn level returns true", () => {
-		expect(shouldLog("warn", "warn")).toBe(true);
+	it("allows higher level", () => {
+		expect(shouldLog("error", "debug")).toBe(true);
+	});
+
+	it("blocks lower level", () => {
+		expect(shouldLog("debug", "info")).toBe(false);
+	});
+
+	it("debug allows everything at debug min", () => {
+		const levels: LogLevel[] = ["debug", "info", "warn", "error"];
+		for (const l of levels) expect(shouldLog(l, "debug")).toBe(true);
+	});
+
+	it("error only allows error at error min", () => {
+		expect(shouldLog("warn", "error")).toBe(false);
+		expect(shouldLog("error", "error")).toBe(true);
 	});
 });
 
@@ -36,20 +32,22 @@ describe("formatEntry", () => {
 	});
 
 	it("formats with context", () => {
-		const result = formatEntry("warn", "test", { key: "val" });
-		expect(result).toBe("[mcp:warn] test (key=val)");
+		const result = formatEntry("warn", "slow", { server: "gh" });
+		expect(result).toBe("[mcp:warn] slow (server=gh)");
 	});
 
 	it("filters undefined context values", () => {
-		const result = formatEntry("debug", "msg", { a: "1", b: undefined, c: "3" });
-		expect(result).toBe("[mcp:debug] msg (a=1 c=3)");
+		const result = formatEntry("debug", "msg", { a: "1", b: undefined });
+		expect(result).toBe("[mcp:debug] msg (a=1)");
 	});
 
-	it("handles empty context object", () => {
-		expect(formatEntry("error", "fail", {})).toBe("[mcp:error] fail");
+	it("returns no parens when all context values undefined", () => {
+		const result = formatEntry("error", "msg", { a: undefined });
+		expect(result).toBe("[mcp:error] msg");
 	});
 
-	it("handles all undefined context values", () => {
-		expect(formatEntry("info", "test", { a: undefined })).toBe("[mcp:info] test");
+	it("formats with empty context object", () => {
+		const result = formatEntry("info", "msg", {});
+		expect(result).toBe("[mcp:info] msg");
 	});
 });

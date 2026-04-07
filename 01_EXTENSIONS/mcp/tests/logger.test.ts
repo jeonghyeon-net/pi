@@ -2,23 +2,17 @@ import { describe, it, expect, vi } from "vitest";
 import { createLogger } from "../src/logger.js";
 
 describe("createLogger", () => {
-	it("info logs at info level via console.log", () => {
-		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-		const logger = createLogger("info");
-		logger.info("hello");
-		expect(spy).toHaveBeenCalledWith("[mcp:info] hello");
-		spy.mockRestore();
-	});
-
-	it("debug is skipped at info level", () => {
+	it("logs info and above at info level", () => {
 		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
 		const logger = createLogger("info");
 		logger.debug("hidden");
 		expect(spy).not.toHaveBeenCalled();
+		logger.info("visible");
+		expect(spy).toHaveBeenCalledWith("[mcp:info] visible");
 		spy.mockRestore();
 	});
 
-	it("error uses console.error", () => {
+	it("uses console.error for error level", () => {
 		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const logger = createLogger("debug");
 		logger.error("fail");
@@ -26,15 +20,15 @@ describe("createLogger", () => {
 		spy.mockRestore();
 	});
 
-	it("warn uses console.warn", () => {
+	it("uses console.warn for warn level", () => {
 		const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const logger = createLogger("debug");
-		logger.warn("careful");
-		expect(spy).toHaveBeenCalledWith("[mcp:warn] careful");
+		logger.warn("caution");
+		expect(spy).toHaveBeenCalledWith("[mcp:warn] caution");
 		spy.mockRestore();
 	});
 
-	it("debug logs at debug level via console.log", () => {
+	it("logs debug at debug level", () => {
 		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
 		const logger = createLogger("debug");
 		logger.debug("trace");
@@ -44,28 +38,32 @@ describe("createLogger", () => {
 
 	it("child logger inherits and extends context", () => {
 		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-		const parent = createLogger("info", { ext: "mcp" });
-		const child = parent.child({ req: "123" });
-		child.info("request");
-		expect(spy).toHaveBeenCalledWith("[mcp:info] request (ext=mcp req=123)");
+		const logger = createLogger("debug", { server: "gh" });
+		const child = logger.child({ op: "list" });
+		child.info("ok");
+		expect(spy).toHaveBeenCalledWith("[mcp:info] ok (server=gh op=list)");
 		spy.mockRestore();
 	});
 
 	it("child logger overrides parent context keys", () => {
 		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-		const parent = createLogger("info", { key: "old" });
-		const child = parent.child({ key: "new" });
+		const logger = createLogger("debug", { server: "old" });
+		const child = logger.child({ server: "new" });
 		child.info("msg");
-		expect(spy).toHaveBeenCalledWith("[mcp:info] msg (key=new)");
+		expect(spy).toHaveBeenCalledWith("[mcp:info] msg (server=new)");
 		spy.mockRestore();
 	});
 
-	it("parent logger without context still works", () => {
-		const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-		const logger = createLogger("debug");
-		const child = logger.child({ id: "abc" });
-		child.info("test");
-		expect(spy).toHaveBeenCalledWith("[mcp:info] test (id=abc)");
-		spy.mockRestore();
+	it("respects minLevel for all methods", () => {
+		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const logger = createLogger("error");
+		logger.debug("no"); logger.info("no"); logger.warn("no");
+		expect(logSpy).not.toHaveBeenCalled();
+		expect(warnSpy).not.toHaveBeenCalled();
+		logger.error("yes");
+		expect(errSpy).toHaveBeenCalled();
+		logSpy.mockRestore(); warnSpy.mockRestore(); errSpy.mockRestore();
 	});
 });

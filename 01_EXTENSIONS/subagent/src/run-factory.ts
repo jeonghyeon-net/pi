@@ -10,26 +10,39 @@ import { nextId, addRun, removeRun, listRuns } from "./store.js";
 import { addToHistory, sessionPath, type HistoryEvent } from "./session.js";
 import { MAX_RETRIES, RETRY_BASE_MS } from "./constants.js";
 import { spawnAndCollect } from "./spawn.js";
-import { syncWidget, setCurrentTool, clearToolState } from "./widget.js";
+import { syncWidget, setCurrentTool, clearToolState, startWidgetTimer, stopWidgetTimer } from "./widget.js";
 
-export interface DispatchCtx {
-	hasUI: boolean;
-	ui: { setWidget(k: string, v: unknown, o?: unknown): void };
-	sessionManager: { getBranch(): unknown[] };
+export interface DispatchCtx { hasUI: boolean; ui: { setWidget(k: string, v: unknown, o?: unknown): void }; sessionManager: { getBranch(): unknown[] } }
+type OnUpdate = ((partial: { content: Array<{ type: string; text: string }> }) => void) | undefined;
+
+function registerRun(id: number, agent: string, ctx: DispatchCtx, ac: AbortController): void {
+	addRun({ id, agent, startedAt: Date.now(), abort: () => ac.abort() });
+	if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
 }
 
-function makeOnEvent(id: number, ctx: DispatchCtx, collected: HistoryEvent[]) {
+function unregisterRun(id: number): void {
+	clearToolState(id);
+	removeRun(id);
+	if (listRuns().length === 0) stopWidgetTimer();
+}
+
+function makeOnEvent(id: number, ctx: DispatchCtx, collected: HistoryEvent[], texts: string[], onUpdate: OnUpdate) {
 	return (evt: ParsedEvent) => {
 		collected.push({ type: evt.type, text: evt.text, toolName: evt.toolName });
-		if (evt.type === "tool_start") { setCurrentTool(id, evt.toolName); syncWidget(ctx, listRuns()); }
+		if (evt.type === "tool_start") {
+			setCurrentTool(id, evt.toolName); syncWidget(ctx, listRuns());
+			texts.push(`→ ${evt.toolName ?? ""}`);
+			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
+		}
 		if (evt.type === "tool_end") { setCurrentTool(id, undefined); syncWidget(ctx, listRuns()); }
+		if (evt.type === "message" && evt.text) {
+			texts.push(evt.text);
+			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
+		}
 	};
 }
 
-export function createRunner(
-	main: boolean,
-	ctx: DispatchCtx,
-): (agent: AgentConfig, task: string) => Promise<RunResult> {
+export function createRunner(main: boolean, ctx: DispatchCtx, onUpdate?: OnUpdate): (agent: AgentConfig, task: string) => Promise<RunResult> {
 	return async (agent, task) => {
 		const id = nextId();
 		const promptPath = join(tmpdir(), `pi-sub-${agent.name}-${id}.md`);
@@ -46,21 +59,19 @@ export function createRunner(
 		if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 		const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: promptPath, task, sessionPath: sessPath });
 		const ac = new AbortController();
-		addRun({ id, agent: agent.name, startedAt: Date.now(), abort: () => ac.abort() });
+		registerRun(id, agent.name, ctx, ac);
 		const collected: HistoryEvent[] = [];
-		const onEvent = makeOnEvent(id, ctx, collected);
+		const texts: string[] = [];
+		const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
 		try {
 			const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
 			addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessPath, events: collected });
 			return result;
-		} finally { clearToolState(id); removeRun(id); }
+		} finally { unregisterRun(id); }
 	};
 }
 
-export function createSessionRunner(
-	sessFile: string,
-	ctx: DispatchCtx,
-): (agent: AgentConfig, task: string) => Promise<RunResult> {
+export function createSessionRunner(sessFile: string, ctx: DispatchCtx, onUpdate?: OnUpdate): (agent: AgentConfig, task: string) => Promise<RunResult> {
 	return async (agent, task) => {
 		const id = nextId();
 		const { cmd, base } = getPiCommand(process.execPath, process.argv[1], existsSync);
@@ -68,13 +79,14 @@ export function createSessionRunner(
 		const idx = args.indexOf("--append-system-prompt");
 		if (idx !== -1) args.splice(idx, 2);
 		const ac = new AbortController();
-		addRun({ id, agent: agent.name, startedAt: Date.now(), abort: () => ac.abort() });
+		registerRun(id, agent.name, ctx, ac);
 		const collected: HistoryEvent[] = [];
-		const onEvent = makeOnEvent(id, ctx, collected);
+		const texts: string[] = [];
+		const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
 		try {
 			const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
 			addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessFile, events: collected });
 			return result;
-		} finally { clearToolState(id); removeRun(id); }
+		} finally { unregisterRun(id); }
 	};
 }
