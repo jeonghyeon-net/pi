@@ -1,5 +1,4 @@
-import path from "node:path";
-import { deriveSessionTitle } from "./title.js";
+import { resolveSessionTitle, type SessionTitleModel, type SessionTitleModelRegistry } from "./summarize.js";
 
 export interface SessionTitleInput {
 	source: "interactive" | "rpc" | "extension";
@@ -14,6 +13,8 @@ export interface SessionTitleRuntime {
 export interface SessionTitleContext {
 	hasUI: boolean;
 	cwd: string;
+	model: SessionTitleModel | undefined;
+	modelRegistry: SessionTitleModelRegistry;
 	ui: { setTitle(title: string): void };
 	sessionManager: {
 		getSessionName(): string | undefined;
@@ -26,9 +27,8 @@ function hasUserMessages(ctx: SessionTitleContext): boolean {
 	return ctx.sessionManager.getEntries().some((entry) => entry.type === "message" && entry.message?.role === "user");
 }
 
-export function buildTerminalTitle(cwd: string, sessionName: string): string {
-	const cwdBasename = path.basename(cwd) || cwd;
-	return `π - ${sessionName} - ${cwdBasename}`;
+export function buildTerminalTitle(_cwd: string, sessionName: string): string {
+	return `π - ${sessionName}`;
 }
 
 export async function handleInput(
@@ -39,10 +39,8 @@ export async function handleInput(
 	if (event.source === "extension") return;
 	if (runtime.getSessionName() || ctx.sessionManager.getSessionName()) return;
 	if (hasUserMessages(ctx)) return;
-
-	const title = deriveSessionTitle(event.text);
+	const title = await resolveSessionTitle(event.text, ctx.model, ctx.modelRegistry);
 	if (!title) return;
-
 	runtime.setSessionName(title);
 	if (ctx.hasUI) ctx.ui.setTitle(buildTerminalTitle(ctx.cwd || ctx.sessionManager.getCwd(), title));
 }
