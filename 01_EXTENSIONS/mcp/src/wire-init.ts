@@ -22,7 +22,6 @@ import { closeServer } from "./server-close.js";
 import { ServerPool } from "./server-pool.js";
 import { recordFailure } from "./failure-tracker.js";
 import type { McpConfig } from "./types-config.js";
-import type { ServerConnection } from "./types-server.js";
 
 export interface FooterUi {
 	setStatus(key: string, text: string | undefined): void;
@@ -33,7 +32,6 @@ export function setCapturedUi(ui: FooterUi | null): void { capturedUi = ui; }
 export function getCapturedUi(): FooterUi | null { return capturedUi; }
 
 function isConfig(v: unknown): v is McpConfig { return typeof v === "object" && v !== null && "mcpServers" in v; }
-function isServerConn(v: unknown): v is ServerConnection { return typeof v === "object" && v !== null && "client" in v && "transport" in v; }
 function isFooterUi(v: unknown): v is FooterUi { return typeof v === "object" && v !== null && "setStatus" in v && "theme" in v; }
 
 function wrapIdleTimer(opts: unknown): void {
@@ -73,7 +71,7 @@ export function wireInitDeps(): InitDeps {
 		registerDirectTools: wireRegisterDirectTools(),
 		buildResourceTools: wireBuildResourceTools(), deduplicateTools: wireDeduplicateTools(),
 		startIdleTimer: wrapIdleTimer, startKeepalive: wrapKeepalive, setConfig,
-		setConnection: (name, conn) => { if (isServerConn(conn)) setConnection(name, conn); },
+		setConnection: (name, conn) => { setConnection(name, conn); },
 		setMetadata, getAllMetadata, incrementGeneration, getGeneration,
 		updateFooter: () => {
 			const ui = getCapturedUi(); const cfg = getConfig();

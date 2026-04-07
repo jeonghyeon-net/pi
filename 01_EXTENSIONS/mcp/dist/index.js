@@ -24876,9 +24876,6 @@ function getCapturedUi() {
 function isConfig(v) {
   return typeof v === "object" && v !== null && "mcpServers" in v;
 }
-function isServerConn(v) {
-  return typeof v === "object" && v !== null && "client" in v && "transport" in v;
-}
 function isFooterUi(v) {
   return typeof v === "object" && v !== null && "setStatus" in v && "theme" in v;
 }
@@ -24934,7 +24931,7 @@ function wireInitDeps() {
     startKeepalive: wrapKeepalive,
     setConfig,
     setConnection: (name, conn) => {
-      if (isServerConn(conn)) setConnection(name, conn);
+      setConnection(name, conn);
     },
     setMetadata,
     getAllMetadata,
