@@ -34,7 +34,7 @@ export function advanceFrame(): void { frame++; }
 
 export function buildWidgetLines(runs: MinimalRun[], now: number): string[] {
 	const spin = SPINNER[frame % SPINNER.length];
-	return runs.slice(0, MAX_VISIBLE).map((r) => {
+	const visible = runs.slice(0, MAX_VISIBLE).map((r) => {
 		const elapsed = formatDuration(now - r.startedAt);
 		const lastEvt = lastEventTime.get(r.id) ?? r.startedAt;
 		const idle = now - lastEvt;
@@ -46,6 +46,8 @@ export function buildWidgetLines(runs: MinimalRun[], now: number): string[] {
 		const suffix = activity ? ` → ${activity}` : "";
 		return `${spin} ${r.agent} #${r.id}${task} (${elapsed})${suffix}`;
 	});
+	const hidden = runs.length - visible.length;
+	return hidden > 0 ? [...visible, `... +${hidden} more`] : visible;
 }
 
 export function syncWidget(ctx: MinimalCtx, runs: MinimalRun[]): void {

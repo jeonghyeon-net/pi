@@ -254,7 +254,7 @@ function setCurrentMessage(runId, preview) {
 }
 function buildWidgetLines(runs, now) {
   const spin = SPINNER[frame % SPINNER.length];
-  return runs.slice(0, MAX_VISIBLE).map((r) => {
+  const visible = runs.slice(0, MAX_VISIBLE).map((r) => {
     const elapsed = formatDuration(now - r.startedAt);
     const lastEvt = lastEventTime.get(r.id) ?? r.startedAt;
     const idle = now - lastEvt;
@@ -266,6 +266,8 @@ function buildWidgetLines(runs, now) {
     const suffix = activity ? ` \u2192 ${activity}` : "";
     return `${spin} ${r.agent} #${r.id}${task} (${elapsed})${suffix}`;
   });
+  const hidden = runs.length - visible.length;
+  return hidden > 0 ? [...visible, `... +${hidden} more`] : visible;
 }
 function syncWidget(ctx, runs) {
   if (!ctx.hasUI) return;

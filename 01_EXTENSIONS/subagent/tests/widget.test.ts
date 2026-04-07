@@ -21,9 +21,12 @@ describe("buildWidgetLines", () => {
 	it("returns empty for no runs", () => {
 		expect(buildWidgetLines([], Date.now())).toEqual([]);
 	});
-	it("limits to 3 visible", () => {
+	it("shows overflow summary when runs exceed the visible limit", () => {
 		const runs = Array.from({ length: 5 }, (_, i) => ({ id: i + 1, agent: "w", startedAt: 0 }));
-		expect(buildWidgetLines(runs, Date.now())).toHaveLength(3);
+		const lines = buildWidgetLines(runs, Date.now());
+		expect(lines).toHaveLength(4);
+		expect(lines[2]).toContain("#3");
+		expect(lines[3]).toContain("+2 more");
 	});
 	it("shows current tool in widget line", () => {
 		setCurrentTool(1, "Bash");

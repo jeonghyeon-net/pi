@@ -1,10 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
-	syncWidget, resetWidgetState, startWidgetTimer, stopWidgetTimer,
+	buildWidgetLines, syncWidget, resetWidgetState, startWidgetTimer, stopWidgetTimer,
 } from "../src/widget.js";
 
 beforeEach(() => resetWidgetState());
 afterEach(() => stopWidgetTimer());
+
+describe("buildWidgetLines", () => {
+	it("shows overflow summary for extra runs", () => {
+		const now = Date.now();
+		const lines = buildWidgetLines([
+			{ id: 1, agent: "a", startedAt: now - 1_000 },
+			{ id: 2, agent: "b", startedAt: now - 2_000 },
+			{ id: 3, agent: "c", startedAt: now - 3_000 },
+			{ id: 4, agent: "d", startedAt: now - 4_000 },
+		], now);
+		expect(lines).toHaveLength(4);
+		expect(lines[2]).toContain("c #3");
+		expect(lines[3]).toContain("+1 more");
+	});
+});
 
 describe("syncWidget", () => {
 	it("sets widget when runs exist", () => {
