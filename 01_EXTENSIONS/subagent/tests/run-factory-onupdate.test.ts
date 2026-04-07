@@ -26,7 +26,7 @@ describe("onUpdate callback", () => {
 			return Promise.resolve(ok);
 		});
 		await createRunner(false, ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ Bash" }] });
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ Bash" }], details: { isError: false } });
 	});
 
 	it("calls onUpdate on message event in createRunner", async () => {
@@ -36,7 +36,7 @@ describe("onUpdate callback", () => {
 			return Promise.resolve(ok);
 		});
 		await createRunner(false, ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "progress update" }] });
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "progress update" }], details: { isError: false } });
 	});
 
 	it("calls onUpdate on tool_start in createSessionRunner", async () => {
@@ -46,7 +46,7 @@ describe("onUpdate callback", () => {
 			return Promise.resolve(ok);
 		});
 		await createSessionRunner("/tmp/s.json", ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ Write" }] });
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ Write" }], details: { isError: false } });
 	});
 
 	it("calls onUpdate on message in createSessionRunner", async () => {
@@ -56,7 +56,7 @@ describe("onUpdate callback", () => {
 			return Promise.resolve(ok);
 		});
 		await createSessionRunner("/tmp/s.json", ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "session message" }] });
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "session message" }], details: { isError: false } });
 	});
 
 	it("accumulates multiple texts in onUpdate calls", async () => {
@@ -69,6 +69,7 @@ describe("onUpdate callback", () => {
 		await createRunner(false, ctx(), onUpdate)(agent, "task");
 		expect(onUpdate).toHaveBeenCalledTimes(2);
 		expect(onUpdate.mock.calls[1][0].content[0].text).toBe("→ Bash\noutput");
+		expect(onUpdate.mock.calls[1][0].details).toEqual({ isError: false });
 	});
 
 	it("uses empty string when toolName is undefined", async () => {
@@ -78,6 +79,6 @@ describe("onUpdate callback", () => {
 			return Promise.resolve(ok);
 		});
 		await createRunner(false, ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ " }] });
+		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ " }], details: { isError: false } });
 	});
 });

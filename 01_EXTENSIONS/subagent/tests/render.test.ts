@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { visibleWidth } from "@mariozechner/pi-tui";
 import { buildCallText, buildResultText, renderCall, renderResult } from "../src/render.js";
 
 describe("buildCallText", () => {
@@ -61,6 +62,13 @@ describe("renderCall", () => {
 		const comp = renderCall({ command: "run scout -- find auth" });
 		expect(comp.render(80)).toBeInstanceOf(Array);
 		expect(comp.render(80)[0]).toContain("scout");
+		comp.invalidate();
+	});
+
+	it("truncates wide characters by visible width", () => {
+		const comp = renderCall({ command: "run challenger -- 너는 가위바위보 선수 A다. 다른 선수의 선택은 모른다고 가정하고, 가위/바위/보 중 하나를 독립적으로 선택하라." });
+		const line = comp.render(40)[0] ?? "";
+		expect(visibleWidth(line)).toBeLessThanOrEqual(40);
 	});
 });
 
@@ -72,5 +80,10 @@ describe("renderResult", () => {
 	it("handles multiline content", () => {
 		const comp = renderResult({ content: [{ type: "text", text: "line1" }, { type: "text", text: "line2" }] });
 		expect(comp.render(80)).toEqual(["line1", "line2"]);
+	});
+	it("truncates wide characters in results by visible width", () => {
+		const comp = renderResult({ content: [{ type: "text", text: "가위바위보 가위바위보 가위바위보" }] });
+		const line = comp.render(10)[0] ?? "";
+		expect(visibleWidth(line)).toBeLessThanOrEqual(10);
 	});
 });

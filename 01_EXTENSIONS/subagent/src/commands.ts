@@ -23,7 +23,7 @@ function buildHelpText(agentsDir: string): string {
 	return lines.join("\n");
 }
 
-interface SendFn { (content: string, opts?: { deliverAs?: string }): void }
+interface SendFn { (content: string, opts?: { deliverAs?: "steer" | "followUp" }): void }
 interface CommandCtx { ui: { notify(msg: string, type?: string): void } }
 
 export function buildSubCommand(agentsDir: string, sendUserMessage: SendFn) {

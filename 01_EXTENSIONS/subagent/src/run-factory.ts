@@ -1,7 +1,8 @@
+import type { AgentToolUpdateCallback } from "@mariozechner/pi-coding-agent";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
 import { join, dirname } from "path";
-import type { AgentConfig, RunResult } from "./types.js";
+import type { AgentConfig, RunResult, SubagentToolDetails } from "./types.js";
 import type { ParsedEvent } from "./parser.js";
 import { getPiCommand, buildArgs } from "./runner.js";
 import { withRetry } from "./retry.js";
@@ -13,7 +14,7 @@ import { spawnAndCollect } from "./spawn.js";
 import { syncWidget, setCurrentTool, clearToolState, startWidgetTimer, stopWidgetTimer } from "./widget.js";
 
 export interface DispatchCtx { hasUI: boolean; ui: { setWidget(k: string, v: unknown, o?: unknown): void }; sessionManager: { getBranch(): unknown[] } }
-type OnUpdate = ((partial: { content: Array<{ type: string; text: string }> }) => void) | undefined;
+type OnUpdate = AgentToolUpdateCallback<SubagentToolDetails> | undefined;
 
 function registerRun(id: number, agent: string, ctx: DispatchCtx, ac: AbortController): void {
 	addRun({ id, agent, startedAt: Date.now(), abort: () => ac.abort() });
@@ -32,12 +33,12 @@ function makeOnEvent(id: number, ctx: DispatchCtx, collected: HistoryEvent[], te
 		if (evt.type === "tool_start") {
 			setCurrentTool(id, evt.toolName); syncWidget(ctx, listRuns());
 			texts.push(`→ ${evt.toolName ?? ""}`);
-			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
+			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }], details: { isError: false } });
 		}
 		if (evt.type === "tool_end") { setCurrentTool(id, undefined); syncWidget(ctx, listRuns()); }
 		if (evt.type === "message" && evt.text) {
 			texts.push(evt.text);
-			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
+			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }], details: { isError: false } });
 		}
 	};
 }

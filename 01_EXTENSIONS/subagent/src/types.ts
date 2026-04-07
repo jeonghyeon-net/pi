@@ -25,6 +25,10 @@ export interface RunResult {
 	error?: string;
 }
 
+export interface SubagentToolDetails {
+	isError: boolean;
+}
+
 export interface UsageStats {
 	inputTokens: number;
 	outputTokens: number;

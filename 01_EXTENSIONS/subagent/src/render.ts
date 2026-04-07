@@ -1,3 +1,4 @@
+import { truncateToWidth } from "@mariozechner/pi-tui";
 import type { RunResult } from "./types.js";
 import { formatUsage } from "./format.js";
 import { parseCommand } from "./cli.js";
@@ -24,14 +25,23 @@ export function buildResultText(result: RunResult): string {
 
 function textComponent(text: string) {
 	const lines = text.split("\n");
-	return { render(width: number) { return lines.map((l) => l.slice(0, width)); } };
+	return {
+		render(width: number) {
+			const safeWidth = Math.max(0, width);
+			return lines.map((line) => truncateToWidth(line, safeWidth));
+		},
+		invalidate() {},
+	};
 }
 
 export function renderCall(args: { command: string }) {
 	return textComponent(buildCallText(args));
 }
 
-export function renderResult(result: { content: Array<{ type: string; text: string }>; details?: { isError?: boolean } }) {
-	const text = result.content.map((c) => c.text).join("\n");
+export function renderResult(result: { content: Array<{ type: string; text?: string }>; details?: { isError?: boolean } }) {
+	const text = result.content
+		.filter((c) => c.type === "text" && typeof c.text === "string")
+		.map((c) => c.text)
+		.join("\n");
 	return textComponent(text);
 }

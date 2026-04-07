@@ -1,3 +1,6 @@
+// src/tool.ts
+import { defineTool } from "@mariozechner/pi-coding-agent";
+
 // src/types.ts
 import { Type } from "@sinclair/typebox";
 var SubagentParams = Type.Object({
@@ -451,7 +454,7 @@ function makeOnEvent(id, ctx, collected, texts, onUpdate) {
       setCurrentTool(id, evt.toolName);
       syncWidget(ctx, listRuns());
       texts.push(`\u2192 ${evt.toolName ?? ""}`);
-      onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
+      onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }], details: { isError: false } });
     }
     if (evt.type === "tool_end") {
       setCurrentTool(id, void 0);
@@ -459,7 +462,7 @@ function makeOnEvent(id, ctx, collected, texts, onUpdate) {
     }
     if (evt.type === "message" && evt.text) {
       texts.push(evt.text);
-      onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }] });
+      onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }], details: { isError: false } });
     }
   };
 }
@@ -575,6 +578,7 @@ function onSessionRestore() {
 import { readdirSync, readFileSync, existsSync as existsSync2 } from "fs";
 
 // src/render.ts
+import { truncateToWidth } from "@mariozechner/pi-tui";
 function buildCallText(params) {
   try {
     const cmd = parseCommand(params.command);
@@ -603,15 +607,20 @@ ${formatUsage(result.usage)}`;
 }
 function textComponent(text) {
   const lines = text.split("\n");
-  return { render(width) {
-    return lines.map((l) => l.slice(0, width));
-  } };
+  return {
+    render(width) {
+      const safeWidth = Math.max(0, width);
+      return lines.map((line) => truncateToWidth(line, safeWidth));
+    },
+    invalidate() {
+    }
+  };
 }
 function renderCall(args) {
   return textComponent(buildCallText(args));
 }
 function renderResult(result) {
-  const text = result.content.map((c) => c.text).join("\n");
+  const text = result.content.filter((c) => c.type === "text" && typeof c.text === "string").map((c) => c.text).join("\n");
   return textComponent(text);
 }
 
@@ -679,7 +688,7 @@ function buildGuidelines(agents) {
 }
 function createTool(pi, agentsDir) {
   const agents = existsSync2(agentsDir) ? loadAgentsFromDir(agentsDir, (d) => readdirSync(d).map(String), readFileSync) : [];
-  return {
+  return defineTool({
     name: "subagent",
     label: "Subagent",
     description: "Run isolated subagent processes in separate pi subprocesses with their own context window",
@@ -695,7 +704,7 @@ function createTool(pi, agentsDir) {
     },
     renderCall: (args) => renderCall(args),
     renderResult: (result) => renderResult(result)
-  };
+  });
 }
 
 // src/commands.ts

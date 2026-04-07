@@ -1,4 +1,6 @@
-import type { SubagentPi, AgentConfig } from "./types.js";
+import { defineTool } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult, AgentToolUpdateCallback, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { SubagentPi, AgentConfig, SubagentToolDetails, Subcommand } from "./types.js";
 import { SubagentParams } from "./types.js";
 import { parseCommand } from "./cli.js";
 import { loadAgentsFromDir, getAgent } from "./agents.js";
@@ -7,10 +9,9 @@ import { getRunHistory } from "./session.js";
 import { dispatchRun, dispatchBatch, dispatchChain, dispatchAbort, dispatchContinue } from "./dispatch.js";
 import type { DispatchCtx } from "./dispatch.js";
 import { readdirSync, readFileSync, existsSync } from "fs";
-import type { Subcommand } from "./types.js";
 import { renderCall, renderResult, buildResultText } from "./render.js";
 
-function textResult(text: string, isError = false) {
+function textResult(text: string, isError = false): AgentToolResult<SubagentToolDetails> {
 	return { content: [{ type: "text" as const, text }], details: { isError } };
 }
 export function errorMsg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
@@ -37,9 +38,9 @@ function formatDetail(id: number): string {
 	return parts.join("\n");
 }
 
-type UpdateFn = ((partial: { content: Array<{ type: string; text: string }> }) => void) | undefined;
+type UpdateFn = AgentToolUpdateCallback<SubagentToolDetails> | undefined;
 
-async function dispatch(cmd: Subcommand, agents: AgentConfig[], pi: SubagentPi, ctx: DispatchCtx, onUpdate: UpdateFn) {
+async function dispatch(cmd: Subcommand, agents: AgentConfig[], pi: SubagentPi, ctx: DispatchCtx, onUpdate: UpdateFn): Promise<AgentToolResult<SubagentToolDetails>> {
 	if (cmd.type === "runs") return textResult(formatRunsList());
 	if (cmd.type === "detail") return textResult(formatDetail(cmd.id));
 	if (cmd.type === "abort") return textResult(dispatchAbort(cmd.id));
@@ -77,17 +78,17 @@ export function createTool(pi: SubagentPi, agentsDir: string) {
 	const agents = existsSync(agentsDir)
 		? loadAgentsFromDir(agentsDir, (d) => readdirSync(d).map(String), readFileSync as (p: string, e: string) => string)
 		: [];
-	return {
+	return defineTool({
 		name: "subagent", label: "Subagent",
 		description: "Run isolated subagent processes in separate pi subprocesses with their own context window",
 		promptSnippet: buildSnippet(agents),
 		promptGuidelines: buildGuidelines(agents),
 		parameters: SubagentParams,
-		async execute(_id: string, params: { command: string }, _signal: unknown, onUpdate: UpdateFn, ctx: DispatchCtx) {
+		async execute(_id: string, params: { command: string }, _signal: AbortSignal | undefined, onUpdate: UpdateFn, ctx: ExtensionContext) {
 			try { return await dispatch(parseCommand(params.command), agents, pi, ctx, onUpdate); }
 			catch (e) { return textResult(`Error: ${errorMsg(e)}`, true); }
 		},
 		renderCall: (args: { command: string }) => renderCall(args),
-		renderResult: (result: { content: Array<{ type: string; text: string }>; details?: { isError?: boolean } }) => renderResult(result),
-	};
+		renderResult: (result: AgentToolResult<SubagentToolDetails>) => renderResult(result),
+	});
 }
