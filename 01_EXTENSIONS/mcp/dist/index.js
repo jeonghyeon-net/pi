@@ -7664,7 +7664,6 @@ function createMcpCommand(_pi, connectFn, closeFn) {
 }
 async function routeCommand(cmd, arg, cfg, notify, connectFn, closeFn) {
   if (cmd === "status") {
-    console.error(`[mcp:dbg] conns.size=${getConnections().size} meta.size=${getAllMetadata().size}`);
     notify(formatStatus(getConnections(), cfg, getAllMetadata(), getFailure), "info");
   } else if (cmd === "tools") {
     notify(formatTools(getAllMetadata(), arg), "info");

@@ -59,7 +59,6 @@ async function routeCommand(
 	connectFn: ConnectFn, closeFn: CloseFn,
 ): Promise<void> {
 	if (cmd === "status") {
-		console.error(`[mcp:dbg] conns.size=${getConnections().size} meta.size=${getAllMetadata().size}`);
 		notify(formatStatus(getConnections(), cfg, getAllMetadata(), getFailure), "info");
 	} else if (cmd === "tools") {
 		notify(formatTools(getAllMetadata(), arg), "info");
