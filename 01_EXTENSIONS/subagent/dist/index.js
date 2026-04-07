@@ -1,15 +1,10 @@
 // src/tool.ts
 import { defineTool } from "@mariozechner/pi-coding-agent";
-
-// src/types.ts
-import { Type } from "@sinclair/typebox";
-var SubagentParams = Type.Object({
-  command: Type.String({ description: "Subcommand string (e.g. 'run scout -- find auth code')" })
-});
+import { readdirSync, readFileSync, existsSync as existsSync2 } from "fs";
 
 // src/cli.ts
 function parseArgs(input) {
-  const result = { _: [] };
+  const result2 = { _: [] };
   const tokens = input.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [];
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -17,24 +12,24 @@ function parseArgs(input) {
       const key = t.slice(2);
       const next = tokens[i + 1];
       if (!next || next.startsWith("--")) {
-        result[key] = true;
+        result2[key] = true;
         continue;
       }
       i++;
       const val = next.replace(/^"|"$/g, "");
-      const prev = result[key];
+      const prev = result2[key];
       if (Array.isArray(prev)) {
         prev.push(val);
       } else if (prev !== void 0 && prev !== true) {
-        result[key] = [prev, val];
+        result2[key] = [prev, val];
       } else {
-        result[key] = val;
+        result2[key] = val;
       }
     } else {
-      result._.push(t.replace(/^"|"$/g, ""));
+      result2._.push(t.replace(/^"|"$/g, ""));
     }
   }
-  return result;
+  return result2;
 }
 function toArray(val) {
   if (Array.isArray(val)) return val.map(String);
@@ -101,6 +96,58 @@ function getAgent(name, agents) {
   return agents.find((a) => a.name === name);
 }
 
+// src/constants.ts
+var MAX_CONCURRENCY = 8;
+var MAX_RETRIES = 3;
+var RETRY_BASE_MS = 2e3;
+var ESCALATION_MARKER = "[ESCALATION]";
+var PIPELINE_MAX_CHARS = 4e3;
+
+// src/execute.ts
+function errorResult(agent, msg, task) {
+  return { id: 0, agent, task, output: "", usage: { inputTokens: 0, outputTokens: 0, turns: 0 }, error: msg };
+}
+async function executeSingle(agent, task, opts) {
+  return opts.runner(agent, task);
+}
+async function executeBatch(items, agents, opts) {
+  const limit = opts.concurrency ?? MAX_CONCURRENCY;
+  const results = [];
+  const pending = /* @__PURE__ */ new Set();
+  for (const item of items) {
+    const agent = getAgent(item.agent, agents);
+    if (!agent) {
+      results.push(errorResult(item.agent, `Unknown agent: ${item.agent}`, item.task));
+      continue;
+    }
+    const p = opts.runner(agent, item.task).then((r) => {
+      results.push(r);
+    }).catch((e) => {
+      results.push(errorResult(item.agent, e.message, item.task));
+    }).finally(() => {
+      pending.delete(p);
+    });
+    pending.add(p);
+    if (pending.size >= limit) await Promise.race(pending);
+  }
+  await Promise.all(pending);
+  return results;
+}
+async function executeChain(steps, agents, opts) {
+  let previous = "";
+  let lastResult = errorResult("", "No steps");
+  for (const step of steps) {
+    const agent = getAgent(step.agent, agents);
+    if (!agent) return errorResult(step.agent, `Unknown agent: ${step.agent}`, step.task);
+    const task = step.task.replace("{previous}", previous.slice(0, PIPELINE_MAX_CHARS));
+    lastResult = await opts.runner(agent, task);
+    if (lastResult.escalation) return lastResult;
+    if (lastResult.error) return lastResult;
+    previous = lastResult.output;
+  }
+  return lastResult;
+}
+
 // src/store.ts
 var counter = 0;
 var active = /* @__PURE__ */ new Map();
@@ -152,58 +199,6 @@ function getSessionFile(id) {
   return history.find((r) => r.id === id)?.sessionFile;
 }
 
-// src/constants.ts
-var MAX_CONCURRENCY = 8;
-var MAX_RETRIES = 3;
-var RETRY_BASE_MS = 2e3;
-var ESCALATION_MARKER = "[ESCALATION]";
-var PIPELINE_MAX_CHARS = 4e3;
-
-// src/execute.ts
-function errorResult(agent, msg) {
-  return { id: 0, agent, output: "", usage: { inputTokens: 0, outputTokens: 0, turns: 0 }, error: msg };
-}
-async function executeSingle(agent, task, opts) {
-  return opts.runner(agent, task);
-}
-async function executeBatch(items, agents, opts) {
-  const limit = opts.concurrency ?? MAX_CONCURRENCY;
-  const results = [];
-  const pending = /* @__PURE__ */ new Set();
-  for (const item of items) {
-    const agent = getAgent(item.agent, agents);
-    if (!agent) {
-      results.push(errorResult(item.agent, `Unknown agent: ${item.agent}`));
-      continue;
-    }
-    const p = opts.runner(agent, item.task).then((r) => {
-      results.push(r);
-    }).catch((e) => {
-      results.push(errorResult(item.agent, e.message));
-    }).finally(() => {
-      pending.delete(p);
-    });
-    pending.add(p);
-    if (pending.size >= limit) await Promise.race(pending);
-  }
-  await Promise.all(pending);
-  return results;
-}
-async function executeChain(steps, agents, opts) {
-  let previous = "";
-  let lastResult = errorResult("", "No steps");
-  for (const step of steps) {
-    const agent = getAgent(step.agent, agents);
-    if (!agent) return errorResult(step.agent, `Unknown agent: ${step.agent}`);
-    const task = step.task.replace("{previous}", previous.slice(0, PIPELINE_MAX_CHARS));
-    lastResult = await opts.runner(agent, task);
-    if (lastResult.escalation) return lastResult;
-    if (lastResult.error) return lastResult;
-    previous = lastResult.output;
-  }
-  return lastResult;
-}
-
 // src/format.ts
 function formatTokens(n) {
   if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
@@ -218,25 +213,41 @@ function formatDuration(ms) {
   if (sec < 60) return `${sec}s`;
   return `${Math.floor(sec / 60)}m ${sec % 60}s`;
 }
+function singleLine(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function previewText(text, max = 80) {
+  if (!text) return "";
+  const normalized = singleLine(text);
+  if (normalized.length <= max) return normalized;
+  return `${normalized.slice(0, Math.max(1, max - 1))}\u2026`;
+}
 
 // src/widget.ts
 var MAX_VISIBLE = 3;
 var SPINNER = "\u280B\u2819\u2839\u2838\u283C\u2834\u2826\u2827\u2807\u280F";
 var IDLE_THRESHOLD_MS = 12e4;
-var currentTools = /* @__PURE__ */ new Map();
+var currentActivity = /* @__PURE__ */ new Map();
 var lastEventTime = /* @__PURE__ */ new Map();
 var frame = 0;
 var timerCtx;
 var timerRuns;
 var timerId;
-function setCurrentTool(runId, toolName, preview) {
+function setActivity(runId, activity) {
   lastEventTime.set(runId, Date.now());
-  if (toolName) {
-    const detail = preview ? `${toolName}: ${preview.slice(0, 30)}` : toolName;
-    currentTools.set(runId, detail);
-  } else {
-    currentTools.delete(runId);
+  if (activity) currentActivity.set(runId, activity);
+  else currentActivity.delete(runId);
+}
+function setCurrentTool(runId, toolName2, preview) {
+  if (!toolName2) {
+    setActivity(runId, void 0);
+    return;
   }
+  const detail = preview ? `${toolName2}: ${previewText(preview, 30)}` : toolName2;
+  setActivity(runId, detail);
+}
+function setCurrentMessage(runId, preview) {
+  setActivity(runId, preview ? `reply: ${previewText(preview, 30)}` : void 0);
 }
 function buildWidgetLines(runs, now) {
   const spin = SPINNER[frame % SPINNER.length];
@@ -244,12 +255,13 @@ function buildWidgetLines(runs, now) {
     const elapsed = formatDuration(now - r.startedAt);
     const lastEvt = lastEventTime.get(r.id) ?? r.startedAt;
     const idle = now - lastEvt;
+    const activity = currentActivity.get(r.id);
+    const task = r.task ? ` \u2014 ${previewText(r.task, 28)}` : "";
     if (idle > IDLE_THRESHOLD_MS) {
-      return `\u26A0 ${r.agent} #${r.id} (${elapsed}) idle ${formatDuration(idle)}`;
+      return `\u26A0 ${r.agent} #${r.id}${task} (${elapsed}) idle ${formatDuration(idle)}`;
     }
-    const tool = currentTools.get(r.id);
-    const suffix = tool ? ` \u2192 ${tool}` : "";
-    return `${spin} ${r.agent} #${r.id} (${elapsed})${suffix}`;
+    const suffix = activity ? ` \u2192 ${activity}` : "";
+    return `${spin} ${r.agent} #${r.id}${task} (${elapsed})${suffix}`;
   });
 }
 function syncWidget(ctx, runs) {
@@ -278,74 +290,14 @@ function stopWidgetTimer() {
   timerRuns = void 0;
 }
 function clearToolState(runId) {
-  currentTools.delete(runId);
+  currentActivity.delete(runId);
   lastEventTime.delete(runId);
 }
 
 // src/run-factory.ts
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
-import { join as join2, dirname } from "path";
-
-// src/runner.ts
-function getPiCommand(execPath, argv1, exists) {
-  if (argv1 && exists(argv1)) return { cmd: execPath, base: [argv1] };
-  return { cmd: "pi", base: [] };
-}
-function buildArgs(input) {
-  const args = [...input.base, "--mode", "json", "-p"];
-  if (input.sessionPath) {
-    args.push("--session", input.sessionPath);
-  } else {
-    args.push("--no-session");
-  }
-  if (input.model) {
-    args.push("--model", input.model);
-  }
-  if (input.thinking) {
-    args.push("--thinking", input.thinking);
-  }
-  if (input.tools) {
-    args.push("--tools", input.tools.join(","));
-  }
-  args.push("--append-system-prompt", input.systemPromptPath);
-  args.push(`Task: ${input.task}`);
-  return args;
-}
-function collectOutput(events) {
-  const texts = [];
-  const usage = { inputTokens: 0, outputTokens: 0, turns: 0 };
-  for (const evt of events) {
-    if (evt.type === "message" && evt.text) {
-      texts.push(evt.text);
-      usage.inputTokens += evt.usage?.inputTokens ?? 0;
-      usage.outputTokens += evt.usage?.outputTokens ?? 0;
-      usage.turns += evt.usage?.turns ?? 0;
-    }
-  }
-  const output = texts.join("\n");
-  const escalation = output.includes(ESCALATION_MARKER) ? output.split(ESCALATION_MARKER)[1]?.trim() : void 0;
-  return { output, usage, escalation };
-}
-
-// src/retry.ts
-var TRANSIENT_PATTERNS = [/ECONNRESET/, /ETIMEDOUT/, /ENOTFOUND/, /429/, /5\d{2}/];
-function isTransient(err) {
-  return TRANSIENT_PATTERNS.some((p) => p.test(err.message));
-}
-async function withRetry(fn, maxRetries, baseMs) {
-  let lastErr;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err instanceof Error ? err : new Error(String(err));
-      if (!isTransient(lastErr) || attempt === maxRetries) throw lastErr;
-      await new Promise((r) => setTimeout(r, baseMs * 2 ** attempt));
-    }
-  }
-  throw lastErr;
-}
+import { dirname, join as join2 } from "path";
 
 // src/context.ts
 function extractText(entry) {
@@ -368,37 +320,216 @@ ${compaction.summary}`);
   return parts.join("\n\n");
 }
 
+// src/runner-output.ts
+function collectOutput(events) {
+  const finalTexts = [];
+  const streamedTexts = [];
+  const usage = { inputTokens: 0, outputTokens: 0, turns: 0 };
+  let agentEndText = "", stopReason, lastToolName, lastToolText;
+  for (const evt of events) {
+    if (evt.type === "message" && evt.text !== void 0) {
+      finalTexts.push(evt.text);
+      usage.inputTokens += evt.usage?.inputTokens ?? 0;
+      usage.outputTokens += evt.usage?.outputTokens ?? 0;
+      usage.turns += evt.usage?.turns ?? 0;
+      stopReason = evt.stopReason ?? stopReason;
+    }
+    if (evt.type === "message_delta" && evt.text) streamedTexts.push(evt.text);
+    if ((evt.type === "tool_update" || evt.type === "tool_end") && evt.toolName) {
+      lastToolName = evt.toolName;
+      lastToolText = evt.text || lastToolText;
+    }
+    if (evt.type === "agent_end") {
+      agentEndText = evt.text || agentEndText;
+      stopReason = evt.stopReason ?? stopReason;
+      if (usage.turns === 0) Object.assign(usage, {
+        inputTokens: usage.inputTokens + (evt.usage?.inputTokens ?? 0),
+        outputTokens: usage.outputTokens + (evt.usage?.outputTokens ?? 0),
+        turns: usage.turns + (evt.usage?.turns ?? 0)
+      });
+    }
+  }
+  const finalOutput = finalTexts.join("\n");
+  const streamOutput = streamedTexts.join("");
+  const output = finalOutput || agentEndText || streamOutput;
+  const source = finalOutput ? "message" : agentEndText ? "agent_end" : streamOutput ? "stream" : "empty";
+  const escalation = output.includes(ESCALATION_MARKER) ? output.split(ESCALATION_MARKER)[1]?.trim() : void 0;
+  return { output, usage, escalation, stopReason, source, lastToolName, lastToolText };
+}
+function buildMissingOutputDiagnostic(data) {
+  const lines = ["Subagent finished without a visible assistant response.", `- source: ${data.source}`];
+  if (data.stopReason) lines.push(`- stop reason: ${data.stopReason}`);
+  if (data.exitCode !== null) lines.push(`- exit code: ${data.exitCode}`);
+  if (data.lastToolName) lines.push(`- last tool: ${data.lastToolName}`);
+  if (data.lastToolText) lines.push(`- last tool output: ${previewText(data.lastToolText, 160)}`);
+  if (data.stderr) lines.push(`- stderr: ${previewText(data.stderr, 160)}`);
+  return lines.join("\n");
+}
+
+// src/runner.ts
+function getPiCommand(execPath, argv1, exists) {
+  return argv1 && exists(argv1) ? { cmd: execPath, base: [argv1] } : { cmd: "pi", base: [] };
+}
+function buildArgs(input) {
+  const args = [...input.base, "--mode", "json", "-p", ...input.sessionPath ? ["--session", input.sessionPath] : ["--no-session"]];
+  if (input.model) args.push("--model", input.model);
+  if (input.thinking) args.push("--thinking", input.thinking);
+  if (input.tools) args.push("--tools", input.tools.join(","));
+  args.push("--append-system-prompt", input.systemPromptPath, `Task: ${input.task}`);
+  return args;
+}
+
+// src/run-progress.ts
+var MAX_RECENT_LINES = 6;
+function registerRun(id, agent, task, ctx, ac) {
+  addRun({ id, agent, task, startedAt: Date.now(), abort: () => ac.abort() });
+  if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
+}
+function unregisterRun(id) {
+  clearToolState(id);
+  removeRun(id);
+  if (listRuns().length === 0) stopWidgetTimer();
+}
+function makeOnEvent(id, agent, task, ctx, collected, onUpdate) {
+  const recent = [];
+  let current = "starting", draft = "";
+  const emit = () => onUpdate?.({ content: [{ type: "text", text: progressText(agent, id, task, current, recent) }], details: { isError: false } });
+  const pushRecent = (line) => {
+    recent.push(line);
+    if (recent.length > MAX_RECENT_LINES) recent.shift();
+  };
+  return (evt) => {
+    collected.push({ type: evt.type, text: evt.text, toolName: evt.toolName, isError: evt.isError, stopReason: evt.stopReason });
+    if (evt.type === "tool_start") current = `running ${evt.toolName ?? "tool"}${evt.text ? `: ${previewText(evt.text, 72)}` : ""}`;
+    if (evt.type === "tool_start") pushRecent(`\u2192 ${evt.toolName ?? "tool"}${evt.text ? `: ${previewText(evt.text, 96)}` : ""}`);
+    if (evt.type === "tool_update" && evt.toolName) current = `${evt.toolName}${evt.text ? `: ${previewText(evt.text, 72)}` : ""}`;
+    if (evt.type === "tool_end") current = `${evt.toolName ?? "tool"} ${evt.isError ? "failed" : "finished"}`;
+    if (evt.type === "tool_end" && evt.text) pushRecent(`${evt.isError ? "\u2717" : "\u2713"} ${evt.toolName ?? "tool"}: ${previewText(evt.text, 96)}`);
+    if (evt.type === "message_delta" && evt.text) {
+      draft += evt.text;
+      current = `drafting reply: ${previewText(draft, 72)}`;
+    }
+    if (evt.type === "message") current = evt.stopReason ? `reply ready (${evt.stopReason})` : "reply ready";
+    if (evt.type === "message") pushRecent(`\u{1F4AC} ${previewText(evt.text, 120) || "(empty response)"}`);
+    if (evt.type === "agent_end") current = evt.stopReason ? `finished (${evt.stopReason})` : "finished";
+    if (evt.type === "agent_end" && evt.isError && evt.text) pushRecent(`\u2717 ${previewText(evt.text, 120)}`);
+    if (["tool_start", "tool_update", "tool_end"].includes(evt.type)) setCurrentTool(id, evt.toolName, evt.text);
+    if (["message_delta", "message", "agent_end"].includes(evt.type) && (draft || evt.text)) setCurrentMessage(id, evt.type === "message_delta" ? draft : evt.text);
+    syncWidget(ctx, listRuns());
+    emit();
+  };
+}
+function progressText(agent, id, task, current, recent) {
+  return [`\u23F3 ${agent} #${id} \u2014 ${previewText(task, 72)}`, `current: ${current}`, ...recent.map((line) => `  ${line}`)].join("\n");
+}
+
+// src/retry.ts
+var TRANSIENT_PATTERNS = [/ECONNRESET/, /ETIMEDOUT/, /ENOTFOUND/, /429/, /5\d{2}/];
+function isTransient(err) {
+  return TRANSIENT_PATTERNS.some((p) => p.test(err.message));
+}
+async function withRetry(fn, maxRetries, baseMs) {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      if (!isTransient(lastErr) || attempt === maxRetries) throw lastErr;
+      await new Promise((r) => setTimeout(r, baseMs * 2 ** attempt));
+    }
+  }
+  throw lastErr;
+}
+
 // src/spawn.ts
 import { spawn } from "child_process";
 import { createInterface } from "readline";
 
+// src/parser-helpers.ts
+var isRecord = (v) => typeof v === "object" && v !== null;
+function parseUsage(message) {
+  if (!message?.usage) return void 0;
+  return {
+    inputTokens: message.usage.inputTokens ?? 0,
+    outputTokens: message.usage.outputTokens ?? 0,
+    turns: 1
+  };
+}
+function extractAssistantText(message) {
+  if (!message || message.role !== "assistant") return "";
+  return message.content?.filter((c) => c.type === "text").map((c) => c.text).join("\n") ?? "";
+}
+function extractToolText(result2) {
+  if (!result2 || typeof result2 !== "object") return typeof result2 === "string" ? result2 : "";
+  if (!("content" in result2) || !Array.isArray(result2.content)) return "";
+  return result2.content.filter((c) => typeof c === "object" && c !== null).filter((c) => c.type === "text" && typeof c.text === "string").map((c) => c.text).join("\n");
+}
+function summarizeArgs(args) {
+  if (!isRecord(args)) return typeof args === "string" ? previewText(args, 80) : "";
+  const obj = args;
+  for (const key of ["command", "path", "query", "tool", "server", "url", "text"]) {
+    if (typeof obj[key] === "string" && obj[key]) return previewText(obj[key], 80);
+  }
+  return previewText(JSON.stringify(args), 80);
+}
+function parseAssistantUpdate(message, delta) {
+  if (message?.role !== "assistant" || !delta?.type) return null;
+  if (delta.type === "text_delta" && delta.delta) return { type: "message_delta", text: delta.delta };
+  if (delta.type === "done") return { type: "agent_end", stopReason: delta.reason ?? message.stopReason };
+  if (delta.type !== "error") return null;
+  const err = typeof delta.error === "string" ? delta.error : delta.error?.message;
+  return { type: "agent_end", stopReason: delta.reason ?? "error", text: err, isError: true };
+}
+function parseToolEvent(type, toolName2, data, isError) {
+  const text = previewText(extractToolText(data), 120);
+  if (type === "tool_start") return { type, toolName: toolName2, text: summarizeArgs(data) };
+  return type === "tool_end" ? { type, toolName: toolName2, text, isError: !!isError } : { type, toolName: toolName2, text };
+}
+
+// src/parser-types.ts
+var eventTypes = [
+  "message_update",
+  "message_end",
+  "tool_execution_start",
+  "tool_execution_update",
+  "tool_execution_end",
+  "agent_end"
+];
+
 // src/parser.ts
+var isRecord2 = (v) => typeof v === "object" && v !== null;
+var hasType = (v) => isRecord2(v) && typeof v.type === "string";
+var isMessage = (v) => isRecord2(v);
+var isAssistantEvent = (v) => isRecord2(v);
+function parseMessageEnd(evt) {
+  const message = isRecord2(evt) && isMessage(evt.message) ? evt.message : void 0;
+  if (!message || message.role !== "assistant") return null;
+  return { type: "message", text: extractAssistantText(message), usage: parseUsage(message), stopReason: message.stopReason };
+}
+function parseAgentEnd(evt) {
+  const messages = isRecord2(evt) && Array.isArray(evt.messages) ? evt.messages.filter(isMessage) : [];
+  const last = messages.filter((m) => m.role === "assistant").at(-1);
+  return { type: "agent_end", text: extractAssistantText(last), usage: parseUsage(last), stopReason: last?.stopReason };
+}
+var toolName = (evt) => typeof evt.toolName === "string" ? evt.toolName : void 0;
+var handlers = {
+  message_update: (evt) => parseAssistantUpdate(isMessage(evt.message) ? evt.message : void 0, isAssistantEvent(evt.assistantMessageEvent) ? evt.assistantMessageEvent : void 0),
+  message_end: parseMessageEnd,
+  tool_execution_start: (evt) => parseToolEvent("tool_start", toolName(evt), evt.args),
+  tool_execution_update: (evt) => parseToolEvent("tool_update", toolName(evt), evt.partialResult),
+  tool_execution_end: (evt) => parseToolEvent("tool_end", toolName(evt), evt.result, evt.isError === true),
+  agent_end: parseAgentEnd
+};
 function parseLine(line) {
   if (!line.trim()) return null;
   try {
     const evt = JSON.parse(line);
-    switch (evt.type) {
-      case "message_end":
-        return parseMessageEnd(evt);
-      case "tool_execution_start":
-        return { type: "tool_start", toolName: evt.toolName };
-      case "tool_execution_end":
-        return { type: "tool_end", toolName: evt.toolName };
-      case "agent_end":
-        return { type: "agent_end" };
-      default:
-        return null;
-    }
+    if (!hasType(evt) || !eventTypes.includes(evt.type)) return null;
+    return handlers[evt.type](evt);
   } catch {
     return null;
   }
-}
-function parseMessageEnd(evt) {
-  const msg = evt.message;
-  if (!msg || msg.role !== "assistant") return null;
-  const text = msg.content?.filter((c) => c.type === "text").map((c) => c.text).join("\n") ?? "";
-  const usage = msg.usage ? { inputTokens: msg.usage.inputTokens ?? 0, outputTokens: msg.usage.outputTokens ?? 0, turns: 1 } : void 0;
-  return { type: "message", text, usage };
 }
 
 // src/spawn.ts
@@ -426,99 +557,87 @@ function spawnAndCollect(cmd, args, id, agentName, signal, onEvent) {
     });
     proc.on("error", (err) => reject(err));
     proc.on("close", (code) => {
-      const { output, usage, escalation } = collectOutput(events);
-      if (code !== 0 && !output) {
-        const stderr = stderrChunks.join("").trim();
-        reject(new Error(stderr || `Process exited with code ${code}`));
+      const summary = collectOutput(events);
+      const stderr = stderrChunks.join("").trim();
+      const result2 = {
+        id,
+        agent: agentName,
+        output: summary.output,
+        usage: summary.usage,
+        escalation: summary.escalation,
+        stopReason: summary.stopReason
+      };
+      if (code !== 0) {
+        result2.error = stderr || `Process exited with code ${code}`;
+        if (!result2.output) {
+          result2.output = buildMissingOutputDiagnostic({ ...summary, stderr, exitCode: code });
+        }
+        resolve(result2);
         return;
       }
-      resolve({ id, agent: agentName, output, usage, escalation });
+      if (!result2.output.trim()) {
+        result2.error = "Subagent finished without a visible assistant result";
+        result2.output = buildMissingOutputDiagnostic({ ...summary, stderr, exitCode: code });
+      }
+      resolve(result2);
     });
   });
 }
 
 // src/run-factory.ts
-function registerRun(id, agent, ctx, ac) {
-  addRun({ id, agent, startedAt: Date.now(), abort: () => ac.abort() });
-  if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
+var errorMsg = (e) => e instanceof Error ? e.message : String(e);
+var createRunner = (main, ctx, onUpdate) => async (agent, task) => {
+  const id = nextId();
+  return runAgent({ id, agent, task, ctx, onUpdate, sessionFile: sessionPath(id), prompt: buildPrompt(agent, ctx, main) });
+};
+var createSessionRunner = (sessFile, ctx, onUpdate) => async (agent, task) => {
+  const id = nextId();
+  return runAgent({ id, agent, task, ctx, onUpdate, sessionFile: sessFile });
+};
+async function runAgent(input) {
+  const id = input.id;
+  if (input.prompt) writeFileSync(join2(tmpdir(), `pi-sub-${input.agent.name}-${id}.md`), input.prompt);
+  ensureSessionDir(input.sessionFile);
+  const { cmd, args } = buildRunCommand(input.agent, input.task, input.sessionFile, input.prompt, id);
+  const ac = new AbortController();
+  const events = [];
+  registerRun(id, input.agent.name, input.task, input.ctx, ac);
+  const onEvent = makeOnEvent(id, input.agent.name, input.task, input.ctx, events, input.onUpdate);
+  try {
+    const result2 = await withRetry(() => spawnAndCollect(cmd, args, id, input.agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
+    return finishRun({ ...result2, task: input.task }, input.sessionFile, events);
+  } catch (e) {
+    return failRun(e, id, input.agent.name, input.task, input.sessionFile, events);
+  }
 }
-function unregisterRun(id) {
-  clearToolState(id);
-  removeRun(id);
-  if (listRuns().length === 0) stopWidgetTimer();
-}
-function makeOnEvent(id, ctx, collected, texts, onUpdate) {
-  return (evt) => {
-    collected.push({ type: evt.type, text: evt.text, toolName: evt.toolName });
-    if (evt.type === "tool_start") {
-      setCurrentTool(id, evt.toolName);
-      syncWidget(ctx, listRuns());
-      texts.push(`\u2192 ${evt.toolName ?? ""}`);
-      onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }], details: { isError: false } });
-    }
-    if (evt.type === "tool_end") {
-      setCurrentTool(id, void 0);
-      syncWidget(ctx, listRuns());
-    }
-    if (evt.type === "message" && evt.text) {
-      texts.push(evt.text);
-      onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }], details: { isError: false } });
-    }
-  };
-}
-function createRunner(main, ctx, onUpdate) {
-  return async (agent, task) => {
-    const id = nextId();
-    const promptPath = join2(tmpdir(), `pi-sub-${agent.name}-${id}.md`);
-    let prompt = agent.systemPrompt;
-    if (main) {
-      const branch = ctx.sessionManager.getBranch();
-      const mainCtx = extractMainContext(branch, 20);
-      if (mainCtx) prompt += `
+function buildPrompt(agent, ctx, main) {
+  if (!main) return agent.systemPrompt;
+  const summary = extractMainContext(ctx.sessionManager.getBranch(), 20);
+  return summary ? `${agent.systemPrompt}
 
 [Main Context]
-${mainCtx}`;
-    }
-    writeFileSync(promptPath, prompt);
-    const { cmd, base } = getPiCommand(process.execPath, process.argv[1], existsSync);
-    const sessPath = sessionPath(id);
-    const dir = dirname(sessPath);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: promptPath, task, sessionPath: sessPath });
-    const ac = new AbortController();
-    registerRun(id, agent.name, ctx, ac);
-    const collected = [];
-    const texts = [];
-    const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
-    try {
-      const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
-      addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessPath, events: collected });
-      return result;
-    } finally {
-      unregisterRun(id);
-    }
-  };
+${summary}` : agent.systemPrompt;
 }
-function createSessionRunner(sessFile, ctx, onUpdate) {
-  return async (agent, task) => {
-    const id = nextId();
-    const { cmd, base } = getPiCommand(process.execPath, process.argv[1], existsSync);
-    const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: "", task, sessionPath: sessFile });
-    const idx = args.indexOf("--append-system-prompt");
-    if (idx !== -1) args.splice(idx, 2);
-    const ac = new AbortController();
-    registerRun(id, agent.name, ctx, ac);
-    const collected = [];
-    const texts = [];
-    const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
-    try {
-      const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
-      addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessFile, events: collected });
-      return result;
-    } finally {
-      unregisterRun(id);
-    }
-  };
+function buildRunCommand(agent, task, sessionFile, prompt, id) {
+  const { cmd, base } = getPiCommand(process.execPath, process.argv[1], existsSync);
+  const promptPath = prompt ? join2(tmpdir(), `pi-sub-${agent.name}-${id}.md`) : "";
+  const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: promptPath, task, sessionPath: sessionFile });
+  if (!prompt) args.splice(args.indexOf("--append-system-prompt"), 2);
+  return { cmd, args };
+}
+function ensureSessionDir(file) {
+  const dir = dirname(file);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+}
+function finishRun(result2, sessionFile, events) {
+  addToHistory({ id: result2.id, agent: result2.agent, task: result2.task, output: result2.output, error: result2.error, sessionFile, events });
+  unregisterRun(result2.id);
+  return result2;
+}
+function failRun(e, id, agent, task, sessionFile, events) {
+  addToHistory({ id, agent, task, output: "", error: errorMsg(e), sessionFile, events });
+  unregisterRun(id);
+  throw e;
 }
 
 // src/dispatch.ts
@@ -574,9 +693,6 @@ function onSessionRestore() {
   };
 }
 
-// src/tool.ts
-import { readdirSync, readFileSync, existsSync as existsSync2 } from "fs";
-
 // src/render.ts
 import { truncateToWidth } from "@mariozechner/pi-tui";
 function buildCallText(params) {
@@ -593,17 +709,25 @@ function buildCallText(params) {
     return `\u25B6 subagent ${params.command}`;
   }
 }
-function buildResultText(result) {
-  const header = `${result.agent} #${result.id}`;
-  if (result.error) return `\u2717 ${header} error: ${result.error}`;
-  if (result.escalation) return `\u26A0 ${header} needs your input:
-${result.escalation}
+function buildResultText(result2) {
+  const header = `${result2.agent} #${result2.id}${result2.task ? ` \u2014 ${previewText(result2.task, 72)}` : ""}`;
+  const footer = `${formatUsage(result2.usage)}${result2.stopReason ? ` / stop: ${result2.stopReason}` : ""}`;
+  if (result2.error) {
+    return `\u2717 ${header}
+error: ${result2.error}${result2.output ? `
 
-Use: subagent continue ${result.id} -- <your answer>`;
+${result2.output}` : ""}
+
+${footer}`;
+  }
+  if (result2.escalation) return `\u26A0 ${header} needs your input:
+${result2.escalation}
+
+Use: subagent continue ${result2.id} -- <your answer>`;
   return `\u2713 ${header}
-${result.output}
+${result2.output || "(no output)"}
 
-${formatUsage(result.usage)}`;
+${footer}`;
 }
 function textComponent(text) {
   const lines = text.split("\n");
@@ -619,91 +743,100 @@ function textComponent(text) {
 function renderCall(args) {
   return textComponent(buildCallText(args));
 }
-function renderResult(result) {
-  const text = result.content.filter((c) => c.type === "text" && typeof c.text === "string").map((c) => c.text).join("\n");
+function renderResult(result2) {
+  const text = result2.content.filter((c) => c.type === "text" && typeof c.text === "string").map((c) => c.text).join("\n");
   return textComponent(text);
 }
 
-// src/tool.ts
-function textResult(text, isError = false) {
-  return { content: [{ type: "text", text }], details: { isError } };
-}
-function errorMsg(e) {
-  return e instanceof Error ? e.message : String(e);
-}
+// src/tool-report.ts
 function formatRunsList() {
   const active2 = listRuns();
   const history2 = getRunHistory();
   const parts = [];
   if (active2.length) parts.push(`Active (${active2.length}):
-` + active2.map((r) => `  #${r.id} ${r.agent}`).join("\n"));
+${active2.map(formatRun).join("\n")}`);
   if (history2.length) parts.push(`History (${history2.length}):
-` + history2.map((r) => `  #${r.id} ${r.agent}`).join("\n"));
+${history2.map(formatRun).join("\n")}`);
   return parts.join("\n\n") || "No runs";
+}
+function formatRun(r) {
+  return `  #${r.id} ${r.agent}${r.task ? ` \u2014 ${previewText(r.task, 80)}` : ""}${r.error ? " [error]" : ""}`;
 }
 function formatDetail(id) {
   const item = getRunHistory().find((r) => r.id === id);
   if (!item) return `Run #${id} not found`;
   const parts = [`# ${item.agent} #${id}`];
-  if (item.events?.length) {
-    for (const evt of item.events) {
-      if (evt.type === "tool_start") parts.push(`  \u2192 ${evt.toolName}`);
-      if (evt.type === "message" && evt.text) parts.push(`  ${evt.text}`);
-    }
-  } else {
-    parts.push(item.output ?? "(no output)");
-  }
+  if (item.task) parts.push(`task: ${item.task}`);
+  if (item.sessionFile) parts.push(`session: ${item.sessionFile}`);
+  parts.push(item.error ? `status: error \u2014 ${item.error}` : "status: ok");
+  if (item.events?.length) parts.push("events:", ...item.events.flatMap(formatEvent));
+  if (item.output) parts.push("", "output:", item.output);
+  else if (!item.events?.length) parts.push("(no output)");
   return parts.join("\n");
 }
-async function dispatch(cmd, agents, pi, ctx, onUpdate) {
-  if (cmd.type === "runs") return textResult(formatRunsList());
-  if (cmd.type === "detail") return textResult(formatDetail(cmd.id));
-  if (cmd.type === "abort") return textResult(dispatchAbort(cmd.id));
-  if (cmd.type === "run") {
-    const agent = getAgent(cmd.agent, agents);
-    if (!agent) return textResult(`Unknown agent: ${cmd.agent}`);
-    return textResult(buildResultText(await dispatchRun(agent, cmd.task, ctx, cmd.main, onUpdate)));
-  }
-  if (cmd.type === "batch") {
-    const results = await dispatchBatch(cmd.items, agents, ctx, cmd.main, onUpdate);
-    return textResult(results.map((r) => buildResultText(r)).join("\n---\n"));
-  }
-  if (cmd.type === "chain") return textResult(buildResultText(await dispatchChain(cmd.steps, agents, ctx, cmd.main, onUpdate)));
+function formatEvent(evt) {
+  if (evt.type === "tool_start") return [`  \u2192 ${evt.toolName}${evt.text ? `: ${previewText(evt.text, 120)}` : ""}`];
+  if (evt.type === "tool_update" && evt.text) return [`  \u21B3 ${evt.toolName ?? "tool"}: ${previewText(evt.text, 120)}`];
+  if (evt.type === "tool_end") return [`  ${evt.isError ? "\u2717" : "\u2713"} ${evt.toolName ?? "tool"}${evt.text ? `: ${previewText(evt.text, 120)}` : ""}`];
+  if (evt.type === "message_delta" && evt.text) return [`  \u2026 ${previewText(evt.text, 120)}`];
+  if (evt.type === "message" && evt.text) return [`  \u{1F4AC} ${evt.text}`];
+  if (evt.type === "agent_end" && evt.stopReason) return [`  done: ${evt.stopReason}`];
+  return [];
+}
+
+// src/types.ts
+import { Type } from "@sinclair/typebox";
+var SubagentParams = Type.Object({
+  command: Type.String({ description: "Subcommand string (e.g. 'run scout -- find auth code')" })
+});
+
+// src/tool.ts
+var result = (text, isError = false) => ({ content: [{ type: "text", text }], details: { isError } });
+var errorMsg2 = (e) => e instanceof Error ? e.message : String(e);
+async function dispatch(cmd, agents, ctx, onUpdate) {
+  if (cmd.type === "runs") return result(formatRunsList());
+  if (cmd.type === "detail") return result(formatDetail(cmd.id));
+  if (cmd.type === "abort") return result(dispatchAbort(cmd.id));
+  if (cmd.type === "run") return runSingle(cmd, agents, ctx, onUpdate);
+  if (cmd.type === "batch") return runBatch(cmd, agents, ctx, onUpdate);
+  if (cmd.type === "chain") return runChain(cmd, agents, ctx, onUpdate);
   const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx, onUpdate);
-  return typeof cont === "string" ? textResult(cont) : textResult(buildResultText(cont));
+  return typeof cont === "string" ? result(cont, cont.includes("not found")) : result(buildResultText(cont), !!cont.error);
 }
-function buildSnippet(agents) {
-  return `Dispatch subagents: ${agents.map((a) => `${a.name} (${a.description})`).join(", ") || "none loaded"}`;
+async function runSingle(cmd, agents, ctx, onUpdate) {
+  const agent = getAgent(cmd.agent, agents);
+  if (!agent) return result(`Unknown agent: ${cmd.agent}`, true);
+  const out = await dispatchRun(agent, cmd.task, ctx, cmd.main, onUpdate);
+  return result(buildResultText(out), !!out.error);
 }
-function buildGuidelines(agents) {
-  return [
-    "Available agents:",
-    ...agents.map((a) => `  - ${a.name}: ${a.description}`),
-    "Command: run <agent> [--main] -- <task>",
-    "Batch: batch --agent <a> --task <t> [--agent <a> --task <t> ...]",
-    "Chain: chain --agent <a> --task <t> --agent <a> --task '{previous}'",
-    "Manage: continue <id> -- <task>, abort <id>, detail <id>, runs",
-    "The tool blocks until the subagent completes and returns the full result."
-  ];
-}
+var runBatch = async (cmd, agents, ctx, onUpdate) => {
+  const out = await dispatchBatch(cmd.items, agents, ctx, cmd.main, onUpdate);
+  return result(out.map((r) => buildResultText(r)).join("\n---\n"), out.some((r) => !!r.error));
+};
+var runChain = async (cmd, agents, ctx, onUpdate) => {
+  const out = await dispatchChain(cmd.steps, agents, ctx, cmd.main, onUpdate);
+  return result(buildResultText(out), !!out.error);
+};
+var snippet = (agents) => `Dispatch subagents: ${agents.map((a) => `${a.name} (${a.description})`).join(", ") || "none loaded"}`;
+var guidelines = (agents) => ["Available agents:", ...agents.map((a) => `  - ${a.name}: ${a.description}`), "Command: run <agent> [--main] -- <task>", "Batch: batch --agent <a> --task <t> [--agent <a> --task <t> ...]", "Chain: chain --agent <a> --task <t> --agent <a> --task '{previous}'", "Manage: continue <id> -- <task>, abort <id>, detail <id>, runs", "The tool blocks until the subagent completes and returns the full result."];
 function createTool(pi, agentsDir) {
   const agents = existsSync2(agentsDir) ? loadAgentsFromDir(agentsDir, (d) => readdirSync(d).map(String), readFileSync) : [];
   return defineTool({
     name: "subagent",
     label: "Subagent",
     description: "Run isolated subagent processes in separate pi subprocesses with their own context window",
-    promptSnippet: buildSnippet(agents),
-    promptGuidelines: buildGuidelines(agents),
+    promptSnippet: snippet(agents),
+    promptGuidelines: guidelines(agents),
     parameters: SubagentParams,
     async execute(_id, params, _signal, onUpdate, ctx) {
       try {
-        return await dispatch(parseCommand(params.command), agents, pi, ctx, onUpdate);
+        return await dispatch(parseCommand(params.command), agents, ctx, onUpdate);
       } catch (e) {
-        return textResult(`Error: ${errorMsg(e)}`, true);
+        return result(`Error: ${errorMsg2(e)}`, true);
       }
     },
     renderCall: (args) => renderCall(args),
-    renderResult: (result) => renderResult(result)
+    renderResult: (res) => renderResult(res)
   });
 }
 

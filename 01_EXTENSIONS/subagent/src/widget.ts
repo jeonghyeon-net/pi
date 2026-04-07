@@ -1,25 +1,33 @@
-import { formatDuration } from "./format.js";
+import { formatDuration, previewText } from "./format.js";
 
 const MAX_VISIBLE = 3;
 const SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
 const IDLE_THRESHOLD_MS = 120_000;
 
-interface MinimalRun { id: number; agent: string; startedAt: number }
+interface MinimalRun { id: number; agent: string; task?: string; startedAt: number }
 interface MinimalCtx { hasUI: boolean; ui: { setWidget(key: string, content: unknown, opts?: unknown): void } }
 
-const currentTools = new Map<number, string>();
+const currentActivity = new Map<number, string>();
 const lastEventTime = new Map<number, number>();
 let frame = 0;
 let timerCtx: MinimalCtx | undefined;
 let timerRuns: (() => MinimalRun[]) | undefined;
 let timerId: ReturnType<typeof setInterval> | undefined;
 
-export function setCurrentTool(runId: number, toolName: string | undefined, preview?: string): void {
+function setActivity(runId: number, activity: string | undefined): void {
 	lastEventTime.set(runId, Date.now());
-	if (toolName) {
-		const detail = preview ? `${toolName}: ${preview.slice(0, 30)}` : toolName;
-		currentTools.set(runId, detail);
-	} else { currentTools.delete(runId); }
+	if (activity) currentActivity.set(runId, activity);
+	else currentActivity.delete(runId);
+}
+
+export function setCurrentTool(runId: number, toolName: string | undefined, preview?: string): void {
+	if (!toolName) { setActivity(runId, undefined); return; }
+	const detail = preview ? `${toolName}: ${previewText(preview, 30)}` : toolName;
+	setActivity(runId, detail);
+}
+
+export function setCurrentMessage(runId: number, preview: string | undefined): void {
+	setActivity(runId, preview ? `reply: ${previewText(preview, 30)}` : undefined);
 }
 
 export function advanceFrame(): void { frame++; }
@@ -30,12 +38,13 @@ export function buildWidgetLines(runs: MinimalRun[], now: number): string[] {
 		const elapsed = formatDuration(now - r.startedAt);
 		const lastEvt = lastEventTime.get(r.id) ?? r.startedAt;
 		const idle = now - lastEvt;
+		const activity = currentActivity.get(r.id);
+		const task = r.task ? ` — ${previewText(r.task, 28)}` : "";
 		if (idle > IDLE_THRESHOLD_MS) {
-			return `⚠ ${r.agent} #${r.id} (${elapsed}) idle ${formatDuration(idle)}`;
+			return `⚠ ${r.agent} #${r.id}${task} (${elapsed}) idle ${formatDuration(idle)}`;
 		}
-		const tool = currentTools.get(r.id);
-		const suffix = tool ? ` → ${tool}` : "";
-		return `${spin} ${r.agent} #${r.id} (${elapsed})${suffix}`;
+		const suffix = activity ? ` → ${activity}` : "";
+		return `${spin} ${r.agent} #${r.id}${task} (${elapsed})${suffix}`;
 	});
 }
 
@@ -57,9 +66,9 @@ export function stopWidgetTimer(): void {
 }
 
 export function clearToolState(runId: number): void {
-	currentTools.delete(runId); lastEventTime.delete(runId);
+	currentActivity.delete(runId); lastEventTime.delete(runId);
 }
 
 export function resetWidgetState(): void {
-	currentTools.clear(); lastEventTime.clear(); frame = 0; stopWidgetTimer();
+	currentActivity.clear(); lastEventTime.clear(); frame = 0; stopWidgetTimer();
 }

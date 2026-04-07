@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
-	buildWidgetLines, setCurrentTool, clearToolState, resetWidgetState,
+	buildWidgetLines, setCurrentTool, setCurrentMessage, clearToolState, resetWidgetState,
 	startWidgetTimer,
 } from "../src/widget.js";
 
@@ -22,7 +22,7 @@ describe("setCurrentTool", () => {
 		const long = "a".repeat(50);
 		setCurrentTool(1, "read", long);
 		const lines = buildWidgetLines([{ id: 1, agent: "a", startedAt: Date.now() }], Date.now());
-		expect(lines[0]).toContain("read: " + "a".repeat(30));
+		expect(lines[0]).toContain("read: " + "a".repeat(29) + "…");
 		expect(lines[0]).not.toContain("a".repeat(31));
 	});
 	it("updates lastEventTime so idle resets", () => {
@@ -34,6 +34,12 @@ describe("setCurrentTool", () => {
 		vi.restoreAllMocks();
 		const lines = buildWidgetLines([{ id: 5, agent: "a", startedAt }], midway + 60_000);
 		expect(lines[0]).not.toContain("⚠");
+	});
+	it("clears message preview when undefined", () => {
+		setCurrentMessage(6, "draft");
+		setCurrentMessage(6, undefined);
+		const lines = buildWidgetLines([{ id: 6, agent: "a", startedAt: Date.now() }], Date.now());
+		expect(lines[0]).not.toContain("reply:");
 	});
 });
 

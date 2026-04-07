@@ -1,6 +1,6 @@
 import { truncateToWidth } from "@mariozechner/pi-tui";
 import type { RunResult } from "./types.js";
-import { formatUsage } from "./format.js";
+import { formatUsage, previewText } from "./format.js";
 import { parseCommand } from "./cli.js";
 
 export function buildCallText(params: { command: string }): string {
@@ -17,10 +17,13 @@ export function buildCallText(params: { command: string }): string {
 }
 
 export function buildResultText(result: RunResult): string {
-	const header = `${result.agent} #${result.id}`;
-	if (result.error) return `✗ ${header} error: ${result.error}`;
+	const header = `${result.agent} #${result.id}${result.task ? ` — ${previewText(result.task, 72)}` : ""}`;
+	const footer = `${formatUsage(result.usage)}${result.stopReason ? ` / stop: ${result.stopReason}` : ""}`;
+	if (result.error) {
+		return `✗ ${header}\nerror: ${result.error}${result.output ? `\n\n${result.output}` : ""}\n\n${footer}`;
+	}
 	if (result.escalation) return `⚠ ${header} needs your input:\n${result.escalation}\n\nUse: subagent continue ${result.id} -- <your answer>`;
-	return `✓ ${header}\n${result.output}\n\n${formatUsage(result.usage)}`;
+	return `✓ ${header}\n${result.output || "(no output)"}\n\n${footer}`;
 }
 
 function textComponent(text: string) {

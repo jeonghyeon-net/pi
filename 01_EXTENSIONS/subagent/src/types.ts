@@ -21,8 +21,10 @@ export interface RunResult {
 	agent: string;
 	output: string;
 	usage: UsageStats;
+	task?: string;
 	escalation?: string;
 	error?: string;
+	stopReason?: string;
 }
 
 export interface SubagentToolDetails {
@@ -38,6 +40,7 @@ export interface UsageStats {
 export interface ActiveRun {
 	id: number;
 	agent: string;
+	task?: string;
 	startedAt: number;
 	abort: () => void;
 }

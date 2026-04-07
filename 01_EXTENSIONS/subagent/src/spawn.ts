@@ -3,7 +3,7 @@ import { createInterface } from "readline";
 import type { RunResult } from "./types.js";
 import type { ParsedEvent } from "./parser.js";
 import { parseLine } from "./parser.js";
-import { collectOutput } from "./runner.js";
+import { collectOutput, buildMissingOutputDiagnostic } from "./runner.js";
 
 export function spawnAndCollect(
 	cmd: string,
@@ -28,13 +28,29 @@ export function spawnAndCollect(
 		proc.stderr.on("data", (chunk: Buffer) => { stderrChunks.push(chunk.toString()); });
 		proc.on("error", (err) => reject(err));
 		proc.on("close", (code) => {
-			const { output, usage, escalation } = collectOutput(events);
-			if (code !== 0 && !output) {
-				const stderr = stderrChunks.join("").trim();
-				reject(new Error(stderr || `Process exited with code ${code}`));
+			const summary = collectOutput(events);
+			const stderr = stderrChunks.join("").trim();
+			const result: RunResult = {
+				id,
+				agent: agentName,
+				output: summary.output,
+				usage: summary.usage,
+				escalation: summary.escalation,
+				stopReason: summary.stopReason,
+			};
+			if (code !== 0) {
+				result.error = stderr || `Process exited with code ${code}`;
+				if (!result.output) {
+					result.output = buildMissingOutputDiagnostic({ ...summary, stderr, exitCode: code });
+				}
+				resolve(result);
 				return;
 			}
-			resolve({ id, agent: agentName, output, usage, escalation });
+			if (!result.output.trim()) {
+				result.error = "Subagent finished without a visible assistant result";
+				result.output = buildMissingOutputDiagnostic({ ...summary, stderr, exitCode: code });
+			}
+			resolve(result);
 		});
 	});
 }

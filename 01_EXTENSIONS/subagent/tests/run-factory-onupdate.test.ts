@@ -16,50 +16,61 @@ const mock = () => (spawnAndCollect as ReturnType<typeof vi.fn>);
 const ctx = () => ({ hasUI: false, ui: { setWidget: vi.fn() }, sessionManager: { getBranch: () => [] } });
 type EvtFn = (e: Record<string, string | undefined>) => void;
 
+function latestText(onUpdate: ReturnType<typeof vi.fn>): string {
+	return onUpdate.mock.calls.at(-1)?.[0]?.content?.[0]?.text ?? "";
+}
+
 describe("onUpdate callback", () => {
 	beforeEach(() => { vi.clearAllMocks(); resetStore(); resetSession(); resetWidgetState(); });
 
-	it("calls onUpdate on tool_start event in createRunner", async () => {
+	it("includes run header and tool progress in createRunner", async () => {
 		const onUpdate = vi.fn();
 		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
 			onEvt({ type: "tool_start", toolName: "Bash" });
 			return Promise.resolve(ok);
 		});
 		await createRunner(false, ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ Bash" }], details: { isError: false } });
+		expect(latestText(onUpdate)).toContain("⏳ scout #1 — task");
+		expect(latestText(onUpdate)).toContain("current: running Bash");
+		expect(latestText(onUpdate)).toContain("→ Bash");
+		expect(onUpdate).toHaveBeenLastCalledWith(expect.objectContaining({ details: { isError: false } }));
 	});
 
-	it("calls onUpdate on message event in createRunner", async () => {
+	it("includes reply status for message event in createRunner", async () => {
 		const onUpdate = vi.fn();
 		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
 			onEvt({ type: "message", text: "progress update" });
 			return Promise.resolve(ok);
 		});
 		await createRunner(false, ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "progress update" }], details: { isError: false } });
+		expect(latestText(onUpdate)).toContain("reply ready");
+		expect(latestText(onUpdate)).toContain("💬 progress update");
 	});
 
-	it("calls onUpdate on tool_start in createSessionRunner", async () => {
+	it("includes run header and tool progress in createSessionRunner", async () => {
 		const onUpdate = vi.fn();
 		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
 			onEvt({ type: "tool_start", toolName: "Write" });
 			return Promise.resolve(ok);
 		});
 		await createSessionRunner("/tmp/s.json", ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ Write" }], details: { isError: false } });
+		expect(latestText(onUpdate)).toContain("⏳ scout #1 — task");
+		expect(latestText(onUpdate)).toContain("current: running Write");
+		expect(latestText(onUpdate)).toContain("→ Write");
 	});
 
-	it("calls onUpdate on message in createSessionRunner", async () => {
+	it("includes reply status for message in createSessionRunner", async () => {
 		const onUpdate = vi.fn();
 		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
 			onEvt({ type: "message", text: "session message" });
 			return Promise.resolve(ok);
 		});
 		await createSessionRunner("/tmp/s.json", ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "session message" }], details: { isError: false } });
+		expect(latestText(onUpdate)).toContain("reply ready");
+		expect(latestText(onUpdate)).toContain("💬 session message");
 	});
 
-	it("accumulates multiple texts in onUpdate calls", async () => {
+	it("retains recent progress lines across updates", async () => {
 		const onUpdate = vi.fn();
 		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
 			onEvt({ type: "tool_start", toolName: "Bash" });
@@ -68,17 +79,19 @@ describe("onUpdate callback", () => {
 		});
 		await createRunner(false, ctx(), onUpdate)(agent, "task");
 		expect(onUpdate).toHaveBeenCalledTimes(2);
-		expect(onUpdate.mock.calls[1][0].content[0].text).toBe("→ Bash\noutput");
+		expect(latestText(onUpdate)).toContain("→ Bash");
+		expect(latestText(onUpdate)).toContain("💬 output");
 		expect(onUpdate.mock.calls[1][0].details).toEqual({ isError: false });
 	});
 
-	it("uses empty string when toolName is undefined", async () => {
+	it("uses generic tool label when toolName is undefined", async () => {
 		const onUpdate = vi.fn();
 		mock().mockImplementation((_c: string, _a: string[], _i: number, _n: string, _s: unknown, onEvt: EvtFn) => {
 			onEvt({ type: "tool_start", toolName: undefined });
 			return Promise.resolve(ok);
 		});
 		await createRunner(false, ctx(), onUpdate)(agent, "task");
-		expect(onUpdate).toHaveBeenCalledWith({ content: [{ type: "text", text: "→ " }], details: { isError: false } });
+		expect(latestText(onUpdate)).toContain("current: running tool");
+		expect(latestText(onUpdate)).toContain("→ tool");
 	});
 });

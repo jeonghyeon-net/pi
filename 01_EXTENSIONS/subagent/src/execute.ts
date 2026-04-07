@@ -5,8 +5,8 @@ import { PIPELINE_MAX_CHARS, MAX_CONCURRENCY } from "./constants.js";
 type RunnerFn = (agent: AgentConfig, task: string) => Promise<RunResult>;
 interface ExecOpts { runner: RunnerFn; concurrency?: number }
 
-function errorResult(agent: string, msg: string): RunResult {
-	return { id: 0, agent, output: "", usage: { inputTokens: 0, outputTokens: 0, turns: 0 }, error: msg };
+function errorResult(agent: string, msg: string, task?: string): RunResult {
+	return { id: 0, agent, task, output: "", usage: { inputTokens: 0, outputTokens: 0, turns: 0 }, error: msg };
 }
 
 export async function executeSingle(agent: AgentConfig, task: string, opts: ExecOpts): Promise<RunResult> {
@@ -23,10 +23,10 @@ export async function executeBatch(
 	const pending = new Set<Promise<void>>();
 	for (const item of items) {
 		const agent = getAgent(item.agent, agents);
-		if (!agent) { results.push(errorResult(item.agent, `Unknown agent: ${item.agent}`)); continue; }
+		if (!agent) { results.push(errorResult(item.agent, `Unknown agent: ${item.agent}`, item.task)); continue; }
 		const p = opts.runner(agent, item.task)
 			.then((r) => { results.push(r); })
-			.catch((e: Error) => { results.push(errorResult(item.agent, e.message)); })
+			.catch((e: Error) => { results.push(errorResult(item.agent, e.message, item.task)); })
 			.finally(() => { pending.delete(p); });
 		pending.add(p);
 		if (pending.size >= limit) await Promise.race(pending);
@@ -44,7 +44,7 @@ export async function executeChain(
 	let lastResult: RunResult = errorResult("", "No steps");
 	for (const step of steps) {
 		const agent = getAgent(step.agent, agents);
-		if (!agent) return errorResult(step.agent, `Unknown agent: ${step.agent}`);
+		if (!agent) return errorResult(step.agent, `Unknown agent: ${step.agent}`, step.task);
 		const task = step.task.replace("{previous}", previous.slice(0, PIPELINE_MAX_CHARS));
 		lastResult = await opts.runner(agent, task);
 		if (lastResult.escalation) return lastResult;

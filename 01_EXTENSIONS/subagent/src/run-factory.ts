@@ -1,93 +1,75 @@
-import type { AgentToolUpdateCallback } from "@mariozechner/pi-coding-agent";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
-import { join, dirname } from "path";
-import type { AgentConfig, RunResult, SubagentToolDetails } from "./types.js";
-import type { ParsedEvent } from "./parser.js";
-import { getPiCommand, buildArgs } from "./runner.js";
-import { withRetry } from "./retry.js";
+import { dirname, join } from "path";
 import { extractMainContext, type Entry } from "./context.js";
-import { nextId, addRun, removeRun, listRuns } from "./store.js";
-import { addToHistory, sessionPath, type HistoryEvent } from "./session.js";
 import { MAX_RETRIES, RETRY_BASE_MS } from "./constants.js";
+import { getPiCommand, buildArgs } from "./runner.js";
+import { registerRun, unregisterRun, makeOnEvent } from "./run-progress.js";
+import { withRetry } from "./retry.js";
+import { addToHistory, sessionPath } from "./session.js";
 import { spawnAndCollect } from "./spawn.js";
-import { syncWidget, setCurrentTool, clearToolState, startWidgetTimer, stopWidgetTimer } from "./widget.js";
+import { nextId } from "./store.js";
+import type { AgentConfig, RunResult, SubagentToolDetails } from "./types.js";
+import type { AgentToolUpdateCallback } from "@mariozechner/pi-coding-agent";
 
 export interface DispatchCtx { hasUI: boolean; ui: { setWidget(k: string, v: unknown, o?: unknown): void }; sessionManager: { getBranch(): unknown[] } }
+export const errorMsg = (e: unknown) => e instanceof Error ? e.message : String(e);
 type OnUpdate = AgentToolUpdateCallback<SubagentToolDetails> | undefined;
 
-function registerRun(id: number, agent: string, ctx: DispatchCtx, ac: AbortController): void {
-	addRun({ id, agent, startedAt: Date.now(), abort: () => ac.abort() });
-	if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
+export const createRunner = (main: boolean, ctx: DispatchCtx, onUpdate?: OnUpdate) => async (agent: AgentConfig, task: string) => {
+	const id = nextId();
+	return runAgent({ id, agent, task, ctx, onUpdate, sessionFile: sessionPath(id), prompt: buildPrompt(agent, ctx, main) });
+};
+
+export const createSessionRunner = (sessFile: string, ctx: DispatchCtx, onUpdate?: OnUpdate) => async (agent: AgentConfig, task: string) => {
+	const id = nextId();
+	return runAgent({ id, agent, task, ctx, onUpdate, sessionFile: sessFile });
+};
+
+async function runAgent(input: { id: number; agent: AgentConfig; task: string; ctx: DispatchCtx; onUpdate?: OnUpdate; sessionFile: string; prompt?: string }): Promise<RunResult> {
+	const id = input.id;
+	if (input.prompt) writeFileSync(join(tmpdir(), `pi-sub-${input.agent.name}-${id}.md`), input.prompt);
+	ensureSessionDir(input.sessionFile);
+	const { cmd, args } = buildRunCommand(input.agent, input.task, input.sessionFile, input.prompt, id);
+	const ac = new AbortController();
+	const events: Parameters<typeof addToHistory>[0]["events"] = [];
+	registerRun(id, input.agent.name, input.task, input.ctx, ac);
+	const onEvent = makeOnEvent(id, input.agent.name, input.task, input.ctx, events, input.onUpdate);
+	try {
+		const result = await withRetry(() => spawnAndCollect(cmd, args, id, input.agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
+		return finishRun({ ...result, task: input.task }, input.sessionFile, events);
+	} catch (e) {
+		return failRun(e, id, input.agent.name, input.task, input.sessionFile, events);
+	}
 }
 
-function unregisterRun(id: number): void {
-	clearToolState(id);
-	removeRun(id);
-	if (listRuns().length === 0) stopWidgetTimer();
+function buildPrompt(agent: AgentConfig, ctx: DispatchCtx, main: boolean) {
+	if (!main) return agent.systemPrompt;
+	const summary = extractMainContext(ctx.sessionManager.getBranch() as Entry[], 20);
+	return summary ? `${agent.systemPrompt}\n\n[Main Context]\n${summary}` : agent.systemPrompt;
 }
 
-function makeOnEvent(id: number, ctx: DispatchCtx, collected: HistoryEvent[], texts: string[], onUpdate: OnUpdate) {
-	return (evt: ParsedEvent) => {
-		collected.push({ type: evt.type, text: evt.text, toolName: evt.toolName });
-		if (evt.type === "tool_start") {
-			setCurrentTool(id, evt.toolName); syncWidget(ctx, listRuns());
-			texts.push(`→ ${evt.toolName ?? ""}`);
-			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }], details: { isError: false } });
-		}
-		if (evt.type === "tool_end") { setCurrentTool(id, undefined); syncWidget(ctx, listRuns()); }
-		if (evt.type === "message" && evt.text) {
-			texts.push(evt.text);
-			onUpdate?.({ content: [{ type: "text", text: texts.join("\n") }], details: { isError: false } });
-		}
-	};
+function buildRunCommand(agent: AgentConfig, task: string, sessionFile: string, prompt: string | undefined, id: number) {
+	const { cmd, base } = getPiCommand(process.execPath, process.argv[1], existsSync);
+	const promptPath = prompt ? join(tmpdir(), `pi-sub-${agent.name}-${id}.md`) : "";
+	const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: promptPath, task, sessionPath: sessionFile });
+	if (!prompt) args.splice(args.indexOf("--append-system-prompt"), 2);
+	return { cmd, args };
 }
 
-export function createRunner(main: boolean, ctx: DispatchCtx, onUpdate?: OnUpdate): (agent: AgentConfig, task: string) => Promise<RunResult> {
-	return async (agent, task) => {
-		const id = nextId();
-		const promptPath = join(tmpdir(), `pi-sub-${agent.name}-${id}.md`);
-		let prompt = agent.systemPrompt;
-		if (main) {
-			const branch = ctx.sessionManager.getBranch() as Entry[];
-			const mainCtx = extractMainContext(branch, 20);
-			if (mainCtx) prompt += `\n\n[Main Context]\n${mainCtx}`;
-		}
-		writeFileSync(promptPath, prompt);
-		const { cmd, base } = getPiCommand(process.execPath, process.argv[1], existsSync);
-		const sessPath = sessionPath(id);
-		const dir = dirname(sessPath);
-		if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-		const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: promptPath, task, sessionPath: sessPath });
-		const ac = new AbortController();
-		registerRun(id, agent.name, ctx, ac);
-		const collected: HistoryEvent[] = [];
-		const texts: string[] = [];
-		const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
-		try {
-			const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
-			addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessPath, events: collected });
-			return result;
-		} finally { unregisterRun(id); }
-	};
+function ensureSessionDir(file: string) {
+	const dir = dirname(file);
+	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 }
 
-export function createSessionRunner(sessFile: string, ctx: DispatchCtx, onUpdate?: OnUpdate): (agent: AgentConfig, task: string) => Promise<RunResult> {
-	return async (agent, task) => {
-		const id = nextId();
-		const { cmd, base } = getPiCommand(process.execPath, process.argv[1], existsSync);
-		const args = buildArgs({ base, model: agent.model, thinking: agent.thinking, tools: agent.tools, systemPromptPath: "", task, sessionPath: sessFile });
-		const idx = args.indexOf("--append-system-prompt");
-		if (idx !== -1) args.splice(idx, 2);
-		const ac = new AbortController();
-		registerRun(id, agent.name, ctx, ac);
-		const collected: HistoryEvent[] = [];
-		const texts: string[] = [];
-		const onEvent = makeOnEvent(id, ctx, collected, texts, onUpdate);
-		try {
-			const result = await withRetry(() => spawnAndCollect(cmd, args, id, agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
-			addToHistory({ id, agent: agent.name, output: result.output, sessionFile: sessFile, events: collected });
-			return result;
-		} finally { unregisterRun(id); }
-	};
+function finishRun(result: RunResult, sessionFile: string, events: NonNullable<Parameters<typeof addToHistory>[0]["events"]>) {
+	addToHistory({ id: result.id, agent: result.agent, task: result.task, output: result.output, error: result.error, sessionFile, events });
+	unregisterRun(result.id);
+	return result;
+}
+
+function failRun(e: unknown, id: number, agent: string, task: string, sessionFile: string, events: NonNullable<Parameters<typeof addToHistory>[0]["events"]>): never {
+	addToHistory({ id, agent, task, output: "", error: errorMsg(e), sessionFile, events });
+	unregisterRun(id);
+	throw e;
 }

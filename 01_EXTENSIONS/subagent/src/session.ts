@@ -1,12 +1,20 @@
 import { join } from "path";
 import { homedir } from "os";
 
-export interface HistoryEvent { type: string; text?: string; toolName?: string }
+export interface HistoryEvent {
+	type: string;
+	text?: string;
+	toolName?: string;
+	isError?: boolean;
+	stopReason?: string;
+}
 
 interface RunHistoryItem {
 	id: number;
 	agent: string;
+	task?: string;
 	output?: string;
+	error?: string;
 	sessionFile?: string;
 	events?: HistoryEvent[];
 }
