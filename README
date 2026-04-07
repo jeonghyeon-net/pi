@@ -16,6 +16,7 @@
     footer … 커스텀 footer: 모델명, 저장소/브랜치, context 사용률 표시
     mcp … MCP 서버 통합 (proxy tool, lazy connection, metadata caching)
     notify … 에이전트 작업 완료 시 터미널 알림 (세션 제목 포함)
+    safe-terminal-output … 모든 터미널용 LLM 응답 sanitize 호환 모드
     subagent … 서브에이전트 오케스트레이션 (비동기 실행, 세션 관리)
     todo … LLM용 todo 관리 도구
     web-access … 웹 검색 및 콘텐츠 추출

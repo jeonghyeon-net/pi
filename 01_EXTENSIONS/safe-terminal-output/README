@@ -1,0 +1,9 @@
+
+  모든 터미널에서 LLM 응답 스트림을 보수적으로 sanitize한다.
+  제어문자, zero-width/bidi 문자, variation selector를 제거해
+  렌더링 크래시를 우회하는 호환 모드 확장이다.
+
+  BEHAVIOR
+    - 모든 터미널에서 항상 활성화
+    - built-in provider들의 streamSimple 응답 이벤트를 후처리
+    - 기존 모델 선택과 provider 인증 흐름은 유지
