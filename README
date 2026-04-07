@@ -13,6 +13,7 @@
 
   EXTENSIONS
     auto-session-title … 첫 사용자 메시지 기반 세션 제목 자동 생성
+    claude-code-bridge … Claude Code instruction/hook subset을 pi 이벤트로 브리지
     footer … 커스텀 footer: 모델명, 저장소/브랜치, context 사용률 표시
     mcp … MCP 서버 통합 (proxy tool, lazy connection, metadata caching)
     notify … 에이전트 작업 완료 시 터미널 알림 (세션 제목 포함)

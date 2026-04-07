@@ -1,0 +1,51 @@
+Claude Code 환경(.claude/CLAUDE.md, CLAUDE.md, CLAUDE.local.md, .claude/rules/, .claude/settings*.json)을 감지해
+pi에서 최대한 비슷하게 동작시키는 bridge extension.
+
+FEATURES
+  - 현재 cwd 기준으로 Claude instruction 파일 자동 탐지
+  - user/project/local CLAUDE 문서 + unconditional rule을 system prompt에 주입
+  - user-scope claudeMdExcludes 지원
+  - path-scoped rule은 read/write/edit/find/grep 경로를 보고 다음 턴부터 활성화
+  - InstructionsLoaded best-effort 매핑
+    * session_start eager load
+    * path_glob_match lazy load
+    * include import observability
+    * compact reload
+  - Claude command/http/prompt/agent hook 일부를 pi 이벤트에 매핑
+    * SessionStart (command only)
+    * UserPromptSubmit
+    * PreToolUse
+    * PostToolUse
+    * PostToolUseFailure
+    * Stop
+    * SubagentStart / SubagentStop (best-effort)
+    * ConfigChange
+    * FileChanged
+    * PreCompact / PostCompact
+    * SessionEnd
+  - prompt hook: 현재 pi model/modelRegistry로 단일 검증 실행
+  - agent hook: createAgentSession 기반 격리 verifier 세션으로 best-effort 검증
+  - user scope Claude env를 bash / ! 명령 앞에 주입
+  - user-scope HTTP hook의 allowedHttpHookUrls / httpHookAllowedEnvVars 제한 반영
+  - FileChanged top-level watchPaths 반영
+  - repo-scoped hook은 세션 단위 trust 확인 후 실행
+
+SAFETY
+  - ~/.pi 아래에 자체 파일을 쓰지 않음
+  - project/local Claude env는 무시
+  - project/local httpHookAllowedEnvVars / allowedHttpHookUrls / claudeMdExcludes 는 무시
+  - project/local import는 repo 경로 밖으로 못 나감
+  - repo-scoped command/http/prompt/agent hook은 기본 비신뢰 상태
+
+COMMANDS
+  /claude-bridge                현재 탐지 상태 표시
+  /claude-bridge-trust-hooks    현재 프로젝트 hook을 이번 세션에서 신뢰
+  /claude-bridge-untrust-hooks  현재 프로젝트 hook 신뢰 해제
+
+LIMITS
+  - Claude Code 전체 스펙 완전 호환은 아님
+  - managed policy / plugin / skill-frontmatter hook source는 아직 미지원
+  - PermissionRequest / PermissionDenied / Notification / CwdChanged / StopFailure / Task* / Worktree* / Elicitation 계열 이벤트는 아직 미지원
+  - FileChanged / ConfigChange 는 best-effort polling 기반 감지
+  - path-scoped rule은 첫 relevant tool call 이후 다음 model turn부터 적용
+  - Stop / SessionEnd / Subagent lifecycle / agent verifier 결과는 best-effort 매핑
