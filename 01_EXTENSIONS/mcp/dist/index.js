@@ -7955,7 +7955,8 @@ function onSessionStart(pi, deps) {
     deps.registerDirectTools(pi, deduped, deps);
     deps.startIdleTimer(config3);
     deps.startKeepalive(config3);
-    deps.saveCache(hash2, deps.getAllMetadata()).catch(() => {
+    const meta3 = deps.getAllMetadata();
+    if (meta3.size > 0) deps.saveCache(hash2, meta3).catch(() => {
     });
     deps.updateFooter();
   };
@@ -24764,6 +24765,9 @@ function wireCommandConnect() {
       clearFailure(name);
       const tools = await buildToolMetadata(result.client, name);
       setMetadata(name, tools);
+      const cfg = getConfig();
+      if (cfg) wireSaveCache()(computeConfigHash(cfg), getAllMetadata()).catch(() => {
+      });
     } catch (err) {
       recordFailure(name);
       throw err;

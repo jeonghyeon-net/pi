@@ -10,8 +10,11 @@ vi.mock("../src/tool-metadata.js", () => ({ buildToolMetadata: vi.fn().mockResol
 vi.mock("../src/state.js", () => ({
 	setConnection: vi.fn(), removeConnection: vi.fn(), setMetadata: vi.fn(),
 	getConnections: vi.fn().mockReturnValue(new Map()),
+	getConfig: vi.fn().mockReturnValue(null), getAllMetadata: vi.fn().mockReturnValue(new Map()),
 }));
 vi.mock("../src/failure-tracker.js", () => ({ recordFailure: vi.fn(), clearFailure: vi.fn() }));
+vi.mock("../src/config-hash.js", () => ({ computeConfigHash: vi.fn().mockReturnValue("hash") }));
+vi.mock("../src/wire-init-config.js", () => ({ wireSaveCache: vi.fn().mockReturnValue(vi.fn().mockResolvedValue(undefined)) }));
 const mockStdio = vi.fn().mockReturnValue({ close: vi.fn() });
 const mockStreamable = vi.fn().mockReturnValue({ close: vi.fn() });
 const mockSse = vi.fn().mockReturnValue({ close: vi.fn() });

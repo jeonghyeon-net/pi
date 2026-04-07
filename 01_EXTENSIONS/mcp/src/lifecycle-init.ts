@@ -78,7 +78,8 @@ export function onSessionStart(pi: InitPi, deps?: InitDeps) {
 		const deduped = deps.deduplicateTools(directSpecs);
 		deps.registerDirectTools(pi, deduped, deps);
 		deps.startIdleTimer(config); deps.startKeepalive(config);
-		deps.saveCache(hash, deps.getAllMetadata()).catch(() => {});
+		const meta = deps.getAllMetadata();
+		if (meta.size > 0) deps.saveCache(hash, meta).catch(() => {});
 		deps.updateFooter();
 	};
 }
