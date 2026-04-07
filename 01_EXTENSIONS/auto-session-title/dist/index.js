@@ -67,22 +67,52 @@ async function resolveSessionTitle(input, model, modelRegistry) {
 function hasUserMessages(ctx) {
   return ctx.sessionManager.getEntries().some((entry) => entry.type === "message" && entry.message?.role === "user");
 }
+function hasSessionTitle(runtime2, ctx) {
+  return Boolean(runtime2.getSessionName() || ctx.sessionManager.getSessionName());
+}
 function buildTerminalTitle(_cwd, sessionName) {
   return `\u03C0 - ${sessionName}`;
 }
-async function handleInput(runtime, event, ctx) {
-  if (event.source === "extension") return;
-  if (runtime.getSessionName() || ctx.sessionManager.getSessionName()) return;
-  if (hasUserMessages(ctx)) return;
-  const title = await resolveSessionTitle(event.text, ctx.model, ctx.modelRegistry);
+function handleInput(pending2, runtime2, event, ctx) {
+  if (event.source === "extension" || hasSessionTitle(runtime2, ctx) || hasUserMessages(ctx)) return;
+  if (!isTitleableInput(event.text)) return;
+  pending2.set(ctx.sessionManager.getSessionId(), event.text);
+}
+async function handleBeforeAgentStart(pending2, runtime2, ctx) {
+  if (hasSessionTitle(runtime2, ctx) || hasUserMessages(ctx)) return;
+  const input = pending2.get(ctx.sessionManager.getSessionId());
+  if (!input) return;
+  const title = await resolveSessionTitle(input, ctx.model, ctx.modelRegistry);
   if (!title) return;
-  runtime.setSessionName(title);
+  pending2.delete(ctx.sessionManager.getSessionId());
+  runtime2.setSessionName(title);
   if (ctx.hasUI) ctx.ui.setTitle(buildTerminalTitle(ctx.cwd || ctx.sessionManager.getCwd(), title));
+}
+
+// src/hooks.ts
+var pending = /* @__PURE__ */ new Map();
+function runtime(getSessionName, setSessionName) {
+  return { getSessionName, setSessionName };
+}
+function createInputHandler(getSessionName, setSessionName) {
+  return async (event, ctx) => {
+    handleInput(pending, runtime(getSessionName, setSessionName), event, ctx);
+  };
+}
+function createBeforeAgentStartHandler(getSessionName, setSessionName) {
+  return async (_event, ctx) => {
+    await handleBeforeAgentStart(pending, runtime(getSessionName, setSessionName), ctx);
+  };
+}
+function createSessionShutdownHandler() {
+  return async (_event, ctx) => void pending.delete(ctx.sessionManager.getSessionId());
 }
 
 // src/index.ts
 function index_default(pi) {
-  pi.on("input", async (event, ctx) => handleInput({ getSessionName: () => pi.getSessionName(), setSessionName: (name) => pi.setSessionName(name) }, event, ctx));
+  pi.on("input", createInputHandler(() => pi.getSessionName(), (name) => pi.setSessionName(name)));
+  pi.on("before_agent_start", createBeforeAgentStartHandler(() => pi.getSessionName(), (name) => pi.setSessionName(name)));
+  pi.on("session_shutdown", createSessionShutdownHandler());
 }
 export {
   index_default as default
