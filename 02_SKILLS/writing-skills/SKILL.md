@@ -212,7 +212,7 @@ Use words pi would search for:
 
 ### 4. Token Efficiency (Critical)
 
-**Problem:** getting-started and frequently-referenced skills load into EVERY conversation. Every token counts.
+**Problem:** frequently-referenced skills consume tokens when loaded. Every token counts.
 
 **Target word counts:**
 - getting-started workflows: <150 words each
