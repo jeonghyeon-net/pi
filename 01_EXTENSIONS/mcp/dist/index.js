@@ -7337,7 +7337,16 @@ function routeAction(params, deps) {
     }
   }
 }
-var FALLBACK_DESC = "MCP proxy tool. Actions: call, list, describe, search, status, connect.";
+var FALLBACK_DESC = [
+  "MCP proxy: call external tools on MCP servers.",
+  "Examples:",
+  '  status: {action:"status"}',
+  '  list tools: {action:"list", server:"myserver"}',
+  `  call tool: {action:"call", tool:"jira_search", args:'{"jql":"project=X"}'}`,
+  '  search: {action:"search", query:"jira"}',
+  '  describe: {action:"describe", tool:"jira_search"}',
+  '  connect: {action:"connect", server:"myserver"}'
+].join("\n");
 var noServers = () => ({ content: [{ type: "text", text: "No servers." }] });
 var noServersAsync = () => Promise.resolve(noServers());
 var EMPTY_DEPS = {
@@ -7352,8 +7361,13 @@ function createProxyTool(_pi, buildDesc, makeDeps) {
   return {
     name: "mcp",
     label: "MCP",
-    promptSnippet: "MCP gateway - connect to MCP servers and call their tools",
+    promptSnippet: "MCP gateway - call tools on external MCP servers",
     description: FALLBACK_DESC,
+    promptGuidelines: [
+      'Use action:"status" first to see available servers.',
+      'Use action:"list" with server name to see tools.',
+      'Use action:"call" with tool name and args (JSON string) to execute.'
+    ],
     parameters: ProxySchema,
     execute: async (_toolCallId, params) => {
       const result = await routeAction(params, makeDeps ? makeDeps() : EMPTY_DEPS);
