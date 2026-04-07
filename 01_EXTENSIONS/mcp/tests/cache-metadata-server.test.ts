@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isServerCacheFresh, invalidateServer } from "../src/cache-metadata.js";
+import { isServerCacheFresh, isServerCacheValid, invalidateServer } from "../src/cache-metadata.js";
 
 describe("isServerCacheFresh", () => {
 	it("returns false for undefined entry", () => {
@@ -13,6 +13,20 @@ describe("isServerCacheFresh", () => {
 	it("returns false for expired entry", () => {
 		const old = Date.now() - 8 * 24 * 60 * 60 * 1000;
 		expect(isServerCacheFresh({ tools: [], savedAt: old }, Date.now())).toBe(false);
+	});
+});
+
+describe("isServerCacheValid", () => {
+	it("accepts fresh per-server hash matches", () => {
+		expect(isServerCacheValid({ tools: [], savedAt: Date.now(), configHash: "server-hash" }, "server-hash", "old-global", "new-global", Date.now())).toBe(true);
+	});
+
+	it("rejects fresh per-server hash mismatches", () => {
+		expect(isServerCacheValid({ tools: [], savedAt: Date.now(), configHash: "old-server-hash" }, "server-hash", "same-global", "same-global", Date.now())).toBe(false);
+	});
+
+	it("falls back to legacy global hash when server hash is missing", () => {
+		expect(isServerCacheValid({ tools: [], savedAt: Date.now() }, "server-hash", "global-hash", "global-hash", Date.now())).toBe(true);
 	});
 });
 

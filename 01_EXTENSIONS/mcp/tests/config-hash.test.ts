@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeConfigHash } from "../src/config-hash.js";
+import { computeConfigHash, computeServerHash } from "../src/config-hash.js";
 
 describe("computeConfigHash", () => {
 	it("returns hex string for valid config", () => {
@@ -48,5 +48,19 @@ describe("computeConfigHash", () => {
 		const a = { mcpServers: { alpha: { command: "a" }, beta: { command: "b" } } };
 		const b = { mcpServers: { beta: { command: "b" }, alpha: { command: "a" } } };
 		expect(computeConfigHash(a)).toBe(computeConfigHash(b));
+	});
+});
+
+describe("computeServerHash", () => {
+	it("returns hex string for valid server entry", () => {
+		expect(computeServerHash({ command: "echo" })).toMatch(/^[a-f0-9]{64}$/);
+	});
+
+	it("ignores lifecycle-only changes", () => {
+		expect(computeServerHash({ command: "echo" })).toBe(computeServerHash({ command: "echo", lifecycle: "eager" }));
+	});
+
+	it("changes when server command changes", () => {
+		expect(computeServerHash({ command: "echo" })).not.toBe(computeServerHash({ command: "cat" }));
 	});
 });

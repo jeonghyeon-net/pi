@@ -7,7 +7,6 @@ vi.mock("../src/state.js", () => ({
 	getConfig: vi.fn().mockReturnValue(null), getAllMetadata: vi.fn().mockReturnValue(new Map()),
 }));
 vi.mock("../src/wire-init-config.js", () => ({ wireSaveCache: vi.fn().mockReturnValue(vi.fn().mockResolvedValue(undefined)) }));
-vi.mock("../src/config-hash.js", () => ({ computeConfigHash: vi.fn().mockReturnValue("hash123") }));
 
 import { wireShutdownOps } from "../src/wire-shutdown.js";
 import { getConnections, getConfig, getAllMetadata } from "../src/state.js";
@@ -21,11 +20,12 @@ describe("wire-shutdown", () => {
 	});
 	it("saveCache resolves when no config", async () => { await expect(wireShutdownOps().saveCache()).resolves.toBeUndefined(); });
 	it("saveCache delegates when config exists", async () => {
-		vi.mocked(getConfig).mockReturnValue({ mcpServers: { s1: { command: "n" } } });
+		const cfg = { mcpServers: { s1: { command: "n" } } };
+		vi.mocked(getConfig).mockReturnValue(cfg);
 		vi.mocked(getAllMetadata).mockReturnValue(new Map([["s1", []]]));
 		const saveFn = vi.fn().mockResolvedValue(undefined);
 		vi.mocked(wireSaveCache).mockReturnValue(saveFn);
-		await wireShutdownOps().saveCache(); expect(saveFn).toHaveBeenCalledWith("hash123", expect.any(Map));
+		await wireShutdownOps().saveCache(); expect(saveFn).toHaveBeenCalledWith(cfg, expect.any(Map));
 	});
 	it("closeAll closes connections", async () => {
 		const mc = { close: vi.fn().mockResolvedValue(undefined) }; const mt = { close: vi.fn().mockResolvedValue(undefined) };

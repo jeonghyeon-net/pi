@@ -9,7 +9,6 @@ import { createHttpTransport } from "./transport-http.js";
 import { createSdkStdioTransport, createSdkStreamableHttpTransport, createSdkSseTransport } from "./sdk-transport.js";
 import { createSdkClient } from "./sdk-client.js";
 import { recordFailure, clearFailure } from "./failure-tracker.js";
-import { computeConfigHash } from "./config-hash.js";
 import { wireSaveCache } from "./wire-init-config.js";
 
 type ConnectFn = (name: string, entry: ServerEntry) => Promise<void>;
@@ -40,7 +39,7 @@ export function wireCommandConnect(): ConnectFn {
 			const tools = await buildToolMetadata(result.client, name);
 			setMetadata(name, tools);
 			const cfg = getConfig();
-			if (cfg) wireSaveCache()(computeConfigHash(cfg), getAllMetadata()).catch(() => {});
+			if (cfg) wireSaveCache()(cfg, getAllMetadata()).catch(() => {});
 		} catch (err) {
 			recordFailure(name);
 			throw err;

@@ -12,6 +12,14 @@ function stripExcluded(entry: ServerEntry): Record<string, unknown> {
 	return result;
 }
 
+function stableStringifyEntry(entry: ServerEntry): string {
+	return JSON.stringify(stripExcluded(entry));
+}
+
+function hashText(text: string): string {
+	return createHash("sha256").update(text).digest("hex");
+}
+
 function stableStringify(config: McpConfig): string {
 	const sorted: Record<string, Record<string, unknown>> = {};
 	for (const name of Object.keys(config.mcpServers).sort()) {
@@ -20,6 +28,10 @@ function stableStringify(config: McpConfig): string {
 	return JSON.stringify(sorted);
 }
 
+export function computeServerHash(entry: ServerEntry): string {
+	return hashText(stableStringifyEntry(entry));
+}
+
 export function computeConfigHash(config: McpConfig): string {
-	return createHash("sha256").update(stableStringify(config)).digest("hex");
+	return hashText(stableStringify(config));
 }

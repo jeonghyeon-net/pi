@@ -2,7 +2,6 @@ import { stopIdleTimer } from "./lifecycle-idle.js";
 import { stopKeepalive } from "./lifecycle-keepalive.js";
 import { resetState, getConnections, getConfig, getAllMetadata } from "./state.js";
 import { wireSaveCache } from "./wire-init-config.js";
-import { computeConfigHash } from "./config-hash.js";
 
 export interface ShutdownOps {
 	saveCache: () => Promise<void>;
@@ -31,7 +30,7 @@ export function wireShutdownOps(): ShutdownOps {
 		saveCache: async () => {
 			const cfg = getConfig();
 			if (!cfg) return;
-			await save(computeConfigHash(cfg), getAllMetadata());
+			await save(cfg, getAllMetadata());
 		},
 		closeAll: closeAllConnections,
 		stopIdle: stopIdleTimer,

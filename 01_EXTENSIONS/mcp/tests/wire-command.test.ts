@@ -13,7 +13,6 @@ vi.mock("../src/state.js", () => ({
 	getConfig: vi.fn().mockReturnValue(null), getAllMetadata: vi.fn().mockReturnValue(new Map()),
 }));
 vi.mock("../src/failure-tracker.js", () => ({ recordFailure: vi.fn(), clearFailure: vi.fn() }));
-vi.mock("../src/config-hash.js", () => ({ computeConfigHash: vi.fn().mockReturnValue("hash") }));
 vi.mock("../src/wire-init-config.js", () => ({ wireSaveCache: vi.fn().mockReturnValue(vi.fn().mockResolvedValue(undefined)) }));
 const mockStdio = vi.fn().mockReturnValue({ close: vi.fn() });
 const mockStreamable = vi.fn().mockReturnValue({ close: vi.fn() });
@@ -31,7 +30,6 @@ import { connectServer } from "../src/server-connect.js";
 import { setConnection, getConnections, removeConnection, setMetadata, getConfig, getAllMetadata } from "../src/state.js";
 import { buildToolMetadata } from "../src/tool-metadata.js";
 import { recordFailure, clearFailure } from "../src/failure-tracker.js";
-import { computeConfigHash } from "../src/config-hash.js";
 import { wireSaveCache } from "../src/wire-init-config.js";
 
 describe("makeConnectDeps", () => {
@@ -62,8 +60,7 @@ describe("wireCommandConnect", () => {
 		vi.mocked(getAllMetadata).mockReturnValue(metadata);
 		vi.mocked(wireSaveCache).mockReturnValue(saveCache);
 		await wireCommandConnect()("s1", { command: "node" });
-		expect(computeConfigHash).toHaveBeenCalledWith(cfg);
-		expect(saveCache).toHaveBeenCalledWith("hash", metadata);
+		expect(saveCache).toHaveBeenCalledWith(cfg, metadata);
 	});
 });
 

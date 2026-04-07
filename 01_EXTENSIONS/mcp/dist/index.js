@@ -7400,7 +7400,7 @@ function statusLine(name, conns, meta3, getFailureFn) {
   const tools = meta3.get(name) ?? [];
   const count = tools.length;
   const toolStr = count === 1 ? "1 tool" : `${count} tools`;
-  if (!conn) return `  \u25CB ${name} (not connected) ${toolStr}`;
+  if (!conn) return `  \u25CB ${name} (${meta3.has(name) ? "cached" : "not connected"}) ${toolStr}`;
   if (conn.status === "connected") return `  \u2713 ${name} ${toolStr}`;
   const fail = getFailureFn(name);
   const ago = fail ? ` (${formatAgo(fail.at)})` : "";
@@ -7909,7 +7909,93 @@ function stopKeepalive() {
   }
 }
 
-// src/lifecycle-init.ts
+// src/cache-metadata.ts
+var isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+function validateCache(parsed) {
+  if (!isRecord(parsed)) return null;
+  if (typeof parsed.version !== "number") return null;
+  if (typeof parsed.configHash !== "string") return null;
+  if (!isRecord(parsed.servers)) return null;
+  return {
+    version: parsed.version,
+    servers: parsed.servers,
+    configHash: parsed.configHash
+  };
+}
+function loadMetadataCache(path, fs) {
+  if (!fs.existsSync(path)) return null;
+  try {
+    return validateCache(JSON.parse(fs.readFileSync(path)));
+  } catch {
+    return null;
+  }
+}
+function dirname(path) {
+  const normalized = path.replace(/\\/g, "/");
+  const idx = normalized.lastIndexOf("/");
+  return idx === 0 ? "/" : idx < 0 ? "." : normalized.slice(0, idx);
+}
+function saveMetadataCache(path, cache, fs) {
+  const tmp = `${path}.${fs.getPid()}.tmp`;
+  fs.mkdirSync(dirname(path));
+  fs.writeFileSync(tmp, JSON.stringify(cache));
+  fs.renameSync(tmp, path);
+}
+function isMetadataCacheValid(cache, configHash, serverHashes, now) {
+  if (!cache) return false;
+  const currentTime = now();
+  const names = Object.keys(serverHashes);
+  if (names.length === 0) {
+    return cache.configHash === configHash && Object.keys(cache.servers).length === 0;
+  }
+  for (const name of names) {
+    if (isServerCacheValid(cache.servers[name], serverHashes[name], cache.configHash, configHash, currentTime)) {
+      return true;
+    }
+  }
+  return false;
+}
+function isServerCacheFresh(entry, now) {
+  return !!entry && now - entry.savedAt < METADATA_CACHE_TTL_MS;
+}
+function isServerCacheValid(entry, serverHash, cacheConfigHash, expectedConfigHash, now) {
+  if (!isServerCacheFresh(entry, now)) return false;
+  if (typeof entry?.configHash === "string") return entry.configHash === serverHash;
+  return cacheConfigHash === expectedConfigHash;
+}
+
+// src/config-hash.ts
+import { createHash } from "node:crypto";
+function stripExcluded(entry) {
+  const result = {};
+  for (const [key, value] of Object.entries(entry)) {
+    if (!HASH_EXCLUDE_FIELDS.has(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+function stableStringifyEntry(entry) {
+  return JSON.stringify(stripExcluded(entry));
+}
+function hashText(text4) {
+  return createHash("sha256").update(text4).digest("hex");
+}
+function stableStringify(config3) {
+  const sorted = {};
+  for (const name of Object.keys(config3.mcpServers).sort()) {
+    sorted[name] = stripExcluded(config3.mcpServers[name]);
+  }
+  return JSON.stringify(sorted);
+}
+function computeServerHash(entry) {
+  return hashText(stableStringifyEntry(entry));
+}
+function computeConfigHash(config3) {
+  return hashText(stableStringify(config3));
+}
+
+// src/lifecycle-init-helpers.ts
 function classifyServers(config3) {
   const eager = [];
   const lazy2 = [];
@@ -7933,6 +8019,17 @@ async function connectAndDiscover(gen, server, deps) {
   } catch {
   }
 }
+function hydrateCachedMetadata(config3, cache, hash2, deps) {
+  const now = Date.now();
+  for (const [name, configEntry] of Object.entries(config3.mcpServers)) {
+    const entry = cache.servers[name];
+    if (!entry || !Array.isArray(entry.tools)) continue;
+    if (!isServerCacheValid(entry, computeServerHash(configEntry), cache.hash, hash2, now)) continue;
+    deps.setMetadata(name, entry.tools);
+  }
+}
+
+// src/lifecycle-init.ts
 function onSessionStart(pi, deps) {
   return async (_event, _ctx) => {
     if (!deps) return;
@@ -7946,7 +8043,8 @@ function onSessionStart(pi, deps) {
     deps.setConfig(config3);
     const hash2 = deps.computeHash(config3);
     const cache = deps.loadCache();
-    deps.isCacheValid(cache, hash2);
+    deps.isCacheValid(cache, config3, hash2);
+    if (cache !== null) hydrateCachedMetadata(config3, cache, hash2, deps);
     const { eager } = classifyServers(config3);
     await Promise.allSettled(eager.map((s) => connectAndDiscover(gen, s, deps)));
     if (deps.getGeneration() !== gen) return;
@@ -7956,7 +8054,7 @@ function onSessionStart(pi, deps) {
     deps.startIdleTimer(config3);
     deps.startKeepalive(config3);
     const meta3 = deps.getAllMetadata();
-    if (meta3.size > 0) deps.saveCache(hash2, meta3).catch(() => {
+    if (meta3.size > 0) deps.saveCache(config3, meta3).catch(() => {
     });
     deps.updateFooter();
   };
@@ -8141,75 +8239,8 @@ function parseDirectToolsEnv(envVal) {
   return map2;
 }
 
-// src/config-hash.ts
-import { createHash } from "node:crypto";
-function stripExcluded(entry) {
-  const result = {};
-  for (const [key, value] of Object.entries(entry)) {
-    if (!HASH_EXCLUDE_FIELDS.has(key)) {
-      result[key] = value;
-    }
-  }
-  return result;
-}
-function stableStringify(config3) {
-  const sorted = {};
-  for (const name of Object.keys(config3.mcpServers).sort()) {
-    sorted[name] = stripExcluded(config3.mcpServers[name]);
-  }
-  return JSON.stringify(sorted);
-}
-function computeConfigHash(config3) {
-  return createHash("sha256").update(stableStringify(config3)).digest("hex");
-}
-
-// src/cache-metadata.ts
-function isRecord(v) {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-function validateCache(parsed) {
-  if (!isRecord(parsed)) return null;
-  if (typeof parsed.version !== "number") return null;
-  if (typeof parsed.configHash !== "string") return null;
-  if (!isRecord(parsed.servers)) return null;
-  return {
-    version: parsed.version,
-    servers: parsed.servers,
-    configHash: parsed.configHash
-  };
-}
-function loadMetadataCache(path, fs) {
-  if (!fs.existsSync(path)) return null;
-  try {
-    const raw = fs.readFileSync(path);
-    return validateCache(JSON.parse(raw));
-  } catch {
-    return null;
-  }
-}
-function saveMetadataCache(path, cache, fs) {
-  const tmp = `${path}.${fs.getPid()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(cache));
-  fs.renameSync(tmp, path);
-}
-function isMetadataCacheValid(cache, configHash, now) {
-  if (!cache) return false;
-  if (cache.configHash !== configHash) return false;
-  return hasAnyFreshEntry(cache.servers, now());
-}
-function isServerCacheFresh(entry, now) {
-  if (!entry) return false;
-  return now - entry.savedAt < METADATA_CACHE_TTL_MS;
-}
-function hasAnyFreshEntry(servers, now) {
-  for (const entry of Object.values(servers)) {
-    if (isServerCacheFresh(entry, now)) return true;
-  }
-  return Object.keys(servers).length === 0;
-}
-
 // src/wire-init-config.ts
-import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 function resolve(p) {
   return p.startsWith("~") ? p.replace("~", homedir()) : p;
@@ -8223,6 +8254,7 @@ var cacheFs = {
   readFileSync: (p) => readFileSync(p, "utf-8"),
   writeFileSync: (p, d) => writeFileSync(p, d, "utf-8"),
   renameSync: (s, d) => renameSync(s, d),
+  mkdirSync: (p) => mkdirSync(p, { recursive: true }),
   getPid: () => process.pid
 };
 function wireLoadConfig() {
@@ -8245,27 +8277,34 @@ function wireLoadCache() {
     if (!cache) return null;
     const servers = {};
     for (const [name, entry] of Object.entries(cache.servers)) {
-      servers[name] = Array.isArray(entry.tools) ? entry.tools : [];
+      servers[name] = {
+        tools: Array.isArray(entry.tools) ? entry.tools : [],
+        savedAt: typeof entry.savedAt === "number" ? entry.savedAt : 0,
+        configHash: typeof entry.configHash === "string" ? entry.configHash : void 0
+      };
     }
-    return { hash: cache.configHash, servers, timestamp: Date.now() };
+    return { hash: cache.configHash, servers };
   };
 }
 function wireIsCacheValid() {
-  return (cache, hash2) => {
+  return (cache, config3, hash2) => {
     if (!cache) return false;
-    const servers = {};
-    for (const [name, tools] of Object.entries(cache.servers)) {
-      servers[name] = { tools, savedAt: cache.timestamp };
+    const serverHashes = {};
+    for (const [name, entry] of Object.entries(config3.mcpServers)) {
+      serverHashes[name] = computeServerHash(entry);
     }
-    return isMetadataCacheValid({ version: 1, configHash: cache.hash, servers }, hash2, () => Date.now());
+    return isMetadataCacheValid({ version: 1, configHash: cache.hash, servers: cache.servers }, hash2, serverHashes, () => Date.now());
   };
 }
 function wireSaveCache() {
-  return async (hash2, metadata2) => {
+  return async (config3, metadata2) => {
     const servers = {};
     const now = Date.now();
-    for (const [name, tools] of metadata2) servers[name] = { tools, savedAt: now };
-    saveMetadataCache(resolve(CACHE_FILE_PATH), { version: 1, configHash: hash2, servers }, cacheFs);
+    for (const [name, tools] of metadata2) {
+      const entry = config3.mcpServers[name];
+      servers[name] = { tools, savedAt: now, configHash: entry ? computeServerHash(entry) : void 0 };
+    }
+    saveMetadataCache(resolve(CACHE_FILE_PATH), { version: 1, configHash: computeConfigHash(config3), servers }, cacheFs);
   };
 }
 
@@ -24766,7 +24805,7 @@ function wireCommandConnect() {
       const tools = await buildToolMetadata(result.client, name);
       setMetadata(name, tools);
       const cfg = getConfig();
-      if (cfg) wireSaveCache()(computeConfigHash(cfg), getAllMetadata()).catch(() => {
+      if (cfg) wireSaveCache()(cfg, getAllMetadata()).catch(() => {
       });
     } catch (err) {
       recordFailure(name);
@@ -24962,7 +25001,7 @@ function wireShutdownOps() {
     saveCache: async () => {
       const cfg = getConfig();
       if (!cfg) return;
-      await save(computeConfigHash(cfg), getAllMetadata());
+      await save(cfg, getAllMetadata());
     },
     closeAll: closeAllConnections,
     stopIdle: stopIdleTimer,
@@ -25216,7 +25255,7 @@ function formatServer(server, metadata2) {
   return `  - ${server.name}: ${toolStr} (${server.status})`;
 }
 
-// src/wire-proxy.ts
+// src/wire-proxy-helpers.ts
 function findToolInMetadata(name) {
   for (const tools of getAllMetadata().values()) {
     const found = tools.find((t) => t.name === name);
@@ -25228,40 +25267,45 @@ function buildServerStatuses() {
   const config3 = getConfig();
   if (!config3) return [];
   const conns = getConnections();
+  const metadata2 = getAllMetadata();
   return Object.keys(config3.mcpServers).map((name) => {
     const conn = conns.get(name);
-    return { name, status: conn?.status ?? "not connected" };
+    return { name, status: conn?.status ?? "not connected", cached: !conn && metadata2.has(name) };
   });
 }
 function buildCallDeps(doConnect) {
-  const cfg = getConfig();
-  const mode = cfg?.settings?.consent ?? "never";
+  const mode = getConfig()?.settings?.consent ?? "never";
   const consent = createConsentManager(mode);
   return {
     findTool: findToolInMetadata,
     getAllMetadata,
     getConfig,
     connectServer: async (name) => {
-      const c = getConfig();
-      if (!c) return;
-      const entry = c.mcpServers[name];
+      const entry = getConfig()?.mcpServers[name];
       if (entry) await doConnect(name, entry);
     },
     getBackoffMs,
     getFailure,
+    transform: transformContent,
     getOrConnect: async (server) => {
       const conn = getConnections().get(server);
       if (conn) return conn;
       throw new Error(`Server "${server}" not connected`);
     },
-    checkConsent: async (server) => {
-      if (!consent.needsConsent(server)) return true;
-      consent.recordApproval(server);
-      return true;
-    },
-    transform: transformContent
+    checkConsent: async (server) => !consent.needsConsent(server) || (consent.recordApproval(server), true)
   };
 }
+async function connectAction(server, doConnect) {
+  if (!server) return text3("Server name is required for connect action.");
+  const entry = getConfig()?.mcpServers[server];
+  if (!getConfig()) return text3("No config loaded.");
+  if (!entry) return text3(`Server "${server}" not found in config.`);
+  await doConnect(server, entry);
+  return text3(`Connected to "${server}".`);
+}
+var text3 = (msg) => ({ content: [{ type: "text", text: msg }] });
+
+// src/wire-proxy.ts
 function wireProxyDeps() {
   const doConnect = wireCommandConnect();
   const callDeps = buildCallDeps(doConnect);
@@ -25274,23 +25318,8 @@ function wireProxyDeps() {
     connect: async (server) => connectAction(server, doConnect)
   };
 }
-async function connectAction(server, doConnect) {
-  if (!server) return text3("Server name is required for connect action.");
-  const config3 = getConfig();
-  if (!config3) return text3("No config loaded.");
-  const entry = config3.mcpServers[server];
-  if (!entry) return text3(`Server "${server}" not found in config.`);
-  await doConnect(server, entry);
-  return text3(`Connected to "${server}".`);
-}
 function buildProxyDescription() {
-  return buildDescription({
-    getServers: () => buildServerStatuses(),
-    getMetadataMap: () => getAllMetadata()
-  });
-}
-function text3(msg) {
-  return { content: [{ type: "text", text: msg }] };
+  return buildDescription({ getServers: () => buildServerStatuses(), getMetadataMap: () => getAllMetadata() });
 }
 
 // src/index.ts

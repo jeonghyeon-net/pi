@@ -24,7 +24,7 @@ function statusLine(
 	const tools = meta.get(name) ?? [];
 	const count = tools.length;
 	const toolStr = count === 1 ? "1 tool" : `${count} tools`;
-	if (!conn) return `  \u25CB ${name} (not connected) ${toolStr}`;
+	if (!conn) return `  \u25CB ${name} (${meta.has(name) ? "cached" : "not connected"}) ${toolStr}`;
 	if (conn.status === "connected") return `  \u2713 ${name} ${toolStr}`;
 	const fail = getFailureFn(name);
 	const ago = fail ? ` (${formatAgo(fail.at)})` : "";
