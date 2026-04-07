@@ -45,9 +45,8 @@ export async function resolveSessionTitle(
 		}, {
 			apiKey: auth.apiKey,
 			headers: auth.headers,
-			maxTokens: 24,
-			reasoning: "minimal",
 		});
+		if (message.stopReason === "error") return undefined;
 		return normalizeTitle(extractText(message.content));
 	} catch {
 		return undefined;

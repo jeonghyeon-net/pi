@@ -53,10 +53,9 @@ async function resolveSessionTitle(input, model, modelRegistry) {
       messages: [{ role: "user", content: input, timestamp: Date.now() }]
     }, {
       apiKey: auth.apiKey,
-      headers: auth.headers,
-      maxTokens: 24,
-      reasoning: "minimal"
+      headers: auth.headers
     });
+    if (message.stopReason === "error") return void 0;
     return normalizeTitle(extractText(message.content));
   } catch {
     return void 0;
