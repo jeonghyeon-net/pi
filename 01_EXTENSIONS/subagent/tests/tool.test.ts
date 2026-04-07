@@ -12,12 +12,13 @@ vi.mock("../src/spawn.js", () => ({
 }));
 import { createTool, errorMsg } from "../src/tool.js";
 import type { SubagentPi } from "../src/types.js";
+import { spawnAndCollect } from "../src/spawn.js";
 import { existsSync } from "fs";
 const stubPi = (): SubagentPi => ({ appendEntry: vi.fn() });
 const stubCtx = () => ({ hasUI: false, ui: { setWidget: vi.fn() }, sessionManager: { getBranch: (): unknown[] => [] } });
-const exec = async (cmd: string) => {
+const exec = async (cmd: string, signal?: AbortSignal) => {
 	const tool = createTool(stubPi(), "/agents");
-	return tool.execute("", { command: cmd }, undefined, undefined, stubCtx());
+	return tool.execute("", { command: cmd }, signal, undefined, stubCtx());
 };
 describe("createTool", () => {
 	beforeEach(() => { vi.clearAllMocks(); resetStore(); resetSession(); });
@@ -65,6 +66,17 @@ describe("createTool", () => {
 	it("run known agent returns result", async () => {
 		const r = await exec("run scout -- find auth");
 		expect(r.content[0].text).toContain("scout");
+	});
+	it("returns aborted error when tool signal is canceled", async () => {
+		(spawnAndCollect as ReturnType<typeof vi.fn>).mockImplementationOnce((_c: string, _a: string[], _i: number, _n: string, signal?: AbortSignal) => new Promise((_resolve, reject) => {
+			signal?.addEventListener("abort", () => reject(new Error("Aborted")), { once: true });
+		}));
+		const ac = new AbortController();
+		const pending = exec("run scout -- find auth", ac.signal);
+		ac.abort();
+		const r = await pending;
+		expect(r.content[0].text).toContain("Aborted");
+		expect(r.details.isError).toBe(true);
 	});
 	it("batch returns results", async () => { expect((await exec("batch --agent scout --task find")).content[0].text).toContain("scout"); });
 	it("chain returns result", async () => { expect((await exec("chain --agent scout --task find")).content[0].text).toContain("scout"); });

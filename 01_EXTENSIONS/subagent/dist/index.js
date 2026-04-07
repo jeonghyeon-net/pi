@@ -102,6 +102,9 @@ var MAX_RETRIES = 3;
 var RETRY_BASE_MS = 2e3;
 var ESCALATION_MARKER = "[ESCALATION]";
 var PIPELINE_MAX_CHARS = 4e3;
+var DEFAULT_HARD_TIMEOUT_MS = 20 * 6e4;
+var DEFAULT_IDLE_TIMEOUT_MS = 5 * 6e4;
+var TERMINATION_GRACE_MS = 5e3;
 
 // src/execute.ts
 function errorResult(agent, msg, task) {
@@ -258,7 +261,7 @@ function buildWidgetLines(runs, now) {
     const activity = currentActivity.get(r.id);
     const task = r.task ? ` \u2014 ${previewText(r.task, 28)}` : "";
     if (idle > IDLE_THRESHOLD_MS) {
-      return `\u26A0 ${r.agent} #${r.id}${task} (${elapsed}) idle ${formatDuration(idle)}`;
+      return `\u23F8 ${r.agent} #${r.id}${task} (${elapsed}) idle ${formatDuration(idle)}`;
     }
     const suffix = activity ? ` \u2192 ${activity}` : "";
     return `${spin} ${r.agent} #${r.id}${task} (${elapsed})${suffix}`;
@@ -413,8 +416,9 @@ function makeOnEvent(id, agent, task, ctx, collected, onUpdate) {
     if (evt.type === "message") pushRecent(`\u{1F4AC} ${previewText(evt.text, 120) || "(empty response)"}`);
     if (evt.type === "agent_end") current = evt.stopReason ? `finished (${evt.stopReason})` : "finished";
     if (evt.type === "agent_end" && evt.isError && evt.text) pushRecent(`\u2717 ${previewText(evt.text, 120)}`);
-    if (["tool_start", "tool_update", "tool_end"].includes(evt.type)) setCurrentTool(id, evt.toolName, evt.text);
-    if (["message_delta", "message", "agent_end"].includes(evt.type) && (draft || evt.text)) setCurrentMessage(id, evt.type === "message_delta" ? draft : evt.text);
+    if (evt.type === "tool_start" || evt.type === "tool_update") setCurrentTool(id, evt.toolName, evt.text);
+    if (evt.type === "tool_end") setCurrentTool(id, void 0);
+    if (["message_delta", "message", "agent_end"].includes(evt.type)) setCurrentMessage(id, evt.type === "message_delta" ? draft : evt.text);
     syncWidget(ctx, listRuns());
     emit();
   };
@@ -533,19 +537,74 @@ function parseLine(line) {
 }
 
 // src/spawn.ts
-function spawnAndCollect(cmd, args, id, agentName, signal, onEvent) {
+function spawnAndCollect(cmd, args, id, agentName, signal, onEvent, options = {}) {
   return new Promise((resolve, reject) => {
     const proc = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
-    if (signal) {
-      signal.addEventListener("abort", () => {
-        proc.kill();
-        reject(new Error("Aborted"));
-      });
-    }
     const events = [];
     const stderrChunks = [];
     const rl = createInterface({ input: proc.stdout });
+    let settled = false;
+    let closed = false;
+    let killTimer;
+    let hardTimer;
+    let idleTimer;
+    const clearOptionalTimer = (timer) => {
+      if (timer) clearTimeout(timer);
+    };
+    const cleanup = (keepKillTimer = false) => {
+      if (!keepKillTimer) {
+        clearOptionalTimer(killTimer);
+        killTimer = void 0;
+      }
+      clearOptionalTimer(hardTimer);
+      clearOptionalTimer(idleTimer);
+      hardTimer = void 0;
+      idleTimer = void 0;
+      signal?.removeEventListener("abort", onAbort);
+      rl.close();
+    };
+    const finishResolve = (result2) => {
+      settled = true;
+      cleanup();
+      resolve(result2);
+    };
+    const finishReject = (err, keepKillTimer = false) => {
+      settled = true;
+      cleanup(keepKillTimer);
+      reject(err);
+    };
+    const killProc = () => {
+      proc.kill("SIGTERM");
+      killTimer = setTimeout(() => {
+        if (!closed) proc.kill("SIGKILL");
+      }, TERMINATION_GRACE_MS);
+    };
+    const failForTimeout = (label, timeoutMs) => {
+      if (settled) return;
+      killProc();
+      finishReject(new Error(`Subagent ${label} timeout after ${Math.ceil(timeoutMs / 1e3)}s`), true);
+    };
+    const scheduleIdleTimeout = () => {
+      clearOptionalTimer(idleTimer);
+      if (!options.idleTimeoutMs || options.idleTimeoutMs <= 0) return;
+      idleTimer = setTimeout(() => failForTimeout("idle", options.idleTimeoutMs), options.idleTimeoutMs);
+    };
+    const onAbort = () => {
+      if (settled) return;
+      killProc();
+      finishReject(new Error("Aborted"), true);
+    };
+    if (options.hardTimeoutMs && options.hardTimeoutMs > 0) {
+      hardTimer = setTimeout(() => failForTimeout("hard", options.hardTimeoutMs), options.hardTimeoutMs);
+    }
+    scheduleIdleTimeout();
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
     rl.on("line", (line) => {
+      scheduleIdleTimeout();
       const evt = parseLine(line);
       if (evt) {
         events.push(evt);
@@ -554,9 +613,18 @@ function spawnAndCollect(cmd, args, id, agentName, signal, onEvent) {
     });
     proc.stderr.on("data", (chunk) => {
       stderrChunks.push(chunk.toString());
+      scheduleIdleTimeout();
     });
-    proc.on("error", (err) => reject(err));
+    proc.on("error", (err) => {
+      if (settled) return;
+      finishReject(err);
+    });
     proc.on("close", (code) => {
+      closed = true;
+      if (settled) {
+        cleanup();
+        return;
+      }
       const summary = collectOutput(events);
       const stderr = stderrChunks.join("").trim();
       const result2 = {
@@ -572,27 +640,27 @@ function spawnAndCollect(cmd, args, id, agentName, signal, onEvent) {
         if (!result2.output) {
           result2.output = buildMissingOutputDiagnostic({ ...summary, stderr, exitCode: code });
         }
-        resolve(result2);
+        finishResolve(result2);
         return;
       }
       if (!result2.output.trim()) {
         result2.error = "Subagent finished without a visible assistant result";
         result2.output = buildMissingOutputDiagnostic({ ...summary, stderr, exitCode: code });
       }
-      resolve(result2);
+      finishResolve(result2);
     });
   });
 }
 
 // src/run-factory.ts
 var errorMsg = (e) => e instanceof Error ? e.message : String(e);
-var createRunner = (main, ctx, onUpdate) => async (agent, task) => {
+var createRunner = (main, ctx, onUpdate, outerSignal) => async (agent, task) => {
   const id = nextId();
-  return runAgent({ id, agent, task, ctx, onUpdate, sessionFile: sessionPath(id), prompt: buildPrompt(agent, ctx, main) });
+  return runAgent({ id, agent, task, ctx, onUpdate, outerSignal, sessionFile: sessionPath(id), prompt: buildPrompt(agent, ctx, main) });
 };
-var createSessionRunner = (sessFile, ctx, onUpdate) => async (agent, task) => {
+var createSessionRunner = (sessFile, ctx, onUpdate, outerSignal) => async (agent, task) => {
   const id = nextId();
-  return runAgent({ id, agent, task, ctx, onUpdate, sessionFile: sessFile });
+  return runAgent({ id, agent, task, ctx, onUpdate, outerSignal, sessionFile: sessFile });
 };
 async function runAgent(input) {
   const id = input.id;
@@ -601,14 +669,36 @@ async function runAgent(input) {
   const { cmd, args } = buildRunCommand(input.agent, input.task, input.sessionFile, input.prompt, id);
   const ac = new AbortController();
   const events = [];
+  const abortFromOuter = () => ac.abort();
+  let removeOuterAbortListener = () => {
+  };
+  if (input.outerSignal) {
+    const outerSignal = input.outerSignal;
+    removeOuterAbortListener = () => outerSignal.removeEventListener("abort", abortFromOuter);
+    if (outerSignal.aborted) ac.abort();
+    else outerSignal.addEventListener("abort", abortFromOuter, { once: true });
+  }
   registerRun(id, input.agent.name, input.task, input.ctx, ac);
   const onEvent = makeOnEvent(id, input.agent.name, input.task, input.ctx, events, input.onUpdate);
+  let result2;
+  let failed = false;
+  let failure;
   try {
-    const result2 = await withRetry(() => spawnAndCollect(cmd, args, id, input.agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
-    return finishRun({ ...result2, task: input.task }, input.sessionFile, events);
+    result2 = await withRetry(
+      () => spawnAndCollect(cmd, args, id, input.agent.name, ac.signal, onEvent, {
+        hardTimeoutMs: DEFAULT_HARD_TIMEOUT_MS,
+        idleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS
+      }),
+      MAX_RETRIES,
+      RETRY_BASE_MS
+    );
   } catch (e) {
-    return failRun(e, id, input.agent.name, input.task, input.sessionFile, events);
+    failed = true;
+    failure = e;
   }
+  removeOuterAbortListener();
+  if (failed) return failRun(failure, id, input.agent.name, input.task, input.sessionFile, events);
+  return finishRun({ ...result2, task: input.task }, input.sessionFile, events);
 }
 function buildPrompt(agent, ctx, main) {
   if (!main) return agent.systemPrompt;
@@ -641,24 +731,24 @@ function failRun(e, id, agent, task, sessionFile, events) {
 }
 
 // src/dispatch.ts
-async function dispatchRun(agent, task, ctx, main, onUpdate) {
-  const runner = createRunner(main, ctx, onUpdate);
+async function dispatchRun(agent, task, ctx, main, onUpdate, signal) {
+  const runner = createRunner(main, ctx, onUpdate, signal);
   try {
     return await executeSingle(agent, task, { runner });
   } finally {
     syncWidget(ctx, listRuns());
   }
 }
-async function dispatchBatch(items, agents, ctx, main, onUpdate) {
-  const runner = createRunner(main, ctx, onUpdate);
+async function dispatchBatch(items, agents, ctx, main, onUpdate, signal) {
+  const runner = createRunner(main, ctx, onUpdate, signal);
   try {
     return await executeBatch(items, agents, { runner });
   } finally {
     syncWidget(ctx, listRuns());
   }
 }
-async function dispatchChain(steps, agents, ctx, main, onUpdate) {
-  const runner = createRunner(main, ctx, onUpdate);
+async function dispatchChain(steps, agents, ctx, main, onUpdate, signal) {
+  const runner = createRunner(main, ctx, onUpdate, signal);
   try {
     return await executeChain(steps, agents, { runner });
   } finally {
@@ -672,14 +762,14 @@ function dispatchAbort(id) {
   removeRun(id);
   return `Run #${id} (${run.agent}) aborted`;
 }
-async function dispatchContinue(id, task, agents, ctx, onUpdate) {
+async function dispatchContinue(id, task, agents, ctx, onUpdate, signal) {
   const hist = getRunHistory().find((r) => r.id === id);
   if (!hist) return `Run #${id} not found in history`;
   const sessFile = getSessionFile(id);
   if (!sessFile) return `Run #${id} not found in history`;
   const agent = getAgent(hist.agent, agents);
   if (!agent) return `Agent for run #${id} not found`;
-  const runner = createSessionRunner(sessFile, ctx, onUpdate);
+  const runner = createSessionRunner(sessFile, ctx, onUpdate, signal);
   try {
     return await executeSingle(agent, task, { runner });
   } finally {
@@ -793,28 +883,28 @@ var SubagentParams = Type.Object({
 // src/tool.ts
 var result = (text, isError = false) => ({ content: [{ type: "text", text }], details: { isError } });
 var errorMsg2 = (e) => e instanceof Error ? e.message : String(e);
-async function dispatch(cmd, agents, ctx, onUpdate) {
+async function dispatch(cmd, agents, ctx, onUpdate, signal) {
   if (cmd.type === "runs") return result(formatRunsList());
   if (cmd.type === "detail") return result(formatDetail(cmd.id));
   if (cmd.type === "abort") return result(dispatchAbort(cmd.id));
-  if (cmd.type === "run") return runSingle(cmd, agents, ctx, onUpdate);
-  if (cmd.type === "batch") return runBatch(cmd, agents, ctx, onUpdate);
-  if (cmd.type === "chain") return runChain(cmd, agents, ctx, onUpdate);
-  const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx, onUpdate);
+  if (cmd.type === "run") return runSingle(cmd, agents, ctx, onUpdate, signal);
+  if (cmd.type === "batch") return runBatch(cmd, agents, ctx, onUpdate, signal);
+  if (cmd.type === "chain") return runChain(cmd, agents, ctx, onUpdate, signal);
+  const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx, onUpdate, signal);
   return typeof cont === "string" ? result(cont, cont.includes("not found")) : result(buildResultText(cont), !!cont.error);
 }
-async function runSingle(cmd, agents, ctx, onUpdate) {
+async function runSingle(cmd, agents, ctx, onUpdate, signal) {
   const agent = getAgent(cmd.agent, agents);
   if (!agent) return result(`Unknown agent: ${cmd.agent}`, true);
-  const out = await dispatchRun(agent, cmd.task, ctx, cmd.main, onUpdate);
+  const out = await dispatchRun(agent, cmd.task, ctx, cmd.main, onUpdate, signal);
   return result(buildResultText(out), !!out.error);
 }
-var runBatch = async (cmd, agents, ctx, onUpdate) => {
-  const out = await dispatchBatch(cmd.items, agents, ctx, cmd.main, onUpdate);
+var runBatch = async (cmd, agents, ctx, onUpdate, signal) => {
+  const out = await dispatchBatch(cmd.items, agents, ctx, cmd.main, onUpdate, signal);
   return result(out.map((r) => buildResultText(r)).join("\n---\n"), out.some((r) => !!r.error));
 };
-var runChain = async (cmd, agents, ctx, onUpdate) => {
-  const out = await dispatchChain(cmd.steps, agents, ctx, cmd.main, onUpdate);
+var runChain = async (cmd, agents, ctx, onUpdate, signal) => {
+  const out = await dispatchChain(cmd.steps, agents, ctx, cmd.main, onUpdate, signal);
   return result(buildResultText(out), !!out.error);
 };
 var snippet = (agents) => `Dispatch subagents: ${agents.map((a) => `${a.name} (${a.description})`).join(", ") || "none loaded"}`;
@@ -828,9 +918,9 @@ function createTool(pi, agentsDir) {
     promptSnippet: snippet(agents),
     promptGuidelines: guidelines(agents),
     parameters: SubagentParams,
-    async execute(_id, params, _signal, onUpdate, ctx) {
+    async execute(_id, params, signal, onUpdate, ctx) {
       try {
-        return await dispatch(parseCommand(params.command), agents, ctx, onUpdate);
+        return await dispatch(parseCommand(params.command), agents, ctx, onUpdate, signal);
       } catch (e) {
         return result(`Error: ${errorMsg2(e)}`, true);
       }

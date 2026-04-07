@@ -2,7 +2,7 @@ import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
 import { extractMainContext, type Entry } from "./context.js";
-import { MAX_RETRIES, RETRY_BASE_MS } from "./constants.js";
+import { DEFAULT_HARD_TIMEOUT_MS, DEFAULT_IDLE_TIMEOUT_MS, MAX_RETRIES, RETRY_BASE_MS } from "./constants.js";
 import { getPiCommand, buildArgs } from "./runner.js";
 import { registerRun, unregisterRun, makeOnEvent } from "./run-progress.js";
 import { withRetry } from "./retry.js";
@@ -16,31 +16,61 @@ export interface DispatchCtx { hasUI: boolean; ui: { setWidget(k: string, v: unk
 export const errorMsg = (e: unknown) => e instanceof Error ? e.message : String(e);
 type OnUpdate = AgentToolUpdateCallback<SubagentToolDetails> | undefined;
 
-export const createRunner = (main: boolean, ctx: DispatchCtx, onUpdate?: OnUpdate) => async (agent: AgentConfig, task: string) => {
+export const createRunner = (main: boolean, ctx: DispatchCtx, onUpdate?: OnUpdate, outerSignal?: AbortSignal) => async (agent: AgentConfig, task: string) => {
 	const id = nextId();
-	return runAgent({ id, agent, task, ctx, onUpdate, sessionFile: sessionPath(id), prompt: buildPrompt(agent, ctx, main) });
+	return runAgent({ id, agent, task, ctx, onUpdate, outerSignal, sessionFile: sessionPath(id), prompt: buildPrompt(agent, ctx, main) });
 };
 
-export const createSessionRunner = (sessFile: string, ctx: DispatchCtx, onUpdate?: OnUpdate) => async (agent: AgentConfig, task: string) => {
+export const createSessionRunner = (sessFile: string, ctx: DispatchCtx, onUpdate?: OnUpdate, outerSignal?: AbortSignal) => async (agent: AgentConfig, task: string) => {
 	const id = nextId();
-	return runAgent({ id, agent, task, ctx, onUpdate, sessionFile: sessFile });
+	return runAgent({ id, agent, task, ctx, onUpdate, outerSignal, sessionFile: sessFile });
 };
 
-async function runAgent(input: { id: number; agent: AgentConfig; task: string; ctx: DispatchCtx; onUpdate?: OnUpdate; sessionFile: string; prompt?: string }): Promise<RunResult> {
+async function runAgent(input: {
+	id: number;
+	agent: AgentConfig;
+	task: string;
+	ctx: DispatchCtx;
+	onUpdate?: OnUpdate;
+	outerSignal?: AbortSignal;
+	sessionFile: string;
+	prompt?: string;
+}): Promise<RunResult> {
 	const id = input.id;
 	if (input.prompt) writeFileSync(join(tmpdir(), `pi-sub-${input.agent.name}-${id}.md`), input.prompt);
 	ensureSessionDir(input.sessionFile);
 	const { cmd, args } = buildRunCommand(input.agent, input.task, input.sessionFile, input.prompt, id);
 	const ac = new AbortController();
 	const events: Parameters<typeof addToHistory>[0]["events"] = [];
+	const abortFromOuter = () => ac.abort();
+	let removeOuterAbortListener = () => {};
+	if (input.outerSignal) {
+		const outerSignal = input.outerSignal;
+		removeOuterAbortListener = () => outerSignal.removeEventListener("abort", abortFromOuter);
+		if (outerSignal.aborted) ac.abort();
+		else outerSignal.addEventListener("abort", abortFromOuter, { once: true });
+	}
 	registerRun(id, input.agent.name, input.task, input.ctx, ac);
 	const onEvent = makeOnEvent(id, input.agent.name, input.task, input.ctx, events, input.onUpdate);
+	let result: RunResult | undefined;
+	let failed = false;
+	let failure: unknown;
 	try {
-		const result = await withRetry(() => spawnAndCollect(cmd, args, id, input.agent.name, ac.signal, onEvent), MAX_RETRIES, RETRY_BASE_MS);
-		return finishRun({ ...result, task: input.task }, input.sessionFile, events);
+		result = await withRetry(
+			() => spawnAndCollect(cmd, args, id, input.agent.name, ac.signal, onEvent, {
+				hardTimeoutMs: DEFAULT_HARD_TIMEOUT_MS,
+				idleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
+			}),
+			MAX_RETRIES,
+			RETRY_BASE_MS,
+		);
 	} catch (e) {
-		return failRun(e, id, input.agent.name, input.task, input.sessionFile, events);
+		failed = true;
+		failure = e;
 	}
+	removeOuterAbortListener();
+	if (failed) return failRun(failure, id, input.agent.name, input.task, input.sessionFile, events);
+	return finishRun({ ...result!, task: input.task }, input.sessionFile, events);
 }
 
 function buildPrompt(agent: AgentConfig, ctx: DispatchCtx, main: boolean) {

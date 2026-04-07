@@ -23,4 +23,10 @@ describe("constants", () => {
 	it("queue interval is positive", () => {
 		expect(C.QUEUE_INTERVAL_MS).toBeGreaterThan(0);
 	});
+
+	it("timeout defaults are positive", () => {
+		expect(C.DEFAULT_HARD_TIMEOUT_MS).toBeGreaterThan(0);
+		expect(C.DEFAULT_IDLE_TIMEOUT_MS).toBeGreaterThan(0);
+		expect(C.TERMINATION_GRACE_MS).toBeGreaterThan(0);
+	});
 });

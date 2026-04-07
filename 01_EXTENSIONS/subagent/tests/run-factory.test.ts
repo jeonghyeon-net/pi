@@ -9,6 +9,7 @@ vi.mock("fs", async (orig) => {
 vi.mock("../src/spawn.js", () => ({ spawnAndCollect: vi.fn() }));
 import { createRunner, createSessionRunner } from "../src/run-factory.js";
 import { spawnAndCollect } from "../src/spawn.js";
+import { DEFAULT_HARD_TIMEOUT_MS, DEFAULT_IDLE_TIMEOUT_MS } from "../src/constants.js";
 const agent: AgentConfig = { name: "scout", description: "", systemPrompt: "find", filePath: "/a.md" };
 const ok: RunResult = { id: 1, agent: "scout", output: "found", usage: { inputTokens: 10, outputTokens: 5, turns: 1 } };
 const mock = () => (spawnAndCollect as ReturnType<typeof vi.fn>);
@@ -32,6 +33,34 @@ describe("createRunner", () => {
 		mock().mockResolvedValue(ok);
 		await createRunner(false, ctx())(agent, "find");
 		expect(mock().mock.calls[0][4] instanceof AbortSignal).toBe(true);
+	});
+	it("passes default timeout options to spawnAndCollect", async () => {
+		mock().mockResolvedValue(ok);
+		await createRunner(false, ctx())(agent, "find");
+		expect(mock().mock.calls[0][6]).toEqual({
+			hardTimeoutMs: DEFAULT_HARD_TIMEOUT_MS,
+			idleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
+		});
+	});
+	it("supports successful runs with an outer signal attached", async () => {
+		const outer = new AbortController();
+		mock().mockResolvedValue(ok);
+		await expect(createRunner(false, ctx(), undefined, outer.signal)(agent, "find")).resolves.toMatchObject({ output: "found" });
+	});
+	it("propagates outer abort signal to subagent runner", async () => {
+		const outer = new AbortController();
+		mock().mockImplementation((_cmd: string, _args: string[], _id: number, _agent: string, signal?: AbortSignal) => new Promise((_resolve, reject) => {
+			signal?.addEventListener("abort", () => reject(new Error("Aborted")), { once: true });
+		}));
+		const pending = createRunner(false, ctx(), undefined, outer.signal)(agent, "find");
+		outer.abort();
+		await expect(pending).rejects.toThrow("Aborted");
+	});
+	it("starts already aborted when outer signal is pre-canceled", async () => {
+		const outer = new AbortController();
+		outer.abort();
+		mock().mockImplementation((_cmd: string, _args: string[], _id: number, _agent: string, signal?: AbortSignal) => Promise.reject(new Error(signal?.aborted ? "Aborted" : "Expected aborted signal")));
+		await expect(createRunner(false, ctx(), undefined, outer.signal)(agent, "find")).rejects.toThrow("Aborted");
 	});
 	it("injects main context when main=true", async () => {
 		mock().mockResolvedValue(ok);
@@ -69,6 +98,15 @@ describe("createSessionRunner", () => {
 		mock().mockResolvedValue(ok);
 		await createSessionRunner("/tmp/s.json", ctx())(agent, "task");
 		expect(mock().mock.calls[0][4] instanceof AbortSignal).toBe(true);
+	});
+	it("propagates outer abort signal for continued runs", async () => {
+		const outer = new AbortController();
+		mock().mockImplementation((_cmd: string, _args: string[], _id: number, _agent: string, signal?: AbortSignal) => new Promise((_resolve, reject) => {
+			signal?.addEventListener("abort", () => reject(new Error("Aborted")), { once: true });
+		}));
+		const pending = createSessionRunner("/tmp/s.json", ctx(), undefined, outer.signal)(agent, "task");
+		outer.abort();
+		await expect(pending).rejects.toThrow("Aborted");
 	});
 	it("adds and removes run", async () => {
 		mock().mockResolvedValue(ok);

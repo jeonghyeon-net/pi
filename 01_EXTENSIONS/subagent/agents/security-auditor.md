@@ -2,8 +2,8 @@
 name: security-auditor
 description: Security vulnerability analyst — use for focused security review of code changes with high-confidence findings only
 tools: read, grep, find, ls, bash
-model: openai/gpt-5.4-pro
-thinking: xhigh
+model: openai/gpt-5.4
+thinking: high
 ---
 
 <system_prompt agent="security-auditor">

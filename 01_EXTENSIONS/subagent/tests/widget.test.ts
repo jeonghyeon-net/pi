@@ -48,18 +48,18 @@ describe("buildWidgetLines", () => {
 		const frames = Array.from({ length: SPINNER.length }, () => { advanceFrame(); return buildWidgetLines(run, now)[0][0]; });
 		for (const ch of SPINNER) expect(frames).toContain(ch);
 	});
-	it("shows idle warning when no event for >120s", () => {
+	it("shows idle pause indicator when no event for >120s", () => {
 		const startedAt = 0;
 		const now = 200_000;
 		const lines = buildWidgetLines([{ id: 42, agent: "worker", startedAt }], now);
-		expect(lines[0]).toContain("⚠");
+		expect(lines[0]).toContain("⏸");
 		expect(lines[0]).toContain("idle");
 	});
 	it("shows spinner when idle is within threshold", () => {
 		const now = Date.now();
 		setCurrentTool(1, "Bash");
 		const lines = buildWidgetLines([{ id: 1, agent: "a", startedAt: now - 1000 }], now);
-		expect(lines[0]).not.toContain("⚠");
+		expect(lines[0]).not.toContain("⏸");
 		expect(SPINNER).toContain(lines[0][0]);
 	});
 });

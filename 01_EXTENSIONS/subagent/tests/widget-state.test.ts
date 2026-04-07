@@ -33,7 +33,7 @@ describe("setCurrentTool", () => {
 		setCurrentTool(5, "Read");
 		vi.restoreAllMocks();
 		const lines = buildWidgetLines([{ id: 5, agent: "a", startedAt }], midway + 60_000);
-		expect(lines[0]).not.toContain("⚠");
+		expect(lines[0]).not.toContain("⏸");
 	});
 	it("clears message preview when undefined", () => {
 		setCurrentMessage(6, "draft");
@@ -49,7 +49,7 @@ describe("clearToolState", () => {
 		clearToolState(3);
 		const now = 250_000;
 		const lines = buildWidgetLines([{ id: 3, agent: "a", startedAt: 0 }], now);
-		expect(lines[0]).toContain("⚠");
+		expect(lines[0]).toContain("⏸");
 		expect(lines[0]).not.toContain("→");
 	});
 });

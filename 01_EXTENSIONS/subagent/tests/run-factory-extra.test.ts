@@ -44,6 +44,11 @@ describe("onEvent integration", () => {
 		});
 		await createRunner(false, c)(agent, "task");
 		expect(c.ui.setWidget).toHaveBeenCalled();
+		const widgetSnapshots = (c.ui.setWidget as ReturnType<typeof vi.fn>).mock.calls
+			.filter((call) => Array.isArray(call[1]))
+			.map((call) => String(call[1][0] ?? ""));
+		expect(widgetSnapshots.some((line) => line.includes("→ Bash"))).toBe(true);
+		expect(widgetSnapshots.some((line) => line.includes("task") && !line.includes("→ Bash"))).toBe(true);
 	});
 
 	it("collects events in history for createRunner", async () => {

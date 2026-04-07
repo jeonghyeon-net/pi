@@ -41,7 +41,7 @@ export function buildWidgetLines(runs: MinimalRun[], now: number): string[] {
 		const activity = currentActivity.get(r.id);
 		const task = r.task ? ` — ${previewText(r.task, 28)}` : "";
 		if (idle > IDLE_THRESHOLD_MS) {
-			return `⚠ ${r.agent} #${r.id}${task} (${elapsed}) idle ${formatDuration(idle)}`;
+			return `⏸ ${r.agent} #${r.id}${task} (${elapsed}) idle ${formatDuration(idle)}`;
 		}
 		const suffix = activity ? ` → ${activity}` : "";
 		return `${spin} ${r.agent} #${r.id}${task} (${elapsed})${suffix}`;

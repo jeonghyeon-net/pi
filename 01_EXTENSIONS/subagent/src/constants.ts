@@ -5,3 +5,6 @@ export const MAX_RETRIES = 3;
 export const RETRY_BASE_MS = 2000;
 export const ESCALATION_MARKER = "[ESCALATION]";
 export const PIPELINE_MAX_CHARS = 4000;
+export const DEFAULT_HARD_TIMEOUT_MS = 20 * 60_000;
+export const DEFAULT_IDLE_TIMEOUT_MS = 5 * 60_000;
+export const TERMINATION_GRACE_MS = 5_000;

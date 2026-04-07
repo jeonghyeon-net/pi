@@ -14,31 +14,37 @@ const result = (text: string, isError = false): AgentToolResult<SubagentToolDeta
 export const errorMsg = (e: unknown) => e instanceof Error ? e.message : String(e);
 type UpdateFn = AgentToolUpdateCallback<SubagentToolDetails> | undefined;
 
-async function dispatch(cmd: Subcommand, agents: AgentConfig[], ctx: DispatchCtx, onUpdate: UpdateFn) {
+async function dispatch(cmd: Subcommand, agents: AgentConfig[], ctx: DispatchCtx, onUpdate: UpdateFn, signal?: AbortSignal) {
 	if (cmd.type === "runs") return result(formatRunsList());
 	if (cmd.type === "detail") return result(formatDetail(cmd.id));
 	if (cmd.type === "abort") return result(dispatchAbort(cmd.id));
-	if (cmd.type === "run") return runSingle(cmd, agents, ctx, onUpdate);
-	if (cmd.type === "batch") return runBatch(cmd, agents, ctx, onUpdate);
-	if (cmd.type === "chain") return runChain(cmd, agents, ctx, onUpdate);
-	const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx, onUpdate);
+	if (cmd.type === "run") return runSingle(cmd, agents, ctx, onUpdate, signal);
+	if (cmd.type === "batch") return runBatch(cmd, agents, ctx, onUpdate, signal);
+	if (cmd.type === "chain") return runChain(cmd, agents, ctx, onUpdate, signal);
+	const cont = await dispatchContinue(cmd.id, cmd.task, agents, ctx, onUpdate, signal);
 	return typeof cont === "string" ? result(cont, cont.includes("not found")) : result(buildResultText(cont), !!cont.error);
 }
 
-async function runSingle(cmd: Extract<Subcommand, { type: "run" }>, agents: AgentConfig[], ctx: DispatchCtx, onUpdate: UpdateFn) {
+async function runSingle(
+	cmd: Extract<Subcommand, { type: "run" }>, agents: AgentConfig[], ctx: DispatchCtx, onUpdate: UpdateFn, signal?: AbortSignal,
+) {
 	const agent = getAgent(cmd.agent, agents);
 	if (!agent) return result(`Unknown agent: ${cmd.agent}`, true);
-	const out = await dispatchRun(agent, cmd.task, ctx, cmd.main, onUpdate);
+	const out = await dispatchRun(agent, cmd.task, ctx, cmd.main, onUpdate, signal);
 	return result(buildResultText(out), !!out.error);
 }
 
-const runBatch = async (cmd: Extract<Subcommand, { type: "batch" }>, agents: AgentConfig[], ctx: DispatchCtx, onUpdate: UpdateFn) => {
-	const out = await dispatchBatch(cmd.items, agents, ctx, cmd.main, onUpdate);
+const runBatch = async (
+	cmd: Extract<Subcommand, { type: "batch" }>, agents: AgentConfig[], ctx: DispatchCtx, onUpdate: UpdateFn, signal?: AbortSignal,
+) => {
+	const out = await dispatchBatch(cmd.items, agents, ctx, cmd.main, onUpdate, signal);
 	return result(out.map((r) => buildResultText(r)).join("\n---\n"), out.some((r) => !!r.error));
 };
 
-const runChain = async (cmd: Extract<Subcommand, { type: "chain" }>, agents: AgentConfig[], ctx: DispatchCtx, onUpdate: UpdateFn) => {
-	const out = await dispatchChain(cmd.steps, agents, ctx, cmd.main, onUpdate);
+const runChain = async (
+	cmd: Extract<Subcommand, { type: "chain" }>, agents: AgentConfig[], ctx: DispatchCtx, onUpdate: UpdateFn, signal?: AbortSignal,
+) => {
+	const out = await dispatchChain(cmd.steps, agents, ctx, cmd.main, onUpdate, signal);
 	return result(buildResultText(out), !!out.error);
 };
 
@@ -50,8 +56,8 @@ export function createTool(pi: SubagentPi, agentsDir: string) {
 	return defineTool({
 		name: "subagent", label: "Subagent", description: "Run isolated subagent processes in separate pi subprocesses with their own context window",
 		promptSnippet: snippet(agents), promptGuidelines: guidelines(agents), parameters: SubagentParams,
-		async execute(_id: string, params: { command: string }, _signal: AbortSignal | undefined, onUpdate: UpdateFn, ctx: ExtensionContext) {
-			try { return await dispatch(parseCommand(params.command), agents, ctx, onUpdate); }
+		async execute(_id: string, params: { command: string }, signal: AbortSignal | undefined, onUpdate: UpdateFn, ctx: ExtensionContext) {
+			try { return await dispatch(parseCommand(params.command), agents, ctx, onUpdate, signal); }
 			catch (e) { return result(`Error: ${errorMsg(e)}`, true); }
 		},
 		renderCall: (args: { command: string }) => renderCall(args), renderResult: (res) => renderResult(res),

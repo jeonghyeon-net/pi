@@ -38,8 +38,9 @@ export function makeOnEvent(id: number, agent: string, task: string, ctx: Dispat
 		if (evt.type === "message") pushRecent(`💬 ${previewText(evt.text, 120) || "(empty response)"}`);
 		if (evt.type === "agent_end") current = evt.stopReason ? `finished (${evt.stopReason})` : "finished";
 		if (evt.type === "agent_end" && evt.isError && evt.text) pushRecent(`✗ ${previewText(evt.text, 120)}`);
-		if (["tool_start", "tool_update", "tool_end"].includes(evt.type)) setCurrentTool(id, evt.toolName, evt.text);
-		if (["message_delta", "message", "agent_end"].includes(evt.type) && (draft || evt.text)) setCurrentMessage(id, evt.type === "message_delta" ? draft : evt.text);
+		if (evt.type === "tool_start" || evt.type === "tool_update") setCurrentTool(id, evt.toolName, evt.text);
+		if (evt.type === "tool_end") setCurrentTool(id, undefined);
+		if (["message_delta", "message", "agent_end"].includes(evt.type)) setCurrentMessage(id, evt.type === "message_delta" ? draft : evt.text);
 		syncWidget(ctx, listRuns());
 		emit();
 	};
