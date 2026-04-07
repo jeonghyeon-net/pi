@@ -10,8 +10,8 @@ describe("notify formatting", () => {
 			content: [{ type: "toolCall" }, { type: "text", text: "- Updated auth flow. Added regression tests too." }],
 		}])).toEqual({ title: "Fix auth tests", body: "" });
 		expect(buildCompletionNotification("  \n;\t ", [{ role: "assistant", content: "로그인 문구 수정 완료" }])).toEqual({
-			title: "로그인 문구 수정 완료",
-			body: "",
+			title: "π",
+			body: "로그인 문구 수정 완료",
 		});
 		expect(buildCompletionNotification("로그인 문구 수정", [{ role: "assistant", content: "로그인 문구 수정 완료" }])).toEqual({
 			title: "로그인 문구 수정",
@@ -21,8 +21,8 @@ describe("notify formatting", () => {
 			role: "assistant",
 			content: "서브에이전트 2개로 가위바위보 실행 서브에이전트 두 명이 모두 가위를 내 무승부로 끝났어",
 		}])).toEqual({
-			title: "서브에이전트 두 명이 모두 가위를 내 무승부로 끝났어",
-			body: "",
+			title: "서브에이전트 2개로 가위바위보 실행",
+			body: "서브에이전트 두 명이 모두 가위를 내 무승부로 끝났어",
 		});
 	});
 
@@ -34,7 +34,7 @@ describe("notify formatting", () => {
 		expect(buildCompletionNotification("notify", [
 			{ role: "assistant", content: "로그인 문구 수정 완료" },
 			{ role: "assistant", content: "   " },
-		])).toEqual({ title: "로그인 문구 수정 완료", body: "" });
+		])).toEqual({ title: "notify", body: "로그인 문구 수정 완료" });
 		expect(buildCompletionNotification("notify", [{ role: "user", content: "ignore me" }, { role: "assistant" }])).toEqual({
 			title: "notify",
 			body: "",

@@ -34,6 +34,10 @@ function hasSessionTitle(runtime: SessionTitleRuntime, ctx: SessionTitleContext)
 	return Boolean(runtime.getSessionName() || ctx.sessionManager.getSessionName());
 }
 
+export function buildTerminalTitle(_cwd: string, sessionName: string): string {
+	return `π - ${sessionName}`;
+}
+
 export function handleInput(
 	pending: PendingSessionTitles,
 	runtime: SessionTitleRuntime,
@@ -57,4 +61,5 @@ export async function handleBeforeAgentStart(
 	if (!title) return;
 	pending.delete(ctx.sessionManager.getSessionId());
 	runtime.setSessionName(title);
+	if (ctx.hasUI) ctx.ui.setTitle(buildTerminalTitle(ctx.cwd || ctx.sessionManager.getCwd(), title));
 }

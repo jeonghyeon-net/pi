@@ -50,10 +50,10 @@ export function summarizeNotificationBody(text: string, maxLength = MAX_BODY_LEN
 }
 
 export function buildCompletionNotification(sessionName?: string, messages: NotificationMessage[] = []): { title: string; body: string } {
-	const fallbackTitle = sanitizeNotificationText(sessionName || "") || FALLBACK_TITLE;
-	const summary = stripLeadingTitle(summarizeNotificationBody(extractAssistantText(messages)), fallbackTitle);
+	const title = sanitizeNotificationText(sessionName || "") || FALLBACK_TITLE;
+	const summary = stripLeadingTitle(summarizeNotificationBody(extractAssistantText(messages)), title);
 	return {
-		title: summary && hasKoreanText(summary) ? summary : fallbackTitle,
-		body: "",
+		title,
+		body: summary && hasKoreanText(summary) ? summary : "",
 	};
 }

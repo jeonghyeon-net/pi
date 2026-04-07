@@ -69,6 +69,9 @@ function hasUserMessages(ctx) {
 function hasSessionTitle(runtime2, ctx) {
   return Boolean(runtime2.getSessionName() || ctx.sessionManager.getSessionName());
 }
+function buildTerminalTitle(_cwd, sessionName) {
+  return `\u03C0 - ${sessionName}`;
+}
 function handleInput(pending2, runtime2, event, ctx) {
   if (event.source === "extension" || hasSessionTitle(runtime2, ctx) || hasUserMessages(ctx)) return;
   if (!isTitleableInput(event.text)) return;
@@ -82,6 +85,7 @@ async function handleBeforeAgentStart(pending2, runtime2, ctx) {
   if (!title) return;
   pending2.delete(ctx.sessionManager.getSessionId());
   runtime2.setSessionName(title);
+  if (ctx.hasUI) ctx.ui.setTitle(buildTerminalTitle(ctx.cwd || ctx.sessionManager.getCwd(), title));
 }
 
 // src/hooks.ts

@@ -6,4 +6,4 @@
     - 원문 복붙 대신 짧은 요약 제목 생성
     - 생성된 제목을 session name 으로 저장
     - footer 세션 이름 칩에 자동 반영
-    - 터미널 window title은 건드리지 않아 notify source 줄 중복을 피함
+    - interactive 모드에서는 터미널 제목을 `π - <title>`로 즉시 갱신

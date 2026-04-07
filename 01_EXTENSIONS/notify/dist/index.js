@@ -86,11 +86,11 @@ function summarizeNotificationBody(text, maxLength = MAX_BODY_LENGTH) {
   return normalizeSingleSummary(contentLines.join("\n"), maxLength) || "";
 }
 function buildCompletionNotification(sessionName, messages = []) {
-  const fallbackTitle = sanitizeNotificationText(sessionName || "") || FALLBACK_TITLE;
-  const summary = stripLeadingTitle(summarizeNotificationBody(extractAssistantText(messages)), fallbackTitle);
+  const title = sanitizeNotificationText(sessionName || "") || FALLBACK_TITLE;
+  const summary = stripLeadingTitle(summarizeNotificationBody(extractAssistantText(messages)), title);
   return {
-    title: summary && hasKoreanText(summary) ? summary : fallbackTitle,
-    body: ""
+    title,
+    body: summary && hasKoreanText(summary) ? summary : ""
   };
 }
 
@@ -165,8 +165,8 @@ function createAgentEndHandler() {
       ctx.model,
       ctx.modelRegistry
     );
-    const summary = stripLeadingTitle(koreanBody || "", sessionTitle);
-    notify(summary && hasKoreanText(summary) ? summary : fallback.title, fallback.body);
+    const body = stripLeadingTitle(koreanBody || "", fallback.title);
+    notify(fallback.title, body && hasKoreanText(body) ? body : fallback.body);
   };
 }
 

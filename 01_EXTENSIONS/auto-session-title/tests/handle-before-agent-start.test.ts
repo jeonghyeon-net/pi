@@ -8,15 +8,22 @@ vi.mock("../src/summarize.js", async () => ({ ...(await vi.importActual("../src/
 describe("handleBeforeAgentStart", () => {
 	beforeEach(() => resolveSessionTitle.mockReset());
 
-	it("sets the session name from pending input without touching the terminal title", async () => {
+	it("sets the session name and title from pending input", async () => {
 		resolveSessionTitle.mockResolvedValue("Fix footer title handling");
 		const runtime = stubRuntime();
 		const ctx = stubContext();
 		const pending = new Map<string, string>([["session-1", "raw input"]]);
 		await handleBeforeAgentStart(pending, runtime, ctx);
 		expect(runtime.setSessionName).toHaveBeenCalledWith("Fix footer title handling");
-		expect(ctx.ui.setTitle).not.toHaveBeenCalled();
+		expect(ctx.ui.setTitle).toHaveBeenCalledWith("π - Fix footer title handling");
 		expect(pending.size).toBe(0);
+	});
+
+	it("uses session cwd fallback when title generation succeeds", async () => {
+		resolveSessionTitle.mockResolvedValue("Investigate cwd fallback");
+		const ctx = stubContext({ cwd: "" });
+		await handleBeforeAgentStart(new Map([["session-1", "raw input"]]), stubRuntime(), ctx);
+		expect(ctx.ui.setTitle).toHaveBeenCalledWith("π - Investigate cwd fallback");
 	});
 
 	it("preserves pending input when title generation fails or no input is queued", async () => {

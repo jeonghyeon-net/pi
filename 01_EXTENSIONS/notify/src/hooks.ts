@@ -19,7 +19,7 @@ export function createAgentEndHandler() {
 			ctx.model,
 			ctx.modelRegistry,
 		);
-		const summary = stripLeadingTitle(koreanBody || "", sessionTitle);
-		notify(summary && hasKoreanText(summary) ? summary : fallback.title, fallback.body);
+		const body = stripLeadingTitle(koreanBody || "", fallback.title);
+		notify(fallback.title, body && hasKoreanText(body) ? body : fallback.body);
 	};
 }
