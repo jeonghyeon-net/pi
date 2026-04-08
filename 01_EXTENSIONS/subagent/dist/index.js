@@ -1218,9 +1218,7 @@ async function runChain(cmd, agents, ctx, onUpdate, signal) {
 }
 var snippet = (agents) => `Dispatch subagents: ${agents.map((agent) => `${agent.name} (${agent.description})`).join(", ") || "none loaded"}`;
 var guidelines = (agents) => ["Available agents:", ...agents.map((agent) => `  - ${agent.name}: ${agent.description}`), "Use subagent_run / subagent_batch / subagent_chain / subagent_continue / subagent_abort / subagent_detail / subagent_runs as appropriate."];
-function createNamedTool(name, pi, agentsDir) {
-  const spec = subagentToolSpecs.find((item) => item.name === name);
-  if (!spec) throw new Error(`Unknown subagent tool: ${name}`);
+function createNamedTool(spec, pi, agentsDir) {
   const agents = existsSync2(agentsDir) ? loadAgentsFromDir(agentsDir, (dir) => readdirSync(dir).map(String), readFileSync) : [];
   return defineTool({
     name: spec.name,
@@ -1240,13 +1238,13 @@ function createNamedTool(name, pi, agentsDir) {
     renderResult: (res) => renderResult(res)
   });
 }
-var createRunTool = (pi, agentsDir) => createNamedTool("subagent_run", pi, agentsDir);
-var createBatchTool = (pi, agentsDir) => createNamedTool("subagent_batch", pi, agentsDir);
-var createChainTool = (pi, agentsDir) => createNamedTool("subagent_chain", pi, agentsDir);
-var createContinueTool = (pi, agentsDir) => createNamedTool("subagent_continue", pi, agentsDir);
-var createAbortTool = (pi, agentsDir) => createNamedTool("subagent_abort", pi, agentsDir);
-var createDetailTool = (pi, agentsDir) => createNamedTool("subagent_detail", pi, agentsDir);
-var createRunsTool = (pi, agentsDir) => createNamedTool("subagent_runs", pi, agentsDir);
+var createRunTool = (pi, agentsDir) => createNamedTool(subagentToolSpecs[0], pi, agentsDir);
+var createBatchTool = (pi, agentsDir) => createNamedTool(subagentToolSpecs[1], pi, agentsDir);
+var createChainTool = (pi, agentsDir) => createNamedTool(subagentToolSpecs[2], pi, agentsDir);
+var createContinueTool = (pi, agentsDir) => createNamedTool(subagentToolSpecs[3], pi, agentsDir);
+var createAbortTool = (pi, agentsDir) => createNamedTool(subagentToolSpecs[4], pi, agentsDir);
+var createDetailTool = (pi, agentsDir) => createNamedTool(subagentToolSpecs[5], pi, agentsDir);
+var createRunsTool = (pi, agentsDir) => createNamedTool(subagentToolSpecs[6], pi, agentsDir);
 
 // src/commands.ts
 import { existsSync as existsSync3, readdirSync as readdirSync2, readFileSync as readFileSync2 } from "fs";
