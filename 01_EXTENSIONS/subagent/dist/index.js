@@ -238,6 +238,7 @@ var frame = 0;
 var timerCtx;
 var timerRuns;
 var timerId;
+var completedWidget;
 function setCurrentTool(runId, toolName2, preview) {
   if (!toolName2) {
     setActivity(runId, void 0);
@@ -249,12 +250,17 @@ var setCurrentMessage = (runId, preview) => setActivity(runId, preview ? `reply:
 var setNestedRuns = (runId, runs) => setNestedRunsState(runId, runs);
 var clearNestedRuns = (runId) => clearNestedRunsState(runId);
 var buildNestedRunSnapshotsForRunId = buildNestedRunSnapshotsForRun;
+function rememberCompletedWidget(runs) {
+  if (runs.length === 0) return;
+  completedWidget = buildWidgetComponent(runs, Date.now(), frame);
+}
 function syncWidget(ctx, runs) {
   if (!ctx.hasUI) return;
   if (runs.length === 0) {
-    ctx.ui.setWidget("subagent-status", void 0);
+    ctx.ui.setWidget("subagent-status", completedWidget, completedWidget ? { placement: "belowEditor" } : void 0);
     return;
   }
+  completedWidget = void 0;
   ctx.ui.setWidget("subagent-status", buildWidgetComponent(runs, Date.now(), frame), { placement: "belowEditor" });
 }
 function startWidgetTimer(ctx, getRuns) {
@@ -362,6 +368,8 @@ function registerRun(id, agent, task, ctx, ac) {
   if (listRuns().length === 1) startWidgetTimer(ctx, listRuns);
 }
 function unregisterRun(id) {
+  const runs = listRuns();
+  if (runs.length === 1 && runs[0]?.id === id) rememberCompletedWidget(runs);
   clearNestedRuns(id);
   clearToolState(id);
   removeRun(id);

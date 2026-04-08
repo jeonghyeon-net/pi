@@ -1,6 +1,6 @@
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buildWidgetLines, resetWidgetState, setCurrentTool, setNestedRuns, syncWidget, stopWidgetTimer } from "../src/widget.js";
+import { buildWidgetLines, rememberCompletedWidget, resetWidgetState, setCurrentTool, setNestedRuns, syncWidget, stopWidgetTimer } from "../src/widget.js";
 
 beforeEach(() => resetWidgetState());
 afterEach(() => stopWidgetTimer());
@@ -46,8 +46,23 @@ describe("syncWidget", () => {
 	it("clears widget when no runs and skips without UI", () => {
 		const setWidget = vi.fn();
 		syncWidget({ hasUI: true, ui: { setWidget } }, []);
-		expect(setWidget).toHaveBeenCalledWith("subagent-status", undefined);
+		expect(setWidget).toHaveBeenCalledWith("subagent-status", undefined, undefined);
 		syncWidget({ hasUI: false, ui: { setWidget } }, [{ id: 1, agent: "w", startedAt: 0 }]);
 		expect(setWidget).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps the last completed widget visible after runs finish", () => {
+		const setWidget = vi.fn(), ctx = { hasUI: true, ui: { setWidget } };
+		rememberCompletedWidget([]);
+		setCurrentTool(1, "Bash");
+		rememberCompletedWidget([{ id: 1, agent: "scout", startedAt: Date.now() - 1_000 }]);
+		syncWidget(ctx, []);
+		expect(setWidget).toHaveBeenCalledWith("subagent-status", expect.any(Function), { placement: "belowEditor" });
+		const widget = setWidget.mock.calls[0][1](undefined, { fg: (_color: string, text: string) => text });
+		expect(widget.render(80)[0]).toContain("scout #1");
+		expect(widget.render(80)[0]).toContain("→ Bash");
+		syncWidget(ctx, [{ id: 2, agent: "worker", startedAt: Date.now() }]);
+		const nextWidget = setWidget.mock.calls[1][1](undefined, { fg: (_color: string, text: string) => text });
+		expect(nextWidget.render(80)[0]).toContain("worker #2");
 	});
 });

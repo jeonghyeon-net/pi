@@ -50,6 +50,9 @@ describe("onEvent integration", () => {
 			.map((factory) => factory(undefined, { fg: (_color: string, text: string) => text }).render(80)[0] ?? "");
 		expect(widgetSnapshots.some((line) => line.includes("→ Bash"))).toBe(true);
 		expect(widgetSnapshots.some((line) => line.includes("task") && !line.includes("→ Bash"))).toBe(true);
+		const lastWidget = (c.ui.setWidget as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1];
+		expect(typeof lastWidget).toBe("function");
+		expect(lastWidget(undefined, { fg: (_color: string, text: string) => text }).render(80)[0]).toContain("task");
 	});
 
 	it("collects events in history for createRunner", async () => {

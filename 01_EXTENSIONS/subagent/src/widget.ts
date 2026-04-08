@@ -4,7 +4,7 @@ import { clearNestedRunsState, clearToolStateState, resetWidgetStore, setActivit
 import type { NestedRunSnapshot } from "./types.js";
 
 interface MinimalCtx { hasUI: boolean; ui: { setWidget(key: string, content: unknown, opts?: unknown): void } }
-let frame = 0, timerCtx: MinimalCtx | undefined, timerRuns: (() => MinimalRun[]) | undefined, timerId: ReturnType<typeof setInterval> | undefined;
+let frame = 0, timerCtx: MinimalCtx | undefined, timerRuns: (() => MinimalRun[]) | undefined, timerId: ReturnType<typeof setInterval> | undefined, completedWidget: unknown | undefined;
 
 export function setCurrentTool(runId: number, toolName: string | undefined, preview?: string): void {
 	if (!toolName) { setActivity(runId, undefined); return; }
@@ -19,9 +19,18 @@ export const buildNestedRunSnapshotsFromRuns = buildNestedRunSnapshots;
 export const advanceFrame = () => void frame++;
 export const buildWidgetLines = (runs: MinimalRun[], now: number) => buildWidgetLinesWithFrame(runs, now, frame);
 
+export function rememberCompletedWidget(runs: MinimalRun[]): void {
+	if (runs.length === 0) return;
+	completedWidget = buildWidgetComponent(runs, Date.now(), frame);
+}
+
 export function syncWidget(ctx: MinimalCtx, runs: MinimalRun[]): void {
 	if (!ctx.hasUI) return;
-	if (runs.length === 0) { ctx.ui.setWidget("subagent-status", undefined); return; }
+	if (runs.length === 0) {
+		ctx.ui.setWidget("subagent-status", completedWidget, completedWidget ? { placement: "belowEditor" } : undefined);
+		return;
+	}
+	completedWidget = undefined;
 	ctx.ui.setWidget("subagent-status", buildWidgetComponent(runs, Date.now(), frame), { placement: "belowEditor" });
 }
 
@@ -42,5 +51,5 @@ export function stopWidgetTimer(): void {
 }
 
 export function clearToolState(runId: number): void { clearToolStateState(runId); }
-export function resetWidgetState(): void { resetWidgetStore(); frame = 0; stopWidgetTimer(); }
+export function resetWidgetState(): void { resetWidgetStore(); frame = 0; completedWidget = undefined; stopWidgetTimer(); }
 export { buildNestedRunSnapshotsFromRuns as buildNestedRunSnapshots, buildNestedRunSnapshotsForRunId as buildNestedRunSnapshotsForRun };
