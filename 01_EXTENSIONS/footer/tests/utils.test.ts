@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { clamp, getFolderName, sanitizeStatusText, styleStatus, getRepoName, hasUncommittedChanges } from "../src/utils.js";
-import { NAME_STATUS_KEY } from "../src/types.js";
+import { NAME_STATUS_KEY, STATUS_STYLE_MAP } from "../src/types.js";
 import { mockTheme, mockExec } from "./helpers.js";
 
 describe("clamp", () => {
@@ -29,6 +29,11 @@ describe("styleStatus", () => {
 	const theme = mockTheme();
 	it("returns text as-is for unknown keys", () => { expect(styleStatus(theme, "unknown", "hello")).toBe("hello"); });
 	it("applies style for known key", () => { expect(styleStatus(theme, NAME_STATUS_KEY, "s")).toContain("s"); });
+	it("covers all configured status styles", () => {
+		for (const key of Object.keys(STATUS_STYLE_MAP)) {
+			expect(styleStatus(theme, key, key)).toContain(key);
+		}
+	});
 });
 
 describe("getRepoName", () => {

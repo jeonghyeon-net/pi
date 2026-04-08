@@ -1,9 +1,13 @@
 import { visibleWidth } from "@mariozechner/pi-tui";
-import type { FooterContext, FooterStatusData, FooterTheme, ThemeColor } from "./types.js";
+import { buildPullRequestStatusEntries } from "./pr.js";
+import type { FooterContext, FooterStatusData, FooterTheme, PullRequestStatus, ThemeColor } from "./types.js";
 import { BAR_WIDTH, NAME_STATUS_KEY } from "./types.js";
-import { clamp, getFolderName, sanitizeStatusText } from "./utils.js";
+import { clamp, getFolderName, sanitizeStatusText, styleStatus } from "./utils.js";
 
-export function buildFooterStatusEntries(ctx: FooterContext, footerData: FooterStatusData) {
+export function buildFooterStatusEntries(
+	ctx: FooterContext,
+	footerData: FooterStatusData,
+) {
 	const statusEntries = Array.from(footerData.getExtensionStatuses().entries())
 		.filter(([key]) => key !== NAME_STATUS_KEY)
 		.map(([key, text]) => [key, sanitizeStatusText(text)] as const)
@@ -21,6 +25,7 @@ export function buildFooterLineParts(
 	footerData: FooterStatusData,
 	repoName: string | null,
 	hasDirtyChanges: boolean,
+	prStatus: PullRequestStatus | null,
 	width: number,
 ) {
 	const model = ctx.model?.id || "no-model";
@@ -31,6 +36,10 @@ export function buildFooterLineParts(
 
 	const statusEntries = buildFooterStatusEntries(ctx, footerData);
 	const statusTexts = statusEntries.map(([, text]) => text);
+	const prEntries = buildPullRequestStatusEntries(prStatus);
+	const prText = prEntries.length > 0
+		? theme.fg("muted", " · ") + prEntries.map(([key, text]) => styleStatus(theme, key, text)).join(theme.fg("muted", " · "))
+		: "";
 	const active = statusTexts.filter((s) => /research(ing)?/i.test(s)).length;
 	const done = statusTexts.filter((s) => /(^|\s)(done|✓)(\s|$)/i.test(s)).length;
 
@@ -45,7 +54,8 @@ export function buildFooterLineParts(
 		theme.fg("muted", " · ") +
 		theme.fg("accent", `${displayName} - `) +
 		dirtyMark +
-		theme.fg("accent", branchText);
+		theme.fg("accent", branchText) +
+		prText;
 
 	const mid =
 		active > 0

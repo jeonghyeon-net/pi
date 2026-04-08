@@ -1,16 +1,116 @@
 // src/footer.ts
 import { truncateToWidth } from "@mariozechner/pi-tui";
 
+// src/build.ts
+import { visibleWidth } from "@mariozechner/pi-tui";
+
 // src/types.ts
 var BAR_WIDTH = 10;
 var DIRTY_CHECK_INTERVAL_MS = 3e3;
+var PR_CHECK_INTERVAL_MS = 15e3;
 var NAME_STATUS_KEY = "session-name";
-var STATUS_STYLE_MAP = {
-  [NAME_STATUS_KEY]: (theme, text) => {
-    const chip = ` ${theme.fg("text", text)} `;
-    return theme.bg("selectedBg", chip);
-  }
+var PR_STATUS_KEYS = {
+  noPullRequest: "pr-no-pr",
+  reviewApproved: "pr-review-approved",
+  reviewChangesRequested: "pr-review-changes-requested",
+  reviewRequired: "pr-review-required",
+  reviewPending: "pr-review-pending",
+  reviewDraft: "pr-review-draft",
+  mergeMergeable: "pr-merge-mergeable",
+  mergeBlocked: "pr-merge-blocked",
+  mergeConflicting: "pr-merge-conflicting",
+  mergeChecking: "pr-merge-checking",
+  mergeDraft: "pr-merge-draft"
 };
+var dim = (theme, text) => theme.fg("dim", text);
+var STATUS_STYLE_MAP = {
+  [NAME_STATUS_KEY]: (theme, text) => theme.bg("selectedBg", ` ${theme.fg("text", text)} `),
+  [PR_STATUS_KEYS.noPullRequest]: dim,
+  [PR_STATUS_KEYS.reviewApproved]: (theme, text) => theme.fg("success", text),
+  [PR_STATUS_KEYS.reviewChangesRequested]: (theme, text) => theme.fg("error", text),
+  [PR_STATUS_KEYS.reviewRequired]: (theme, text) => theme.fg("warning", text),
+  [PR_STATUS_KEYS.reviewPending]: dim,
+  [PR_STATUS_KEYS.reviewDraft]: dim,
+  [PR_STATUS_KEYS.mergeMergeable]: (theme, text) => theme.fg("success", text),
+  [PR_STATUS_KEYS.mergeBlocked]: (theme, text) => theme.fg("warning", text),
+  [PR_STATUS_KEYS.mergeConflicting]: (theme, text) => theme.fg("error", text),
+  [PR_STATUS_KEYS.mergeChecking]: dim,
+  [PR_STATUS_KEYS.mergeDraft]: dim
+};
+
+// src/pr-display.ts
+var REVIEW_ENTRY_MAP = {
+  approved: [PR_STATUS_KEYS.reviewApproved, "\u2713 approved"],
+  "changes-requested": [PR_STATUS_KEYS.reviewChangesRequested, "\xD7 changes requested"],
+  "review-required": [PR_STATUS_KEYS.reviewRequired, "\u2022 review required"],
+  pending: [PR_STATUS_KEYS.reviewPending, "\u2026 review pending"],
+  draft: [PR_STATUS_KEYS.reviewDraft, "\xB7 draft"]
+};
+var MERGE_ENTRY_MAP = {
+  mergeable: [PR_STATUS_KEYS.mergeMergeable, "mergeable"],
+  blocked: [PR_STATUS_KEYS.mergeBlocked, "blocked"],
+  conflicting: [PR_STATUS_KEYS.mergeConflicting, "conflicts"],
+  checking: [PR_STATUS_KEYS.mergeChecking, "checking"],
+  draft: [PR_STATUS_KEYS.mergeDraft, "draft"],
+  "no-pr": [PR_STATUS_KEYS.noPullRequest, "no PR"]
+};
+function buildPullRequestStatusEntries(pr) {
+  if (!pr) return [];
+  if (!pr.exists) return [MERGE_ENTRY_MAP["no-pr"]];
+  return [...pr.review ? [REVIEW_ENTRY_MAP[pr.review]] : [], MERGE_ENTRY_MAP[pr.merge]];
+}
+
+// src/pr-normalize.ts
+function samePullRequestStatus(a, b) {
+  return a === b || !!a && !!b && a.exists === b.exists && a.review === b.review && a.merge === b.merge && a.number === b.number && a.title === b.title && a.url === b.url;
+}
+function normalizePullRequest(pr) {
+  const draft = pr.isDraft === true;
+  return {
+    exists: true,
+    review: draft ? "draft" : normalizeReviewState(pr.reviewDecision),
+    merge: draft ? "draft" : normalizeMergeState(pr.mergeStateStatus, pr.mergeable),
+    number: typeof pr.number === "number" ? pr.number : void 0,
+    title: typeof pr.title === "string" ? pr.title : void 0,
+    url: typeof pr.url === "string" ? pr.url : void 0
+  };
+}
+function normalizeReviewState(reviewDecision) {
+  if (reviewDecision === "APPROVED") return "approved";
+  if (reviewDecision === "CHANGES_REQUESTED") return "changes-requested";
+  if (reviewDecision === "REVIEW_REQUIRED") return "review-required";
+  return "pending";
+}
+function normalizeMergeState(state, mergeable) {
+  if (state === "CLEAN") return "mergeable";
+  if (state === "BLOCKED" || state === "BEHIND" || state === "HAS_HOOKS" || state === "UNSTABLE") return "blocked";
+  if (state === "DIRTY") return "conflicting";
+  if (state === "DRAFT") return "draft";
+  if (state === "UNKNOWN") return "checking";
+  if (mergeable === "MERGEABLE") return "mergeable";
+  if (mergeable === "CONFLICTING") return "conflicting";
+  if (mergeable === "UNKNOWN") return "checking";
+  return "blocked";
+}
+
+// src/pr-query.ts
+var GH_PR_FIELDS = "number,title,url,isDraft,reviewDecision,mergeable,mergeStateStatus";
+async function getPullRequestStatus(cwd, branch, exec) {
+  if (!branch) return null;
+  const result = await exec("gh", ["pr", "list", "--head", branch, "--state", "open", "--json", GH_PR_FIELDS, "--limit", "1"], { cwd });
+  if (result.code !== 0 || !result.stdout?.trim()) return null;
+  const prs = parsePullRequestList(result.stdout);
+  if (!prs) return null;
+  return prs[0] ? normalizePullRequest(prs[0]) : { exists: false, merge: "no-pr" };
+}
+function parsePullRequestList(stdout) {
+  try {
+    const parsed = JSON.parse(stdout);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 // src/utils.ts
 function clamp(n, min, max) {
@@ -42,7 +142,6 @@ async function hasUncommittedChanges(cwd, exec) {
 }
 
 // src/build.ts
-import { visibleWidth } from "@mariozechner/pi-tui";
 function buildFooterStatusEntries(ctx, footerData) {
   const statusEntries = Array.from(footerData.getExtensionStatuses().entries()).filter(([key]) => key !== NAME_STATUS_KEY).map(([key, text]) => [key, sanitizeStatusText(text)]).filter(([, text]) => Boolean(text));
   const sessionName = ctx.sessionManager.getSessionName();
@@ -51,7 +150,7 @@ function buildFooterStatusEntries(ctx, footerData) {
   }
   return statusEntries;
 }
-function buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges, width) {
+function buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges, prStatus, width) {
   const model = ctx.model?.id || "no-model";
   const usage = ctx.getContextUsage();
   const pct = clamp(Math.round(usage?.percent ?? 0), 0, 100);
@@ -59,6 +158,8 @@ function buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges,
   const bar = "#".repeat(filled) + "-".repeat(BAR_WIDTH - filled);
   const statusEntries = buildFooterStatusEntries(ctx, footerData);
   const statusTexts = statusEntries.map(([, text]) => text);
+  const prEntries = buildPullRequestStatusEntries(prStatus);
+  const prText = prEntries.length > 0 ? theme.fg("muted", " \xB7 ") + prEntries.map(([key, text]) => styleStatus(theme, key, text)).join(theme.fg("muted", " \xB7 ")) : "";
   const active = statusTexts.filter((s) => /research(ing)?/i.test(s)).length;
   const done = statusTexts.filter((s) => /(^|\s)(done|✓)(\s|$)/i.test(s)).length;
   const folder = getFolderName(ctx.sessionManager.getCwd());
@@ -66,7 +167,7 @@ function buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges,
   const branch = footerData.getGitBranch();
   const branchText = branch ?? "no-branch";
   const dirtyMark = branch && hasDirtyChanges ? theme.fg("warning", "*") : "";
-  const left = theme.fg("dim", ` ${model}`) + theme.fg("muted", " \xB7 ") + theme.fg("accent", `${displayName} - `) + dirtyMark + theme.fg("accent", branchText);
+  const left = theme.fg("dim", ` ${model}`) + theme.fg("muted", " \xB7 ") + theme.fg("accent", `${displayName} - `) + dirtyMark + theme.fg("accent", branchText) + prText;
   const mid = active > 0 ? theme.fg("accent", ` \u25C9 ${active} researching`) : done > 0 ? theme.fg("success", ` \u2713 ${done} done`) : "";
   const remaining = 100 - pct;
   const barColor = remaining <= 15 ? "error" : remaining <= 40 ? "warning" : "dim";
@@ -79,82 +180,98 @@ function buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges,
 function installFooter(ctx, exec) {
   if (!ctx.hasUI) return;
   ctx.ui.setFooter((tui, theme, footerData) => {
-    let hasDirtyChanges = false;
-    let dirtyCheckInitialized = false;
-    let dirtyCheckRunning = false;
-    let disposed = false;
-    let dirtyTimer;
-    let repoName = null;
-    const fetchRepoName = async () => {
-      repoName = await getRepoName(ctx.sessionManager.getCwd(), exec);
+    let hasDirtyChanges = false, dirtyCheckInitialized = false, dirtyCheckRunning = false, prCheckRunning = false, disposed = false;
+    let dirtyTimer, prTimer;
+    let repoName = null, prStatus = null;
+    const cwd = ctx.sessionManager.getCwd();
+    const requestRender = () => {
       if (!disposed) tui.requestRender();
+    };
+    const fetchRepoName = async () => {
+      repoName = await getRepoName(cwd, exec);
+      requestRender();
     };
     const refreshDirtyState = async () => {
       if (dirtyCheckRunning) return;
       const branch = footerData.getGitBranch();
-      if (branch === null) {
-        if (hasDirtyChanges || !dirtyCheckInitialized) {
-          hasDirtyChanges = false;
-          dirtyCheckInitialized = true;
-          tui.requestRender();
-        }
-        return;
-      }
+      if (branch === null) return dirtyCheckReset();
       dirtyCheckRunning = true;
       try {
-        const next = await hasUncommittedChanges(ctx.sessionManager.getCwd(), exec);
-        if (disposed) return;
-        if (!dirtyCheckInitialized || next !== hasDirtyChanges) {
-          hasDirtyChanges = next;
-          dirtyCheckInitialized = true;
-          tui.requestRender();
-        }
+        dirtyCheckSet(await hasUncommittedChanges(cwd, exec));
       } catch {
       } finally {
         dirtyCheckRunning = false;
       }
     };
+    const dirtyCheckReset = () => {
+      if (hasDirtyChanges || !dirtyCheckInitialized) {
+        hasDirtyChanges = false;
+        dirtyCheckInitialized = true;
+        requestRender();
+      }
+    };
+    const dirtyCheckSet = (next) => {
+      if (!disposed && (!dirtyCheckInitialized || next !== hasDirtyChanges)) {
+        hasDirtyChanges = next;
+        dirtyCheckInitialized = true;
+        requestRender();
+      }
+    };
+    const refreshPrStatus = async () => {
+      if (prCheckRunning) return;
+      const branch = footerData.getGitBranch();
+      if (branch === null) return clearPrStatus();
+      prCheckRunning = true;
+      try {
+        setPrStatus(await getPullRequestStatus(cwd, branch, exec));
+      } catch {
+      } finally {
+        prCheckRunning = false;
+      }
+    };
+    const clearPrStatus = () => {
+      if (prStatus !== null) {
+        prStatus = null;
+        requestRender();
+      }
+    };
+    const setPrStatus = (next) => {
+      if (!disposed && !samePullRequestStatus(prStatus, next)) {
+        prStatus = next;
+        requestRender();
+      }
+    };
+    const unsubscribeBranch = footerData.onBranchChange(() => {
+      prStatus = null;
+      requestRender();
+      void refreshDirtyState();
+      void refreshPrStatus();
+    });
     void fetchRepoName();
     void refreshDirtyState();
+    void refreshPrStatus();
     dirtyTimer = setInterval(() => void refreshDirtyState(), DIRTY_CHECK_INTERVAL_MS);
-    const unsubscribeBranch = footerData.onBranchChange(() => {
-      tui.requestRender();
-      void refreshDirtyState();
-    });
+    prTimer = setInterval(() => void refreshPrStatus(), PR_CHECK_INTERVAL_MS);
     return {
       dispose() {
         disposed = true;
         unsubscribeBranch();
-        if (dirtyTimer) {
-          clearInterval(dirtyTimer);
-          dirtyTimer = void 0;
-        }
+        if (dirtyTimer) clearInterval(dirtyTimer);
+        if (prTimer) clearInterval(prTimer);
       },
       invalidate() {
       },
       render(width) {
-        const { statusEntries, left, mid, right, pad } = buildFooterLineParts(
-          theme,
-          ctx,
-          footerData,
-          repoName,
-          hasDirtyChanges,
-          width
-        );
-        const lines = [truncateToWidth(left + mid + pad + right, width)];
-        if (statusEntries.length > 0) {
-          const delimiter = theme.fg("dim", " \xB7 ");
-          const rendered = statusEntries.map(([key, text]) => styleStatus(theme, key, text));
-          lines.push(truncateToWidth(` ${rendered.join(delimiter)}`, width));
-        }
+        const { statusEntries, left, mid, right, pad } = buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges, prStatus, width);
+        const lines = [truncateToWidth(left + mid + pad + right, width)], delimiter = theme.fg("dim", " \xB7 ");
+        if (statusEntries.length > 0) lines.push(truncateToWidth(` ${statusEntries.map(([k, t]) => styleStatus(theme, k, t)).join(delimiter)}`, width));
         return lines;
       }
     };
   });
 }
 function teardownFooter(ctx) {
-  if (!ctx.hasUI) return;
-  ctx.ui.setFooter(void 0);
+  if (ctx.hasUI) ctx.ui.setFooter(void 0);
 }
 
 // src/index.ts
