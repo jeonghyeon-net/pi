@@ -8,7 +8,7 @@ describe("parseCommand basics", () => {
 
 	it("parses run with --main and --cwd", () => {
 		expect(parseCommand("run worker --main -- implement login")).toEqual({ type: "run", agent: "worker", task: "implement login", main: true, cwd: undefined });
-		expect(parseCommand("run worker --cwd /tmp -- task")).toEqual({ type: "run", agent: "worker", task: "task", main: false, cwd: "/tmp" });
+		expect(parseCommand("run worker --cwd /workspace/cwd -- task")).toEqual({ type: "run", agent: "worker", task: "task", main: false, cwd: "/workspace/cwd" });
 	});
 
 	it("parses batch and chain", () => {

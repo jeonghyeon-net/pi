@@ -35,7 +35,6 @@
     subagent-driven-development … 태스크별 서브에이전트 기반 구현
     systematic-debugging … 근본 원인 추적 기반 체계적 디버깅
     test-driven-development … Red-Green-Refactor TDD 워크플로
-    using-git-worktrees … 격리된 git worktree 생성 및 관리
     using-superpowers … 스킬 자동 탐색 및 적용 메타 스킬
     verification-before-completion … 완료 선언 전 증거 기반 검증
     writing-plans … 구현 계획서 작성

@@ -5,7 +5,7 @@ describe("structured cli helpers", () => {
 	it("maps parsed commands to dedicated tool calls", () => {
 		expect(subcommandToToolCall(parseCommand("run worker --main -- implement fix"))).toEqual({ toolName: "subagent_run", input: { agent: "worker", task: "implement fix", main: true } });
 		expect(subcommandToToolCall(parseCommand("run worker -- implement fix"))).toEqual({ toolName: "subagent_run", input: { agent: "worker", task: "implement fix" } });
-		expect(subcommandToToolCall(parseCommand("run worker --cwd /tmp -- implement fix"))).toEqual({ toolName: "subagent_run", input: { agent: "worker", task: "implement fix", cwd: "/tmp" } });
+		expect(subcommandToToolCall(parseCommand("run worker --cwd /workspace/cwd -- implement fix"))).toEqual({ toolName: "subagent_run", input: { agent: "worker", task: "implement fix", cwd: "/workspace/cwd" } });
 		expect(subcommandToToolCall(parseCommand("batch --agent reviewer --task 'Review auth'"))).toEqual({ toolName: "subagent_batch", input: { items: [{ agent: "reviewer", task: "Review auth" }] } });
 		expect(subcommandToToolCall(parseCommand("batch --main --agent reviewer --task 'Review auth'"))).toEqual({ toolName: "subagent_batch", input: { items: [{ agent: "reviewer", task: "Review auth" }], main: true } });
 		expect(subcommandToToolCall(parseCommand("chain --agent scout --task find --agent worker --task '{previous}'"))).toEqual({ toolName: "subagent_chain", input: { steps: [{ agent: "scout", task: "find" }, { agent: "worker", task: "{previous}" }] } });
@@ -20,7 +20,7 @@ describe("structured cli helpers", () => {
 	});
 
 	it("stringifies structured commands", () => {
-		expect(stringifyCommand({ type: "run", agent: "worker", task: "Implement fix", main: true, cwd: "/tmp/worktree" })).toBe('run worker --main --cwd "/tmp/worktree" -- Implement fix');
+		expect(stringifyCommand({ type: "run", agent: "worker", task: "Implement fix", main: true, cwd: "/workspace/task-dir" })).toBe('run worker --main --cwd "/workspace/task-dir" -- Implement fix');
 		expect(stringifyCommand({ type: "run", agent: "worker", task: "Implement fix", main: false })).toBe("run worker -- Implement fix");
 		expect(stringifyCommand({ type: "batch", items: [{ agent: "reviewer", task: "Review auth changes" }], main: true })).toContain("--main");
 		expect(stringifyCommand({ type: "batch", items: [{ agent: "reviewer", task: "Review auth changes" }], main: false })).toContain("Review auth changes");
