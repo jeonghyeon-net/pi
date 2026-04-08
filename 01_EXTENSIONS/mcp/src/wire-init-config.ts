@@ -49,19 +49,27 @@ export function wireApplyDirectToolsEnv(): (config: McpConfig) => McpConfig {
 
 export const wireComputeHash = computeConfigHash;
 
+type NormalizedCacheServer = { tools: unknown[]; savedAt: number; configHash?: string };
+
+function normalizeCachedServers(
+	servers: Record<string, { tools: unknown; savedAt: unknown; configHash?: unknown }>,
+): Record<string, NormalizedCacheServer> {
+	const normalized: Record<string, NormalizedCacheServer> = {};
+	for (const [name, entry] of Object.entries(servers)) {
+		normalized[name] = {
+			tools: Array.isArray(entry.tools) ? entry.tools : [],
+			savedAt: typeof entry.savedAt === "number" ? entry.savedAt : 0,
+			configHash: typeof entry.configHash === "string" ? entry.configHash : undefined,
+		};
+	}
+	return normalized;
+}
+
 export function wireLoadCache(): () => CacheData | null {
 	return () => {
 		const cache = loadMetadataCache(resolve(CACHE_FILE_PATH), cacheFs);
 		if (!cache) return null;
-		const servers: Record<string, { tools: unknown[]; savedAt: number; configHash?: string }> = {};
-		for (const [name, entry] of Object.entries(cache.servers)) {
-			servers[name] = {
-				tools: Array.isArray(entry.tools) ? entry.tools : [],
-				savedAt: typeof entry.savedAt === "number" ? entry.savedAt : 0,
-				configHash: typeof entry.configHash === "string" ? entry.configHash : undefined,
-			};
-		}
-		return { hash: cache.configHash, servers };
+		return { hash: cache.configHash, servers: normalizeCachedServers(cache.servers) };
 	};
 }
 
@@ -78,7 +86,8 @@ export function wireIsCacheValid(): (cache: CacheData | null, config: McpConfig,
 
 export function wireSaveCache(): (config: McpConfig, metadata: Map<string, ToolMetadata[]>) => Promise<void> {
 	return async (config, metadata) => {
-		const servers: Record<string, { tools: unknown; savedAt: number; configHash?: string }> = {};
+		const existing = loadMetadataCache(resolve(CACHE_FILE_PATH), cacheFs);
+		const servers = existing ? normalizeCachedServers(existing.servers) : {};
 		const now = Date.now();
 		for (const [name, tools] of metadata) {
 			const entry = config.mcpServers[name];

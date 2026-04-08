@@ -28,7 +28,11 @@ import { loadImportedConfigs } from "../src/config-imports.js";
 import { existsSync, readFileSync } from "node:fs";
 
 describe("wire-init-config", () => {
-	beforeEach(() => vi.clearAllMocks());
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(loadMetadataCache).mockReturnValue(null);
+		vi.mocked(isMetadataCacheValid).mockReturnValue(false);
+	});
 	it("wireLoadConfig loads config", async () => { expect(await wireLoadConfig()()).toEqual({ mcpServers: {} }); });
 	it("wireMergeConfigs without imports", () => { wireMergeConfigs()({ mcpServers: {} }); expect(loadImportedConfigs).not.toHaveBeenCalled(); });
 	it("wireMergeConfigs with imports", () => { wireMergeConfigs()({ mcpServers: {}, imports: ["cursor"] }); expect(loadImportedConfigs).toHaveBeenCalled(); });

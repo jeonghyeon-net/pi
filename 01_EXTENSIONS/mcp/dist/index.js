@@ -8271,19 +8271,22 @@ function wireApplyDirectToolsEnv() {
   return (config3) => applyDirectToolsEnv(config3, process.env.PI_MCP_DIRECT_TOOLS);
 }
 var wireComputeHash = computeConfigHash;
+function normalizeCachedServers(servers) {
+  const normalized = {};
+  for (const [name, entry] of Object.entries(servers)) {
+    normalized[name] = {
+      tools: Array.isArray(entry.tools) ? entry.tools : [],
+      savedAt: typeof entry.savedAt === "number" ? entry.savedAt : 0,
+      configHash: typeof entry.configHash === "string" ? entry.configHash : void 0
+    };
+  }
+  return normalized;
+}
 function wireLoadCache() {
   return () => {
     const cache = loadMetadataCache(resolve(CACHE_FILE_PATH), cacheFs);
     if (!cache) return null;
-    const servers = {};
-    for (const [name, entry] of Object.entries(cache.servers)) {
-      servers[name] = {
-        tools: Array.isArray(entry.tools) ? entry.tools : [],
-        savedAt: typeof entry.savedAt === "number" ? entry.savedAt : 0,
-        configHash: typeof entry.configHash === "string" ? entry.configHash : void 0
-      };
-    }
-    return { hash: cache.configHash, servers };
+    return { hash: cache.configHash, servers: normalizeCachedServers(cache.servers) };
   };
 }
 function wireIsCacheValid() {
@@ -8298,7 +8301,8 @@ function wireIsCacheValid() {
 }
 function wireSaveCache() {
   return async (config3, metadata2) => {
-    const servers = {};
+    const existing = loadMetadataCache(resolve(CACHE_FILE_PATH), cacheFs);
+    const servers = existing ? normalizeCachedServers(existing.servers) : {};
     const now = Date.now();
     for (const [name, tools] of metadata2) {
       const entry = config3.mcpServers[name];
