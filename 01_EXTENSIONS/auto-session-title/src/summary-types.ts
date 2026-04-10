@@ -9,11 +9,12 @@ export const OVERVIEW_PROMPT = [
 	"Do not overwrite the whole summary with only the latest turn.",
 	"Return exactly this format:",
 	"TITLE: <short title in the user's language, max 8 words>",
-	"SUMMARY:",
-	"<as many summary lines as needed to preserve the current session context>",
-	"Do not artificially limit the number of summary lines.",
-	"Keep the lines concise but complete, in plain natural language, without Goal/Done/Note/Next labels.",
-	"Do not use markdown bullets, code fences, or extra sections.",
+	"SUMMARY: <a cohesive current-state summary in the user's language>",
+	"Prefer one dense paragraph; use a second paragraph only when it materially improves clarity.",
+	"Describe the current state rather than retelling events in chronological order.",
+	"Merge related updates into prose instead of writing one line per turn or tool call.",
+	"Do not drop still-relevant context merely to make the summary shorter.",
+	"Do not use markdown bullets, numbered lists, code fences, or extra sections.",
 ].join(" ");
 
 export type SessionOverviewModel = Model<Api>;

@@ -25,8 +25,8 @@ describe("resolveSessionOverview", () => {
 	});
 
 	it("parses a successful model response", async () => {
-		completeSimple.mockResolvedValue(assistantMessage([{ type: "thinking", thinking: "hidden" }, { type: "text", text: "TITLE: 세션 제목\nSUMMARY:\n현재 작업은 오버레이를 다듬는 중\nidle 시점 갱신을 마침\nresume 복원을 확인해야 함" }]));
-		expect(await resolveSessionOverview({ recentText: "recent", model, modelRegistry: registry })).toEqual({ title: "세션 제목", summary: ["현재 작업은 오버레이를 다듬는 중", "idle 시점 갱신을 마침", "resume 복원을 확인해야 함"] });
+		completeSimple.mockResolvedValue(assistantMessage([{ type: "thinking", thinking: "hidden" }, { type: "text", text: "TITLE: 세션 제목\nSUMMARY:\n현재 작업은 오버레이를 다듬는 중\nidle 시점 갱신을 마쳤고\nresume 복원까지 확인해야 한다" }]));
+		expect(await resolveSessionOverview({ recentText: "recent", model, modelRegistry: registry })).toEqual({ title: "세션 제목", summary: ["현재 작업은 오버레이를 다듬는 중 idle 시점 갱신을 마쳤고 resume 복원까지 확인해야 한다"] });
 		expect(completeSimple).toHaveBeenCalledWith(model, expect.objectContaining({ systemPrompt: OVERVIEW_PROMPT }), expect.objectContaining({ apiKey: "token" }));
 	});
 

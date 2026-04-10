@@ -94,15 +94,19 @@ function getOverviewOverlayOptions() {
 import { completeSimple } from "@mariozechner/pi-ai";
 
 // src/summary-prompt.ts
+function formatPreviousSummary(summary) {
+  return summary.length > 0 ? summary.join("\n\n") : "(none)";
+}
 function buildOverviewPrompt(recentText, previous) {
-  const previousSection = previous ? [`Previous title: ${previous.title}`, "Previous summary:", ...previous.summary].join("\n") : "Previous summary: (none)";
+  const previousSection = previous ? [`Previous title: ${previous.title}`, "Previous summary (older versions may contain legacy line breaks; rewrite them into cohesive prose if needed):", formatPreviousSummary(previous.summary)].join("\n") : "Previous summary: (none)";
   return [
-    "Update the previous summary instead of rewriting from scratch.",
+    "Update the previous summary into a cohesive current-state brief, not a turn-by-turn log.",
     "Preserve still-relevant goals, decisions, constraints, blockers, and completed work unless recent updates clearly replace them.",
-    "Do not artificially limit the number of summary lines if more context is still relevant.",
+    "Fold recent updates into the current state instead of listing events in order.",
+    "Prefer one dense paragraph. Use multiple paragraphs only for clearly separate concerns.",
     previousSection,
     "",
-    "Recent conversation updates:",
+    "Recent conversation updates below are raw chronological notes, not the desired output format:",
     recentText
   ].join("\n");
 }
@@ -154,11 +158,12 @@ var OVERVIEW_PROMPT = [
   "Do not overwrite the whole summary with only the latest turn.",
   "Return exactly this format:",
   "TITLE: <short title in the user's language, max 8 words>",
-  "SUMMARY:",
-  "<as many summary lines as needed to preserve the current session context>",
-  "Do not artificially limit the number of summary lines.",
-  "Keep the lines concise but complete, in plain natural language, without Goal/Done/Note/Next labels.",
-  "Do not use markdown bullets, code fences, or extra sections."
+  "SUMMARY: <a cohesive current-state summary in the user's language>",
+  "Prefer one dense paragraph; use a second paragraph only when it materially improves clarity.",
+  "Describe the current state rather than retelling events in chronological order.",
+  "Merge related updates into prose instead of writing one line per turn or tool call.",
+  "Do not drop still-relevant context merely to make the summary shorter.",
+  "Do not use markdown bullets, numbered lists, code fences, or extra sections."
 ].join(" ");
 
 // src/summary-text.ts
@@ -188,7 +193,7 @@ function clipTranscript(text) {
 ${tail}`;
 }
 function extractSummaryLines(raw) {
-  return raw.split(/\r?\n/).map((line) => collapseWhitespace2(line.replace(/^[-*•]\s*/, ""))).filter(Boolean);
+  return raw.split(/\r?\n\s*\r?\n+/).map((paragraph) => paragraph.split(/\r?\n/).map((line) => line.replace(/^(?:[-*•]+|\d+[.)])\s*/, "").trim()).filter(Boolean).join(" ")).map(collapseWhitespace2).filter(Boolean);
 }
 function buildConversationTranscript(entries) {
   const lines = [];

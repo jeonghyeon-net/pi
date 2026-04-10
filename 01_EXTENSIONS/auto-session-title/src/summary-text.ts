@@ -28,7 +28,7 @@ function clipTranscript(text: string): string {
 }
 
 export function extractSummaryLines(raw: string): string[] {
-	return raw.split(/\r?\n/).map((line) => collapseWhitespace(line.replace(/^[-*•]\s*/, ""))).filter(Boolean);
+	return raw.split(/\r?\n\s*\r?\n+/).map((paragraph) => paragraph.split(/\r?\n/).map((line) => line.replace(/^(?:[-*•]+|\d+[.)])\s*/, "").trim()).filter(Boolean).join(" ")).map(collapseWhitespace).filter(Boolean);
 }
 
 export function buildConversationTranscript(entries: OverviewEntry[]): string {
