@@ -103,7 +103,14 @@ import { completeSimple } from "@mariozechner/pi-ai";
 // src/summary-prompt.ts
 function buildOverviewPrompt(recentText, previous) {
   const previousSection = previous ? [`Previous title: ${previous.title}`, "Previous summary:", ...previous.summary].join("\n") : "Previous summary: (none)";
-  return [previousSection, "", "Recent conversation updates:", recentText].join("\n");
+  return [
+    "Update the previous summary instead of rewriting from scratch.",
+    "Preserve still-relevant goals, decisions, constraints, and blockers unless the recent updates clearly replace them.",
+    previousSection,
+    "",
+    "Recent conversation updates:",
+    recentText
+  ].join("\n");
 }
 
 // src/title.ts
@@ -148,6 +155,9 @@ var MAX_SECTION_LENGTH = 240;
 var MAX_TRANSCRIPT_LENGTH = 12e3;
 var OVERVIEW_PROMPT = [
   "You maintain concise coding-session overviews.",
+  "Treat the previous summary as the baseline state for the session.",
+  "Carry forward still-relevant context unless recent updates clearly resolve or replace it.",
+  "Do not overwrite the whole summary with only the latest turn.",
   "Return exactly this format:",
   "TITLE: <short title in the user's language, max 8 words>",
   "SUMMARY:",

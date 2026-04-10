@@ -4,6 +4,9 @@ export const MAX_SECTION_LENGTH = 240;
 export const MAX_TRANSCRIPT_LENGTH = 12000;
 export const OVERVIEW_PROMPT = [
 	"You maintain concise coding-session overviews.",
+	"Treat the previous summary as the baseline state for the session.",
+	"Carry forward still-relevant context unless recent updates clearly resolve or replace it.",
+	"Do not overwrite the whole summary with only the latest turn.",
 	"Return exactly this format:",
 	"TITLE: <short title in the user's language, max 8 words>",
 	"SUMMARY:",

@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { buildOverviewPrompt, parseOverviewResponse } from "../src/summarize.js";
 
 describe("buildOverviewPrompt", () => {
-	it("includes previous overview when available", () => {
+	it("tells the model to preserve still-relevant context from the previous overview", () => {
 		const prompt = buildOverviewPrompt("Recent updates", { title: "기존 제목", summary: ["오버레이 배치를 정리함", "resume 복원을 붙임"] });
+		expect(prompt).toContain("Update the previous summary instead of rewriting from scratch.");
+		expect(prompt).toContain("Preserve still-relevant goals, decisions, constraints, and blockers");
 		expect(prompt).toContain("Previous title: 기존 제목");
 		expect(prompt).toContain("resume 복원을 붙임");
 	});
+
 	it("falls back when no previous overview exists", () => {
 		expect(buildOverviewPrompt("Recent updates")).toContain("Previous summary: (none)");
 	});
