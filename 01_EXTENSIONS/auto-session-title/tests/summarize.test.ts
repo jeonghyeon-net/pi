@@ -22,6 +22,11 @@ describe("buildConversationTranscript", () => {
 		expect(transcript).not.toContain("ignored");
 	});
 
+	it("truncates oversized transcript sections before clipping the full transcript", () => {
+		const transcript = buildConversationTranscript([{ type: "message", id: "1", message: { role: "assistant", content: [{ type: "text", text: "x".repeat(500) }] } }]);
+		expect(transcript).toContain(`Assistant: ${"x".repeat(239)}…`);
+	});
+
 	it("clips very long transcripts", () => {
 		const transcript = buildConversationTranscript(Array.from({ length: 80 }, (_, index) => ({ type: "message", id: `${index + 1}`, message: { role: "user", content: [{ type: "text", text: `line-${index}-${"a".repeat(220)}` }] } })));
 		expect(transcript).toContain("[... earlier context omitted ...]");

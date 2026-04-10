@@ -6,14 +6,13 @@ var OVERVIEW_OVERLAY_WIDTH = 64;
 function normalizeSummaryLine(line) {
   if (typeof line !== "string") return void 0;
   const collapsed = line.replace(/^[-*•]\s*/, "").replace(/\s+/g, " ").trim();
-  if (!collapsed) return void 0;
-  return collapsed.length > 120 ? `${collapsed.slice(0, 119).trimEnd()}\u2026` : collapsed;
+  return collapsed || void 0;
 }
 function normalizeOverviewData(data) {
   const record = data && typeof data === "object" ? data : void 0;
   const title = typeof record?.title === "string" ? record.title.trim() : "";
   const coveredThroughEntryId = typeof record?.coveredThroughEntryId === "string" ? record.coveredThroughEntryId.trim() : "";
-  const summary = Array.isArray(record?.summary) ? record.summary.map(normalizeSummaryLine).filter((line) => Boolean(line)).slice(0, 4) : [];
+  const summary = Array.isArray(record?.summary) ? record.summary.map(normalizeSummaryLine).filter((line) => Boolean(line)) : [];
   return title && summary.length > 0 ? { title, summary, coveredThroughEntryId: coveredThroughEntryId || void 0 } : void 0;
 }
 function findLatestOverview(branch) {
@@ -38,7 +37,7 @@ function buildOverviewBodyLines(overview) {
 }
 
 // src/overlay-component.ts
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 var OverviewOverlayComponent = class {
   constructor(tui, theme, overview, fallbackTitle) {
     this.tui = tui;
@@ -62,19 +61,14 @@ var OverviewOverlayComponent = class {
     if (this.cachedLines && this.cachedWidth === width) return this.cachedLines;
     const innerWidth = Math.max(1, width - 2);
     const border = (text) => this.theme.fg("border", text);
-    const pad = (text) => {
-      const clipped = truncateToWidth(text, innerWidth, "...", true);
-      return clipped + " ".repeat(Math.max(0, innerWidth - visibleWidth(clipped)));
-    };
-    const title = truncateToWidth(` ${resolveOverviewTitle(this.overview, this.fallbackTitle)} `, innerWidth, "...", true);
+    const pad = (text) => text + " ".repeat(Math.max(0, innerWidth - visibleWidth(text)));
+    const title = truncateToWidth(` ${resolveOverviewTitle(this.overview, this.fallbackTitle)} `, Math.max(1, innerWidth - 2), "...", false);
     const header = this.theme.fg("accent", title);
-    const headerWidth = visibleWidth(title);
-    const left = "\u2500".repeat(Math.max(0, Math.floor((innerWidth - headerWidth) / 2)));
-    const right = "\u2500".repeat(Math.max(0, innerWidth - headerWidth - left.length));
+    const right = "\u2500".repeat(Math.max(1, innerWidth - 1 - visibleWidth(title)));
+    const body = buildOverviewBodyLines(this.overview).flatMap((line) => wrapTextWithAnsi(line, innerWidth));
     this.cachedLines = [
-      border(`\u256D${left}`) + header + border(`${right}\u256E`),
-      border(`\u251C${"\u2500".repeat(innerWidth)}\u2524`),
-      ...buildOverviewBodyLines(this.overview).map((line) => border("\u2502") + pad(line) + border("\u2502")),
+      border("\u256D\u2500") + header + border(`${right}\u256E`),
+      ...body.map((line) => border("\u2502") + pad(line) + border("\u2502")),
       border(`\u2570${"\u2500".repeat(innerWidth)}\u256F`)
     ];
     this.cachedWidth = width;
@@ -90,7 +84,6 @@ function getOverviewOverlayOptions() {
     anchor: "top-right",
     width: OVERVIEW_OVERLAY_WIDTH,
     minWidth: 48,
-    maxHeight: 10,
     margin: { top: 1, right: 1 },
     nonCapturing: true,
     visible: (termWidth) => termWidth >= 100
@@ -105,7 +98,8 @@ function buildOverviewPrompt(recentText, previous) {
   const previousSection = previous ? [`Previous title: ${previous.title}`, "Previous summary:", ...previous.summary].join("\n") : "Previous summary: (none)";
   return [
     "Update the previous summary instead of rewriting from scratch.",
-    "Preserve still-relevant goals, decisions, constraints, and blockers unless the recent updates clearly replace them.",
+    "Preserve still-relevant goals, decisions, constraints, blockers, and completed work unless recent updates clearly replace them.",
+    "Do not artificially limit the number of summary lines if more context is still relevant.",
     previousSection,
     "",
     "Recent conversation updates:",
@@ -154,15 +148,16 @@ function buildTerminalTitle(sessionName) {
 var MAX_SECTION_LENGTH = 240;
 var MAX_TRANSCRIPT_LENGTH = 12e3;
 var OVERVIEW_PROMPT = [
-  "You maintain concise coding-session overviews.",
+  "You maintain coding-session overviews.",
   "Treat the previous summary as the baseline state for the session.",
   "Carry forward still-relevant context unless recent updates clearly resolve or replace it.",
   "Do not overwrite the whole summary with only the latest turn.",
   "Return exactly this format:",
   "TITLE: <short title in the user's language, max 8 words>",
   "SUMMARY:",
-  "<2-4 short summary lines about the current session state>",
-  "Write the summary in plain natural language without Goal/Done/Note/Next labels.",
+  "<as many summary lines as needed to preserve the current session context>",
+  "Do not artificially limit the number of summary lines.",
+  "Keep the lines concise but complete, in plain natural language, without Goal/Done/Note/Next labels.",
   "Do not use markdown bullets, code fences, or extra sections."
 ].join(" ");
 
@@ -193,7 +188,7 @@ function clipTranscript(text) {
 ${tail}`;
 }
 function extractSummaryLines(raw) {
-  return raw.split(/\r?\n/).map((line) => line.replace(/^[-*•]\s*/, "").trim()).filter(Boolean).map((line) => truncateSection(line, 120)).slice(0, 4);
+  return raw.split(/\r?\n/).map((line) => collapseWhitespace2(line.replace(/^[-*•]\s*/, ""))).filter(Boolean);
 }
 function buildConversationTranscript(entries) {
   const lines = [];

@@ -2,13 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { OverviewOverlayComponent } from "../src/overlay-component.js";
 
 describe("OverviewOverlayComponent", () => {
-	it("renders a header divider and recalculates when the width changes", () => {
-		const component = new OverviewOverlayComponent({ requestRender: vi.fn() }, { fg: vi.fn((_color: string, text: string) => text) }, { title: "제목", summary: ["현재 상태를 짧게 보여줌"] });
+	it("renders a trailing top-border line and wraps long body text without ellipsis", () => {
+		const component = new OverviewOverlayComponent({ requestRender: vi.fn() }, { fg: vi.fn((_color: string, text: string) => text) }, { title: "제목", summary: ["이 요약은 상자 폭을 넘어가더라도 말줄임표 대신 자연스럽게 줄바꿈되어야 한다고 사용자가 요청했다"] });
 		const first = component.render(64);
 		expect(component.render(64)).toBe(first);
 		expect(component.render(68)).not.toBe(first);
-		expect(first.join("\n")).toContain("제목");
-		expect(first[1]).toBe(`├${"─".repeat(62)}┤`);
+		expect(first[0]).toMatch(/^╭─ 제목 ─+╮$/);
+		expect(first.some((line) => line.includes("..."))).toBe(false);
+		expect(first.length).toBeGreaterThan(3);
 	});
 
 	it("invalidates and requests a render when content changes", () => {

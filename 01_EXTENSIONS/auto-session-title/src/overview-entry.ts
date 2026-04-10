@@ -4,8 +4,7 @@ import type { OverviewEntry, PersistedOverview, SessionOverview, StoredOverview 
 function normalizeSummaryLine(line: unknown): string | undefined {
 	if (typeof line !== "string") return undefined;
 	const collapsed = line.replace(/^[-*•]\s*/, "").replace(/\s+/g, " ").trim();
-	if (!collapsed) return undefined;
-	return collapsed.length > 120 ? `${collapsed.slice(0, 119).trimEnd()}…` : collapsed;
+	return collapsed || undefined;
 }
 
 function normalizeOverviewData(data: object | null | undefined): StoredOverview | undefined {
@@ -13,7 +12,7 @@ function normalizeOverviewData(data: object | null | undefined): StoredOverview 
 	const title = typeof record?.title === "string" ? record.title.trim() : "";
 	const coveredThroughEntryId = typeof record?.coveredThroughEntryId === "string" ? record.coveredThroughEntryId.trim() : "";
 	const summary = Array.isArray(record?.summary)
-		? record.summary.map(normalizeSummaryLine).filter((line): line is string => Boolean(line)).slice(0, 4)
+		? record.summary.map(normalizeSummaryLine).filter((line): line is string => Boolean(line))
 		: [];
 	return title && summary.length > 0 ? { title, summary, coveredThroughEntryId: coveredThroughEntryId || undefined } : undefined;
 }

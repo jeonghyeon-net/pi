@@ -17,20 +17,22 @@ describe("buildOverviewWidgetText", () => {
 });
 
 describe("buildOverviewBodyLines", () => {
-	it("returns only summary lines for the overlay body", () => {
-		expect(buildOverviewBodyLines({ title: "작업 제목", summary: ["오버레이 배치를 정리함", "동기화 로직을 점검 중"] })).toEqual([
+	it("returns all summary lines for the overlay body", () => {
+		expect(buildOverviewBodyLines({ title: "작업 제목", summary: ["오버레이 배치를 정리함", "동기화 로직을 점검 중", "추가 컨텍스트를 계속 유지함"] })).toEqual([
 			"오버레이 배치를 정리함",
 			"동기화 로직을 점검 중",
+			"추가 컨텍스트를 계속 유지함",
 		]);
 	});
 });
 
 describe("getOverviewOverlayOptions", () => {
-	it("uses a much wider non-capturing top-right overlay", () => {
+	it("uses a wide non-capturing top-right overlay without a height cap", () => {
 		const options = getOverviewOverlayOptions();
 		expect(options.anchor).toBe("top-right");
 		expect(options.width).toBe(64);
 		expect(options.minWidth).toBe(48);
+		expect(options.maxHeight).toBeUndefined();
 		expect(options.nonCapturing).toBe(true);
 		expect(options.visible?.(120, 40)).toBe(true);
 		expect(options.visible?.(90, 40)).toBe(false);

@@ -14,12 +14,12 @@ describe("overview restoration core", () => {
 		])).toBeUndefined();
 	});
 
-	it("finds the latest valid persisted overview entry and keeps its checkpoint", () => {
+	it("finds the latest valid persisted overview entry and keeps every summary line", () => {
 		expect(findLatestOverview([
 			{ type: "custom", id: "1", customType: "other", data: { title: "x", summary: ["y"] } },
 			{ type: "custom", id: "2", customType: "auto-session-title.overview", data: "invalid" },
-			{ type: "custom", id: "5", customType: "auto-session-title.overview", data: { title: "현재 세션", summary: ["우상단 오버레이를 유지함", "resume 복원을 붙임", `${"x".repeat(140)}`], coveredThroughEntryId: "4" } },
-		])).toEqual({ entryId: "5", coveredThroughEntryId: "4", title: "현재 세션", summary: ["우상단 오버레이를 유지함", "resume 복원을 붙임", `${"x".repeat(119)}…`] });
+			{ type: "custom", id: "5", customType: "auto-session-title.overview", data: { title: "현재 세션", summary: ["우상단 오버레이를 유지함", "resume 복원을 붙임", `${"x".repeat(140)}`, "체크포인트 전진을 유지함", "긴 컨텍스트도 계속 보존함"], coveredThroughEntryId: "4" } },
+		])).toEqual({ entryId: "5", coveredThroughEntryId: "4", title: "현재 세션", summary: ["우상단 오버레이를 유지함", "resume 복원을 붙임", `${"x".repeat(140)}`, "체크포인트 전진을 유지함", "긴 컨텍스트도 계속 보존함"] });
 	});
 
 	it("falls back to the overview entry id when no checkpoint was stored", () => {
@@ -32,15 +32,15 @@ describe("overview restoration core", () => {
 		restoreOverview(runtime, ctx);
 		expect(runtime.setSessionName).toHaveBeenCalledWith("현재 세션");
 		expect(ctx.overlay.options?.overlayOptions).toEqual(expect.objectContaining({ anchor: "top-right", nonCapturing: true, width: getOverviewOverlayOptions().width }));
-		expect(ctx.overlay.component?.render(48).join("\n")).toContain("현재 세션");
+		expect(ctx.overlay.component?.render(64).join("\n")).toContain("현재 세션");
 		expect(ctx.ui.setTitle).toHaveBeenCalledWith("π - 현재 세션");
 	});
 
 	it("reuses the same overlay for subsequent restores in the same session", () => {
 		const ctx = stubContext([{ type: "custom", id: "1", customType: "auto-session-title.overview", data: { title: "첫 제목", summary: ["현재 상태를 짧게 표시함"] } }]);
 		restoreOverview(stubRuntime(), ctx);
-		const firstRender = ctx.overlay.component?.render(48);
-		expect(ctx.overlay.component?.render(52)).not.toBe(firstRender);
+		const firstRender = ctx.overlay.component?.render(64);
+		expect(ctx.overlay.component?.render(68)).not.toBe(firstRender);
 		ctx.sessionManager.getBranch.mockReturnValue([{ type: "custom", id: "2", customType: "auto-session-title.overview", data: { title: "둘째 제목", summary: ["다음 상태로 전환함"] } }]);
 		restoreOverview(stubRuntime(), ctx);
 		expect(ctx.ui.custom).toHaveBeenCalledTimes(1);
