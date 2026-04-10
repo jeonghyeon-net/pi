@@ -5,18 +5,13 @@ import { BAR_WIDTH, NAME_STATUS_KEY } from "./types.js";
 import { clamp, getFolderName, sanitizeStatusText, styleStatus } from "./utils.js";
 
 export function buildFooterStatusEntries(
-	ctx: FooterContext,
+	_ctx: FooterContext,
 	footerData: FooterStatusData,
 ) {
-	const statusEntries = Array.from(footerData.getExtensionStatuses().entries())
+	return Array.from(footerData.getExtensionStatuses().entries())
 		.filter(([key]) => key !== NAME_STATUS_KEY)
 		.map(([key, text]) => [key, sanitizeStatusText(text)] as const)
 		.filter(([, text]) => Boolean(text));
-	const sessionName = ctx.sessionManager.getSessionName();
-	if (sessionName) {
-		statusEntries.unshift([NAME_STATUS_KEY, sessionName]);
-	}
-	return statusEntries;
 }
 
 export function buildFooterLineParts(

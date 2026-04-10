@@ -142,13 +142,8 @@ async function hasUncommittedChanges(cwd, exec) {
 }
 
 // src/build.ts
-function buildFooterStatusEntries(ctx, footerData) {
-  const statusEntries = Array.from(footerData.getExtensionStatuses().entries()).filter(([key]) => key !== NAME_STATUS_KEY).map(([key, text]) => [key, sanitizeStatusText(text)]).filter(([, text]) => Boolean(text));
-  const sessionName = ctx.sessionManager.getSessionName();
-  if (sessionName) {
-    statusEntries.unshift([NAME_STATUS_KEY, sessionName]);
-  }
-  return statusEntries;
+function buildFooterStatusEntries(_ctx, footerData) {
+  return Array.from(footerData.getExtensionStatuses().entries()).filter(([key]) => key !== NAME_STATUS_KEY).map(([key, text]) => [key, sanitizeStatusText(text)]).filter(([, text]) => Boolean(text));
 }
 function buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges, prStatus, width) {
   const model = ctx.model?.id || "no-model";

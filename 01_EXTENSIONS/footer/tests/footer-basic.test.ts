@@ -16,12 +16,23 @@ describe("footer basic behavior", () => {
 	it("installs footer factory", () => { const { ctx } = setup(); expect(ctx.ui.setFooter).toHaveBeenCalledWith(expect.any(Function)); });
 	it("creates component", () => { const { factory } = setup(); const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData()); expect(typeof c.render).toBe("function"); c.invalidate(); c.dispose(); });
 	it("renders model on first line", () => { const { factory } = setup(); const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData()); expect(c.render(120)[0]).toContain("claude-opus-4-6"); c.dispose(); });
-	it("shows session line when session exists", () => { const { factory } = setup(mockCtx({ sessionManager: { getCwd: () => "/t", getSessionName: () => "s" } })); const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData()); expect(c.render(120)[1]).toContain("s"); c.dispose(); });
+	it("does not add a second footer line just for the session name", () => {
+		const { factory } = setup(mockCtx({ sessionManager: { getCwd: () => "/t", getSessionName: () => "s" } }));
+		const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData());
+		expect(c.render(120)).toHaveLength(1);
+		c.dispose();
+	});
+	it("renders a second line when extension statuses exist", () => {
+		const { factory } = setup();
+		const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData({ getExtensionStatuses: () => new Map([["todo", "doing"]]) }));
+		expect(c.render(120)).toHaveLength(2);
+		c.dispose();
+	});
 	it("renders PR review and merge on first line", async () => {
 		const exec: ExecFn = vi.fn().mockImplementation(async (command, args) => command === "gh" ? { stdout: JSON.stringify([{ reviewDecision: "APPROVED", mergeStateStatus: "CLEAN" }]), code: 0 } : command === "git" && args[0] === "remote" ? { stdout: "https://g.com/u/r.git\n", code: 0 } : { stdout: "", code: 0 });
 		const { factory } = setup(mockCtx({ sessionManager: { getCwd: () => "/t", getSessionName: () => "s" } }), exec);
 		const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData()); await vi.advanceTimersByTimeAsync(0); const lines = c.render(120);
-		expect(lines[0]).toContain("approved"); expect(lines[0]).toContain("mergeable"); expect(lines[1]).toContain("s"); c.dispose();
+		expect(lines[0]).toContain("approved"); expect(lines[0]).toContain("mergeable"); expect(lines).toHaveLength(1); c.dispose();
 	});
 	it("unsubscribes branch listener on dispose", () => { const unsub = vi.fn(); const { factory } = setup(); const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData({ onBranchChange: () => unsub })); c.dispose(); expect(unsub).toHaveBeenCalled(); });
 	it("refreshes repo name on branch change", async () => {
