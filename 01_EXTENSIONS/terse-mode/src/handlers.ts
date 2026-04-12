@@ -1,21 +1,18 @@
-import { STYLE_PROMPT, STYLE_SECTION } from "./constants.js";
-import { isEnabled, restoreFromEntries, type BranchEntryLike } from "./state.js";
-
-interface BranchReader {
-	getBranch(): BranchEntryLike[];
-}
-
-interface SessionContextLike {
-	sessionManager: BranchReader;
-}
+import { loadGlobalState } from "./config.js";
+import { DEFAULT_ENABLED, STYLE_PROMPT, STYLE_SECTION } from "./constants.js";
+import { isEnabled, setEnabled } from "./state.js";
 
 interface BeforeAgentStartEventLike {
 	systemPrompt: string;
 }
 
-export function onRestore() {
-	return async (_event: object, ctx: SessionContextLike) => {
-		restoreFromEntries(ctx.sessionManager.getBranch());
+export function onRestore(loadState: () => Promise<boolean> = loadGlobalState) {
+	return async () => {
+		try {
+			setEnabled(await loadState());
+		} catch {
+			setEnabled(DEFAULT_ENABLED);
+		}
 	};
 }
 

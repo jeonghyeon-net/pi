@@ -1,4 +1,4 @@
-export const ENTRY_TYPE = "terse-mode-state";
+export const DEFAULT_ENABLED = true;
 export const STYLE_SECTION = "## Terse Response Style";
 
 export const STYLE_PROMPT = [
