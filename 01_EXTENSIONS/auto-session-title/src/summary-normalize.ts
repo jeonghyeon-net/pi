@@ -26,9 +26,9 @@ function splitLongSummaryLine(line: string): string[] {
 }
 
 export function normalizeOverviewSummary(overview: SessionOverview): SessionOverview {
-	const summary = overview.summary.filter((line) => !isEmptyStateLine(line));
-	const splitSummary = summary.length === 1 ? splitLongSummaryLine(summary[0]!) : summary;
-	return splitSummary.length === overview.summary.length && splitSummary.every((line, index) => line === overview.summary[index])
+	const splitSummary = overview.summary.length === 1 ? splitLongSummaryLine(overview.summary[0]!) : overview.summary;
+	const summary = splitSummary.filter((line) => !isEmptyStateLine(line));
+	return summary.length === overview.summary.length && summary.every((line, index) => line === overview.summary[index])
 		? overview
-		: { ...overview, summary: splitSummary };
+		: { ...overview, summary };
 }

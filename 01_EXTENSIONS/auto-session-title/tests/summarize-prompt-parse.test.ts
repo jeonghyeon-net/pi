@@ -10,8 +10,8 @@ describe("buildOverviewPrompt", () => {
 		expect(prompt).toContain("Ignore routine greetings, acknowledgements, current-branch checks");
 		expect(prompt).toContain("If the recent updates contain no durable change, keep the previous title and summary unchanged.");
 		expect(prompt).toContain("Write SUMMARY as 2-5 short `- ` bullets when durable state exists.");
-		expect(prompt).toContain("Make the user's current request or goal obvious, but do not restate the same point in both TITLE and the first bullet.");
-		expect(prompt).toContain("Keep bullets scan-friendly");
+		expect(prompt).toContain("Keep bullets scan-friendly and concrete: prioritize current state, finished work, constraints, blockers, or next important step. Do not use lead-ins like `요청:`, `Request:`, `사용자는`, `The user`, or `현재 목표는`.");
+		expect(prompt).toContain("Do not collapse everything into one long paragraph.");
 		expect(prompt).toContain("leave SUMMARY blank");
 		expect(prompt).toContain("Keep the summary compact enough to scan quickly");
 		expect(prompt).toContain("Previous title: 기존 제목");
@@ -75,4 +75,5 @@ describe("parseOverviewResponse", () => {
 	it("drops generic empty-session prose so ui can keep skeleton state", () => {
 		expect(parseOverviewResponse("TITLE: 대화 시작 상태\nSUMMARY: 아직 실질적인 작업, 목표, 결정사항, 제약, 진행 상황, 막힌 점이 정해지지 않았다. 현재 세션에는 인사 외에 이어갈 과제가 없으므로, 다음에 재개할 때는 무엇을 하려는지 목표와 맥락부터 새로 정하면 된다.")).toEqual({ title: "대화 시작 상태", summary: [] });
 	});
+
 });

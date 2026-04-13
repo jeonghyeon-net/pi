@@ -142,8 +142,8 @@ function buildOverviewPrompt(recentText, previous) {
     "Ignore routine greetings, acknowledgements, current-branch checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially changed the task.",
     "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
     "Write SUMMARY as 2-5 short `- ` bullets when durable state exists. One bullet per durable point.",
-    "Make the user's current request or goal obvious, but do not restate the same point in both TITLE and the first bullet.",
-    "Keep bullets scan-friendly: prioritize current goal, finished work, constraints, blockers, or next important step. Do not collapse everything into one long paragraph.",
+    "Keep bullets scan-friendly and concrete: prioritize current state, finished work, constraints, blockers, or next important step. Do not use lead-ins like `\uC694\uCCAD:`, `Request:`, `\uC0AC\uC6A9\uC790\uB294`, `The user`, or `\uD604\uC7AC \uBAA9\uD45C\uB294`.",
+    "Do not collapse everything into one long paragraph.",
     "If there is still no durable task or state yet, do not invent one; leave SUMMARY blank.",
     buildCompactionNote(previous),
     previousSection,
@@ -214,9 +214,9 @@ function splitLongSummaryLine(line) {
   return summary;
 }
 function normalizeOverviewSummary(overview) {
-  const summary = overview.summary.filter((line) => !isEmptyStateLine(line));
-  const splitSummary = summary.length === 1 ? splitLongSummaryLine(summary[0]) : summary;
-  return splitSummary.length === overview.summary.length && splitSummary.every((line, index) => line === overview.summary[index]) ? overview : { ...overview, summary: splitSummary };
+  const splitSummary = overview.summary.length === 1 ? splitLongSummaryLine(overview.summary[0]) : overview.summary;
+  const summary = splitSummary.filter((line) => !isEmptyStateLine(line));
+  return summary.length === overview.summary.length && summary.every((line, index) => line === overview.summary[index]) ? overview : { ...overview, summary };
 }
 
 // src/summary-types.ts
@@ -236,8 +236,7 @@ var OVERVIEW_PROMPT = [
   "SUMMARY:",
   "- <short durable point in the user's language>",
   "Use 2-5 short `- ` bullets when durable state exists. One bullet per durable point.",
-  "Make the user's current request or goal obvious from TITLE and SUMMARY.",
-  "If TITLE already names that request clearly, first bullet should add non-duplicate state instead of restating it.",
+  "Keep TITLE and SUMMARY focused on durable state. Do not use lead-ins like `\uC694\uCCAD:`, `Request:`, `\uC0AC\uC6A9\uC790\uB294`, `The user`, or `\uD604\uC7AC \uBAA9\uD45C\uB294`.",
   "Keep bullets concrete and scannable, not chatty.",
   "Describe current state rather than retelling events in chronological order.",
   "Keep the summary self-compacting: when it starts to sprawl, rewrite older still-relevant context more densely instead of letting the text grow turn after turn.",
@@ -373,54 +372,6 @@ function extractAssistantText(message) {
   return message.content.filter((part) => part.type === "text").map((part) => part.text).join("\n").trim();
 }
 
-// src/summary-request.ts
-var REQUEST_PREFIX = /^(?:요청|Request):\s*/u;
-var REQUEST_CONTEXT = /^(?:(?:요청|Request):|(?:사용자(?:는|가)?|User|The user)(?:\s|$)|(?:현재\s*)?목표(?:는|:))/iu;
-var REQUEST_INTENT = /(하려고 한다|원한다|요청(?:했다|함)?|asked to|wants to|needs to|goal is|trying to)/iu;
-var REQUEST_MAX_LENGTH = 72;
-var COMPARE_MAX_LENGTH = 200;
-var GENERIC_TOKENS = /* @__PURE__ */ new Set(["current", "goal", "the", "user", "\uC0AC\uC6A9\uC790", "\uD604\uC7AC", "\uBAA9\uD45C"]);
-function extractLatestUserRequest(recentText) {
-  const lines = recentText.split(/\r?\n/);
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim();
-    if (!line.startsWith("User: ")) continue;
-    const request = normalizeTitle(line.slice(6), REQUEST_MAX_LENGTH);
-    if (request) return request;
-  }
-}
-function buildRequestLine(request) {
-  return `${/[가-힣]/u.test(request) ? "\uC694\uCCAD" : "Request"}: ${request}`;
-}
-function normalizeToken(token) {
-  return token.toLowerCase().replace(/(?:에서|으로|에게|까지|부터|처럼|보다|은|는|이|가|을|를|에|로|와|과|도|만|의)$/u, "");
-}
-function tokenize(text) {
-  return [
-    ...new Set(
-      (normalizeTitle(text.replace(REQUEST_PREFIX, ""), COMPARE_MAX_LENGTH) ?? "").split(/[^\p{L}\p{N}]+/u).map(normalizeToken).filter((token) => token.length > 1 && !GENERIC_TOKENS.has(token))
-    )
-  ];
-}
-function overlapsEnough(left, right) {
-  const leftTokens = new Set(tokenize(left));
-  const rightTokens = tokenize(right);
-  const shared = rightTokens.filter((token) => leftTokens.has(token)).length;
-  return shared >= 2 && shared / Math.min(leftTokens.size, rightTokens.length) >= 0.6;
-}
-function isRequestSummaryLine(line, request) {
-  return REQUEST_PREFIX.test(line) || overlapsEnough(line, request) && (REQUEST_CONTEXT.test(line) || REQUEST_INTENT.test(line));
-}
-function ensureOverviewRequestLine(overview, recentText) {
-  if (overview.summary.length === 0) return overview;
-  const request = extractLatestUserRequest(recentText);
-  if (!request) return overview;
-  const requestLines = overview.summary.filter((line) => isRequestSummaryLine(line, request));
-  const otherLines = overview.summary.filter((line) => !isRequestSummaryLine(line, request));
-  const summary = overlapsEnough(overview.title, request) && otherLines.length > 0 ? otherLines : requestLines.length > 0 ? [requestLines[0], ...otherLines] : [buildRequestLine(request), ...overview.summary].slice(0, 5);
-  return summary.length === overview.summary.length && summary.every((line, index) => line === overview.summary[index]) ? overview : { ...overview, summary };
-}
-
 // src/summarize.ts
 async function resolveSessionOverview(options) {
   if (!options.model || !options.recentText.trim()) return void 0;
@@ -433,8 +384,7 @@ async function resolveSessionOverview(options) {
       { apiKey: auth.apiKey, headers: auth.headers }
     );
     if (message.stopReason === "error") return void 0;
-    const overview = parseOverviewResponse(extractAssistantText(message));
-    return overview ? ensureOverviewRequestLine(overview, options.recentText) : void 0;
+    return parseOverviewResponse(extractAssistantText(message));
   } catch {
     return void 0;
   }
