@@ -5,12 +5,13 @@ import { stubContext, stubRuntime } from "./helpers.js";
 describe("overview restoration fallbacks", () => {
 	beforeEach(() => clearOverviewUi(new Set(), stubContext()));
 
-	it("falls back to runtime or session title when no overview exists", () => {
+	it("falls back to runtime or session title without showing empty overview ui", () => {
 		const runtime = stubRuntime("런타임 제목");
 		const ctx = stubContext([], { sessionManager: { ...stubContext().sessionManager, getSessionName: () => "세션 제목" } });
 		restoreOverview(runtime, ctx);
 		expect(runtime.setSessionName).not.toHaveBeenCalled();
-		expect(ctx.overlay.component?.render(48).join("\n")).toContain("런타임 제목");
+		expect(ctx.ui.custom).not.toHaveBeenCalled();
+		expect(ctx.ui.setWidget).not.toHaveBeenCalled();
 		expect(ctx.ui.setTitle).toHaveBeenCalledWith("π - 런타임 제목");
 	});
 

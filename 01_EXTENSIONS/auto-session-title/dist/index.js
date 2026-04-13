@@ -3,7 +3,6 @@ var OVERVIEW_CUSTOM_TYPE = "auto-session-title.overview";
 var OVERVIEW_OVERLAY_WIDTH = 80;
 
 // src/overview-entry.ts
-var OVERVIEW_SKELETON_LINES = ["\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591", "\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591"];
 function normalizeSummaryLine(line) {
   if (typeof line !== "string") return void 0;
   const collapsed = line.replace(/^[-*•]\s*/, "").replace(/\s+/g, " ").trim();
@@ -34,7 +33,7 @@ function resolveOverviewTitle(overview, fallbackTitle) {
   return overview?.title || fallbackTitle || "\uC138\uC158 \uC694\uC57D";
 }
 function buildOverviewBodyLines(overview) {
-  return overview?.summary.length ? overview.summary : OVERVIEW_SKELETON_LINES;
+  return overview?.summary ?? [];
 }
 
 // src/overlay-component.ts
@@ -115,6 +114,233 @@ function getOverviewOverlayOptions(termWidth) {
     return { row: 1, col: resolveOverlayCol(termWidth, width), width, nonCapturing: true };
   }
   return { anchor: "top-right", width: OVERVIEW_OVERLAY_WIDTH, margin: { top: 1, right: 0 }, nonCapturing: true };
+}
+
+// src/overview-preview.ts
+function previewOverviewFromInput(_ctx, _text) {
+  return false;
+}
+
+// src/summarize.ts
+import { completeSimple } from "@mariozechner/pi-ai";
+
+// src/summary-prompt.ts
+function formatPreviousSummary(summary) {
+  return summary.length > 0 ? summary.join("\n\n") : "(none)";
+}
+function buildCompactionNote(previous) {
+  const length = previous?.summary.join("\n\n").length ?? 0;
+  return length > 700 ? `The stored summary is already ${length} characters long. Compact it noticeably while preserving only durable context.` : "Keep the summary compact enough to scan quickly, and compress older context instead of appending more prose each turn.";
+}
+function buildOverviewPrompt(recentText, previous) {
+  const previousSection = previous ? [`Previous title: ${previous.title}`, "Previous summary (older versions may contain legacy line breaks; rewrite them into cohesive prose if needed):", formatPreviousSummary(previous.summary)].join("\n") : "Previous summary: (none)";
+  return [
+    "Update the previous summary into a cohesive current-state brief, not a turn-by-turn log.",
+    "Write it for quick future recall by the user, so prioritize what they would want to remember when resuming later.",
+    "Preserve still-relevant goals, decisions, constraints, blockers, and completed work unless recent updates clearly replace them.",
+    "Fold recent updates into the current state instead of listing events in order.",
+    "Ignore routine greetings, acknowledgements, current-branch checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially changed the task.",
+    "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
+    "Prefer one dense paragraph. Use multiple paragraphs only for clearly separate concerns.",
+    "If there is still no durable task or state yet, do not invent one; leave SUMMARY blank.",
+    buildCompactionNote(previous),
+    previousSection,
+    "",
+    "Recent conversation updates below are raw chronological notes, not the desired output format:",
+    recentText
+  ].join("\n");
+}
+
+// src/title.ts
+var DEFAULT_MAX_TITLE_LENGTH = 48;
+function collapseWhitespace(text) {
+  return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function stripMarkdownNoise(text) {
+  return text.replace(/```[\s\S]*?```/g, " ").replace(/`+/g, " ");
+}
+function stripListPrefix(text) {
+  return text.replace(/^(?:[#>*-]+|\d+[.)])\s+/, "");
+}
+function stripWrappingPunctuation(text) {
+  return text.replace(/^["'`“”‘’([{]+/, "").replace(/["'`“”‘’)}\].,!?;:]+$/u, "").trim();
+}
+function truncateTitle(text, maxLength = DEFAULT_MAX_TITLE_LENGTH) {
+  if (text.length <= maxLength) return text;
+  const clipped = text.slice(0, maxLength + 1);
+  const lastWordBreak = Math.max(
+    clipped.lastIndexOf(" "),
+    clipped.lastIndexOf(":"),
+    clipped.lastIndexOf("-"),
+    clipped.lastIndexOf("\u2014"),
+    clipped.lastIndexOf(",")
+  );
+  const cutoff = lastWordBreak >= Math.floor(maxLength * 0.6) ? lastWordBreak : maxLength;
+  return `${clipped.slice(0, cutoff).trimEnd()}\u2026`;
+}
+function normalizeTitle(text, maxLength = DEFAULT_MAX_TITLE_LENGTH) {
+  const cleaned = collapseWhitespace(stripListPrefix(stripMarkdownNoise(text)));
+  if (!cleaned) return void 0;
+  const title = truncateTitle(stripWrappingPunctuation(cleaned), maxLength).trim();
+  return title || void 0;
+}
+function buildTerminalTitle(sessionName) {
+  return `\u03C0 - ${sessionName}`;
+}
+
+// src/summary-normalize.ts
+var EMPTY_STATE_PATTERNS = [
+  /실질적인 작업.*정해지지 않/u,
+  /인사 외에 이어갈 과제가 없/u,
+  /목표와 맥락부터 새로 정/u,
+  /no (?:substantial|concrete) task/i,
+  /nothing to resume/i,
+  /start .*goal and context/i
+];
+function isEmptyStateLine(line) {
+  return EMPTY_STATE_PATTERNS.some((pattern) => pattern.test(line));
+}
+function normalizeOverviewSummary(overview) {
+  const summary = overview.summary.filter((line) => !isEmptyStateLine(line));
+  return summary.length === overview.summary.length ? overview : { ...overview, summary };
+}
+
+// src/summary-types.ts
+var MAX_SECTION_LENGTH = 240;
+var MAX_TRANSCRIPT_LENGTH = 12e3;
+var OVERVIEW_PROMPT = [
+  "You maintain coding-session overviews.",
+  "Treat the previous summary as the baseline state for the session.",
+  "Carry forward still-relevant context unless recent updates clearly resolve or replace it.",
+  "Do not overwrite the whole summary with only the latest turn.",
+  "Write this as a quick reference for a user resuming the session later.",
+  "Prioritize durable context: the current goal, important decisions, meaningful progress, blockers, and the next important step.",
+  "Ignore routine greetings, acknowledgements, branch-name checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially change the task.",
+  "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
+  "Return exactly this format:",
+  "TITLE: <short title in the user's language, max 8 words, naming the durable task rather than chatty or incidental details>",
+  "SUMMARY: <a cohesive current-state summary in the user's language>",
+  "Prefer one dense paragraph; use a second short paragraph only when it materially improves clarity.",
+  "Describe the current state rather than retelling events in chronological order.",
+  "Merge related updates into prose instead of writing one line per turn or tool call.",
+  "Keep the summary self-compacting: when it starts to sprawl, rewrite older still-relevant context more densely instead of letting the text grow turn after turn.",
+  "Do not drop still-relevant context merely to make the summary shorter.",
+  "Do not use markdown bullets, numbered lists, code fences, or extra sections."
+].join(" ");
+
+// src/summary-text.ts
+function collapseWhitespace2(text) {
+  return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function truncateSection(text, maxLength = MAX_SECTION_LENGTH) {
+  const collapsed = collapseWhitespace2(text);
+  return collapsed.length <= maxLength ? collapsed : `${collapsed.slice(0, maxLength - 1).trimEnd()}\u2026`;
+}
+function isRoutineSocialText(text) {
+  return /^(?:안녕(?:하세요)?|반가워(?:요)?|hi|hello|hey|thanks|thank you|고마워(?:요)?|감사(?:합니다|해요)?)$/iu.test(collapseWhitespace2(text).replace(/[.!?~]+$/u, ""));
+}
+function extractTextContent(content) {
+  if (typeof content === "string") return [content];
+  return Array.isArray(content) ? content.filter((part) => Boolean(part) && typeof part === "object" && part.type === "text" && typeof part.text === "string").map((part) => part.text) : [];
+}
+function normalizeTextContent(content) {
+  return collapseWhitespace2(extractTextContent(content).join(" "));
+}
+function hasBashCommandArguments(value) {
+  if (!value || typeof value !== "object" || !("command" in value)) return false;
+  return typeof value.command === "string";
+}
+function isRoutineBashCommand(argumentsValue) {
+  if (!hasBashCommandArguments(argumentsValue)) return false;
+  return /^(?:cd\s+.+?\s*&&\s*)*git\s+branch\s+--show-current$/iu.test(collapseWhitespace2(argumentsValue.command));
+}
+function extractToolCalls(content) {
+  if (!Array.isArray(content)) return [];
+  return content.filter((part) => Boolean(part) && typeof part === "object" && part.type === "toolCall" && typeof part.name === "string").map((part) => {
+    const skipResult = part.name === "bash" && isRoutineBashCommand(part.arguments);
+    return {
+      toolName: part.name,
+      skipResult,
+      line: skipResult ? "" : truncateSection(`Tool ${part.name}: ${typeof part.arguments === "object" && part.arguments !== null ? JSON.stringify(part.arguments) : "{}"}`, 180)
+    };
+  });
+}
+function clipTranscript(text) {
+  if (text.length <= MAX_TRANSCRIPT_LENGTH) return text;
+  const head = text.slice(0, 4e3).trimEnd();
+  const tail = text.slice(-(MAX_TRANSCRIPT_LENGTH - head.length - 32)).trimStart();
+  return `${head}
+
+[... earlier context omitted ...]
+
+${tail}`;
+}
+function extractSummaryLines(raw) {
+  return raw.split(/\r?\n\s*\r?\n+/).map((paragraph) => paragraph.split(/\r?\n/).map((line) => line.replace(/^(?:[-*•]+|\d+[.)])\s*/, "").trim()).filter(Boolean).join(" ")).map(collapseWhitespace2).filter(Boolean);
+}
+function buildConversationTranscript(entries) {
+  const lines = [];
+  const pendingSkippedResults = {};
+  for (const entry of entries) {
+    if ((entry.type === "compaction" || entry.type === "branch_summary") && entry.summary) lines.push(`${entry.type === "compaction" ? "Compaction" : "Branch"} summary: ${truncateSection(entry.summary)}`);
+    if (entry.type !== "message" || !entry.message?.role) continue;
+    if (entry.message.role === "user") {
+      const text = normalizeTextContent(entry.message.content);
+      if (text && !isRoutineSocialText(text)) lines.push(`User: ${truncateSection(text)}`);
+    }
+    if (entry.message.role === "assistant") {
+      const text = normalizeTextContent(entry.message.content);
+      if (text && !isRoutineSocialText(text)) lines.push(`Assistant: ${truncateSection(text)}`);
+      for (const toolCall of extractToolCalls(entry.message.content)) {
+        if (toolCall.skipResult) pendingSkippedResults[toolCall.toolName] = (pendingSkippedResults[toolCall.toolName] ?? 0) + 1;
+        if (toolCall.line) lines.push(toolCall.line);
+      }
+    }
+    if (entry.message.role === "toolResult") {
+      const toolName = entry.message.toolName || "tool";
+      if ((pendingSkippedResults[toolName] ?? 0) > 0) {
+        pendingSkippedResults[toolName] -= 1;
+        continue;
+      }
+      const text = truncateSection(normalizeTextContent(entry.message.content), 180);
+      if (text) lines.push(`Tool result ${toolName}: ${text}`);
+    }
+  }
+  return clipTranscript(lines.join("\n"));
+}
+
+// src/summary-parse.ts
+function parseOverviewResponse(response) {
+  const lines = response.split(/\r?\n/);
+  const titleLine = lines.find((line) => /^TITLE\s*:/i.test(line));
+  const title = normalizeTitle(titleLine?.replace(/^TITLE\s*:/i, "").trim() ?? "");
+  if (!title) return void 0;
+  const summaryIndex = lines.findIndex((line) => /^SUMMARY\s*:/i.test(line));
+  const inlineSummary = summaryIndex >= 0 ? lines[summaryIndex].replace(/^SUMMARY\s*:/i, "").trim() : "";
+  const remainder = summaryIndex >= 0 ? lines.slice(summaryIndex + 1) : lines.filter((line) => !/^TITLE\s*:/i.test(line));
+  const summary = extractSummaryLines([...inlineSummary ? [inlineSummary] : [], ...remainder].join("\n"));
+  if (summaryIndex < 0 && summary.length === 0) return void 0;
+  return normalizeOverviewSummary({ title, summary });
+}
+function extractAssistantText(message) {
+  return message.content.filter((part) => part.type === "text").map((part) => part.text).join("\n").trim();
+}
+
+// src/summarize.ts
+async function resolveSessionOverview(options) {
+  if (!options.model || !options.recentText.trim()) return void 0;
+  const auth = await options.modelRegistry.getApiKeyAndHeaders(options.model);
+  if (!auth.ok) return void 0;
+  try {
+    const message = await completeSimple(
+      options.model,
+      { systemPrompt: OVERVIEW_PROMPT, messages: [{ role: "user", content: buildOverviewPrompt(options.recentText, options.previous), timestamp: Date.now() }] },
+      { apiKey: auth.apiKey, headers: auth.headers }
+    );
+    return message.stopReason === "error" ? void 0 : parseOverviewResponse(extractAssistantText(message));
+  } catch {
+    return void 0;
+  }
 }
 
 // src/overlay-state.ts
@@ -211,9 +437,6 @@ function syncOverviewStatus(ctx, overview, fallbackTitle) {
   activeOverviewStatusKeys = nextKeys;
   return true;
 }
-function hasActiveOverviewStatus() {
-  return activeOverviewStatusKeys.length > 0;
-}
 function clearOverviewStatus(ctx) {
   if (!ctx) {
     activeOverviewStatusKeys = [];
@@ -226,11 +449,8 @@ function clearOverviewStatus(ctx) {
 // src/overview-ui.ts
 function syncOverviewUi(ctx, overview, fallbackTitle) {
   if (!ctx.hasUI) return;
+  if (!overview?.summary.length) return clearOverviewDisplay(ctx);
   if (syncOverviewStatus(ctx, overview, fallbackTitle)) {
-    clearOverlayState();
-    return;
-  }
-  if (!overview && !fallbackTitle) {
     clearOverlayState();
     return;
   }
@@ -239,263 +459,6 @@ function syncOverviewUi(ctx, overview, fallbackTitle) {
 function clearOverviewDisplay(ctx) {
   clearOverviewStatus(ctx);
   clearOverlayState();
-}
-
-// src/title.ts
-var DEFAULT_MAX_TITLE_LENGTH = 48;
-function collapseWhitespace(text) {
-  return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
-}
-function stripMarkdownNoise(text) {
-  return text.replace(/```[\s\S]*?```/g, " ").replace(/`+/g, " ");
-}
-function stripListPrefix(text) {
-  return text.replace(/^(?:[#>*-]+|\d+[.)])\s+/, "");
-}
-function stripWrappingPunctuation(text) {
-  return text.replace(/^["'`“”‘’([{]+/, "").replace(/["'`“”‘’)}\].,!?;:]+$/u, "").trim();
-}
-function truncateTitle(text, maxLength = DEFAULT_MAX_TITLE_LENGTH) {
-  if (text.length <= maxLength) return text;
-  const clipped = text.slice(0, maxLength + 1);
-  const lastWordBreak = Math.max(
-    clipped.lastIndexOf(" "),
-    clipped.lastIndexOf(":"),
-    clipped.lastIndexOf("-"),
-    clipped.lastIndexOf("\u2014"),
-    clipped.lastIndexOf(",")
-  );
-  const cutoff = lastWordBreak >= Math.floor(maxLength * 0.6) ? lastWordBreak : maxLength;
-  return `${clipped.slice(0, cutoff).trimEnd()}\u2026`;
-}
-function normalizeTitle(text, maxLength = DEFAULT_MAX_TITLE_LENGTH) {
-  const cleaned = collapseWhitespace(stripListPrefix(stripMarkdownNoise(text)));
-  if (!cleaned) return void 0;
-  const title = truncateTitle(stripWrappingPunctuation(cleaned), maxLength).trim();
-  return title || void 0;
-}
-function buildTerminalTitle(sessionName) {
-  return `\u03C0 - ${sessionName}`;
-}
-
-// src/overview-preview.ts
-function collapseWhitespace2(text) {
-  return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
-}
-function isRoutineInput(text) {
-  return /^(?:안녕(?:하세요)?|반가워(?:요)?|hi|hello|hey|thanks|thank you|고마워(?:요)?|감사(?:합니다|해요)?)$/iu.test(text.replace(/[.!?~]+$/u, ""));
-}
-function stripRequestNoise(text) {
-  let request = collapseWhitespace2(text).replace(/^(?:그리고|근데|그런데|야|이거|저기|아|어|음|and then|also)\s+/iu, "");
-  if (!/^hello(?:,\s*|\s+)world\b/iu.test(request) && /^(?:hello|hi|hey)(?:\s+there)?\b/iu.test(request) && (/(?:,\s*)?please[.!?~]*$/iu.test(request) || /(?:can|could|would|will)\s+you\b/iu.test(request))) {
-    request = request.replace(/^(?:hello|hi|hey)(?:\s+there)?(?:[,!.:;-]\s*|\s+)/iu, "");
-  }
-  return request.replace(/^please\s+/iu, "").replace(/^(?:can|could|would|will)\s+you(?:\s+please)?\s+/iu, "").replace(/[.!?~]+$/u, "").replace(/([가-힣]+?)해(?:줘|주세요|봐|줄래)\s*$/u, "$1").replace(/(?:해줘|해주세요|해봐|시켜봐|봐줘|보여줘|고쳐줘|넣어줘|바꿔줘|만들어줘|해줄래|부탁해|(?:,\s*)?please)\s*$/iu, "").replace(/[.!?~]+$/u, "").trim();
-}
-function buildPreviewSummary(_title, _request) {
-  return [];
-}
-function buildPreviewOverview(text) {
-  const request = stripRequestNoise(text.replace(/```[\s\S]*?```/g, " ").split(/\r?\n\s*\r?\n/).find((part) => part.trim()) ?? "");
-  if (!request || request.startsWith("/") || request.startsWith("!") || isRoutineInput(request)) return void 0;
-  const title = normalizeTitle(request);
-  return title ? { title, summary: buildPreviewSummary(title, request) } : void 0;
-}
-function syncTitle(ctx, title) {
-  if (ctx.hasUI) ctx.ui.setTitle(buildTerminalTitle(title));
-}
-function previewOverviewFromInput(ctx, text) {
-  if (findLatestOverview(ctx.sessionManager.getBranch())) return false;
-  const preview = buildPreviewOverview(text);
-  if (!preview) return false;
-  syncOverviewUi(ctx, preview, preview.title);
-  syncTitle(ctx, preview.title);
-  return true;
-}
-
-// src/summarize.ts
-import { completeSimple } from "@mariozechner/pi-ai";
-
-// src/summary-prompt.ts
-function formatPreviousSummary(summary) {
-  return summary.length > 0 ? summary.join("\n\n") : "(none)";
-}
-function buildCompactionNote(previous) {
-  const length = previous?.summary.join("\n\n").length ?? 0;
-  return length > 700 ? `The stored summary is already ${length} characters long. Compact it noticeably while preserving only durable context.` : "Keep the summary compact enough to scan quickly, and compress older context instead of appending more prose each turn.";
-}
-function buildOverviewPrompt(recentText, previous) {
-  const previousSection = previous ? [`Previous title: ${previous.title}`, "Previous summary (older versions may contain legacy line breaks; rewrite them into cohesive prose if needed):", formatPreviousSummary(previous.summary)].join("\n") : "Previous summary: (none)";
-  return [
-    "Update the previous summary into a cohesive current-state brief, not a turn-by-turn log.",
-    "Write it for quick future recall by the user, so prioritize what they would want to remember when resuming later.",
-    "Preserve still-relevant goals, decisions, constraints, blockers, and completed work unless recent updates clearly replace them.",
-    "Fold recent updates into the current state instead of listing events in order.",
-    "Ignore routine greetings, acknowledgements, current-branch checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially changed the task.",
-    "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
-    "Prefer one dense paragraph. Use multiple paragraphs only for clearly separate concerns.",
-    "If there is still no durable task or state yet, do not invent one; leave SUMMARY blank.",
-    buildCompactionNote(previous),
-    previousSection,
-    "",
-    "Recent conversation updates below are raw chronological notes, not the desired output format:",
-    recentText
-  ].join("\n");
-}
-
-// src/summary-normalize.ts
-var EMPTY_STATE_PATTERNS = [
-  /실질적인 작업.*정해지지 않/u,
-  /인사 외에 이어갈 과제가 없/u,
-  /목표와 맥락부터 새로 정/u,
-  /no (?:substantial|concrete) task/i,
-  /nothing to resume/i,
-  /start .*goal and context/i
-];
-function isEmptyStateLine(line) {
-  return EMPTY_STATE_PATTERNS.some((pattern) => pattern.test(line));
-}
-function normalizeOverviewSummary(overview) {
-  const summary = overview.summary.filter((line) => !isEmptyStateLine(line));
-  return summary.length === overview.summary.length ? overview : { ...overview, summary };
-}
-
-// src/summary-types.ts
-var MAX_SECTION_LENGTH = 240;
-var MAX_TRANSCRIPT_LENGTH = 12e3;
-var OVERVIEW_PROMPT = [
-  "You maintain coding-session overviews.",
-  "Treat the previous summary as the baseline state for the session.",
-  "Carry forward still-relevant context unless recent updates clearly resolve or replace it.",
-  "Do not overwrite the whole summary with only the latest turn.",
-  "Write this as a quick reference for a user resuming the session later.",
-  "Prioritize durable context: the current goal, important decisions, meaningful progress, blockers, and the next important step.",
-  "Ignore routine greetings, acknowledgements, branch-name checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially change the task.",
-  "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
-  "Return exactly this format:",
-  "TITLE: <short title in the user's language, max 8 words, naming the durable task rather than chatty or incidental details>",
-  "SUMMARY: <a cohesive current-state summary in the user's language>",
-  "Prefer one dense paragraph; use a second short paragraph only when it materially improves clarity.",
-  "Describe the current state rather than retelling events in chronological order.",
-  "Merge related updates into prose instead of writing one line per turn or tool call.",
-  "Keep the summary self-compacting: when it starts to sprawl, rewrite older still-relevant context more densely instead of letting the text grow turn after turn.",
-  "Do not drop still-relevant context merely to make the summary shorter.",
-  "Do not use markdown bullets, numbered lists, code fences, or extra sections."
-].join(" ");
-
-// src/summary-text.ts
-function collapseWhitespace3(text) {
-  return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
-}
-function truncateSection(text, maxLength = MAX_SECTION_LENGTH) {
-  const collapsed = collapseWhitespace3(text);
-  return collapsed.length <= maxLength ? collapsed : `${collapsed.slice(0, maxLength - 1).trimEnd()}\u2026`;
-}
-function isRoutineSocialText(text) {
-  return /^(?:안녕(?:하세요)?|반가워(?:요)?|hi|hello|hey|thanks|thank you|고마워(?:요)?|감사(?:합니다|해요)?)$/iu.test(collapseWhitespace3(text).replace(/[.!?~]+$/u, ""));
-}
-function extractTextContent(content) {
-  if (typeof content === "string") return [content];
-  return Array.isArray(content) ? content.filter((part) => Boolean(part) && typeof part === "object" && part.type === "text" && typeof part.text === "string").map((part) => part.text) : [];
-}
-function normalizeTextContent(content) {
-  return collapseWhitespace3(extractTextContent(content).join(" "));
-}
-function hasBashCommandArguments(value) {
-  if (!value || typeof value !== "object" || !("command" in value)) return false;
-  return typeof value.command === "string";
-}
-function isRoutineBashCommand(argumentsValue) {
-  if (!hasBashCommandArguments(argumentsValue)) return false;
-  return /^(?:cd\s+.+?\s*&&\s*)*git\s+branch\s+--show-current$/iu.test(collapseWhitespace3(argumentsValue.command));
-}
-function extractToolCalls(content) {
-  if (!Array.isArray(content)) return [];
-  return content.filter((part) => Boolean(part) && typeof part === "object" && part.type === "toolCall" && typeof part.name === "string").map((part) => {
-    const skipResult = part.name === "bash" && isRoutineBashCommand(part.arguments);
-    return {
-      toolName: part.name,
-      skipResult,
-      line: skipResult ? "" : truncateSection(`Tool ${part.name}: ${typeof part.arguments === "object" && part.arguments !== null ? JSON.stringify(part.arguments) : "{}"}`, 180)
-    };
-  });
-}
-function clipTranscript(text) {
-  if (text.length <= MAX_TRANSCRIPT_LENGTH) return text;
-  const head = text.slice(0, 4e3).trimEnd();
-  const tail = text.slice(-(MAX_TRANSCRIPT_LENGTH - head.length - 32)).trimStart();
-  return `${head}
-
-[... earlier context omitted ...]
-
-${tail}`;
-}
-function extractSummaryLines(raw) {
-  return raw.split(/\r?\n\s*\r?\n+/).map((paragraph) => paragraph.split(/\r?\n/).map((line) => line.replace(/^(?:[-*•]+|\d+[.)])\s*/, "").trim()).filter(Boolean).join(" ")).map(collapseWhitespace3).filter(Boolean);
-}
-function buildConversationTranscript(entries) {
-  const lines = [];
-  const pendingSkippedResults = {};
-  for (const entry of entries) {
-    if ((entry.type === "compaction" || entry.type === "branch_summary") && entry.summary) lines.push(`${entry.type === "compaction" ? "Compaction" : "Branch"} summary: ${truncateSection(entry.summary)}`);
-    if (entry.type !== "message" || !entry.message?.role) continue;
-    if (entry.message.role === "user") {
-      const text = normalizeTextContent(entry.message.content);
-      if (text && !isRoutineSocialText(text)) lines.push(`User: ${truncateSection(text)}`);
-    }
-    if (entry.message.role === "assistant") {
-      const text = normalizeTextContent(entry.message.content);
-      if (text && !isRoutineSocialText(text)) lines.push(`Assistant: ${truncateSection(text)}`);
-      for (const toolCall of extractToolCalls(entry.message.content)) {
-        if (toolCall.skipResult) pendingSkippedResults[toolCall.toolName] = (pendingSkippedResults[toolCall.toolName] ?? 0) + 1;
-        if (toolCall.line) lines.push(toolCall.line);
-      }
-    }
-    if (entry.message.role === "toolResult") {
-      const toolName = entry.message.toolName || "tool";
-      if ((pendingSkippedResults[toolName] ?? 0) > 0) {
-        pendingSkippedResults[toolName] -= 1;
-        continue;
-      }
-      const text = truncateSection(normalizeTextContent(entry.message.content), 180);
-      if (text) lines.push(`Tool result ${toolName}: ${text}`);
-    }
-  }
-  return clipTranscript(lines.join("\n"));
-}
-
-// src/summary-parse.ts
-function parseOverviewResponse(response) {
-  const lines = response.split(/\r?\n/);
-  const titleLine = lines.find((line) => /^TITLE\s*:/i.test(line));
-  const title = normalizeTitle(titleLine?.replace(/^TITLE\s*:/i, "").trim() ?? "");
-  if (!title) return void 0;
-  const summaryIndex = lines.findIndex((line) => /^SUMMARY\s*:/i.test(line));
-  const inlineSummary = summaryIndex >= 0 ? lines[summaryIndex].replace(/^SUMMARY\s*:/i, "").trim() : "";
-  const remainder = summaryIndex >= 0 ? lines.slice(summaryIndex + 1) : lines.filter((line) => !/^TITLE\s*:/i.test(line));
-  const summary = extractSummaryLines([...inlineSummary ? [inlineSummary] : [], ...remainder].join("\n"));
-  if (summaryIndex < 0 && summary.length === 0) return void 0;
-  return normalizeOverviewSummary({ title, summary });
-}
-function extractAssistantText(message) {
-  return message.content.filter((part) => part.type === "text").map((part) => part.text).join("\n").trim();
-}
-
-// src/summarize.ts
-async function resolveSessionOverview(options) {
-  if (!options.model || !options.recentText.trim()) return void 0;
-  const auth = await options.modelRegistry.getApiKeyAndHeaders(options.model);
-  if (!auth.ok) return void 0;
-  try {
-    const message = await completeSimple(
-      options.model,
-      { systemPrompt: OVERVIEW_PROMPT, messages: [{ role: "user", content: buildOverviewPrompt(options.recentText, options.previous), timestamp: Date.now() }] },
-      { apiKey: auth.apiKey, headers: auth.headers }
-    );
-    return message.stopReason === "error" ? void 0 : parseOverviewResponse(extractAssistantText(message));
-  } catch {
-    return void 0;
-  }
 }
 
 // src/overview-sync.ts
@@ -555,13 +518,8 @@ async function refreshOverview(inFlight2, runtime2, ctx) {
     }
     const next = await resolveSessionOverview({ recentText, previous, model: ctx.model, modelRegistry: ctx.modelRegistry });
     if (!isActive(runtime2)) return;
-    if (!next) return !previous && hasActiveOverviewStatus() ? void 0 : restoreOverview(runtime2, ctx);
-    if (next.summary.length === 0) {
-      if (previous) return restoreOverview(runtime2, ctx);
-      if (hasActiveOverviewStatus()) return;
-      syncOverviewUi(ctx, next, next.title);
-      return syncTerminalTitle(ctx, next.title);
-    }
+    if (!next) return restoreOverview(runtime2, ctx);
+    if (next.summary.length === 0) return previous ? restoreOverview(runtime2, ctx) : clearOverviewDisplay(ctx);
     if (shouldPersist(previous, next, coveredThroughEntryId)) runtime2.appendEntry(OVERVIEW_CUSTOM_TYPE, toStoredOverview(next, coveredThroughEntryId));
     if (runtime2.getSessionName() !== next.title) runtime2.setSessionName(next.title);
     syncOverviewUi(ctx, next, next.title);

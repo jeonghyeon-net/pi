@@ -29,6 +29,10 @@ describe("buildFooterOverview", () => {
 		const fd = mockFooterData({ getExtensionStatuses: () => new Map([["auto-session-title.overview.summary.x", "무시"], ["auto-session-title.overview.summary.2", "  "], ["auto-session-title.overview.summary.0", "첫 줄"]]) });
 		expect(buildFooterOverview(fd)).toEqual({ title: undefined, summary: ["첫 줄"] });
 	});
+	it("hides title-only overview status", () => {
+		const fd = mockFooterData({ getExtensionStatuses: () => new Map([["auto-session-title.overview.title", "제목만"]]) });
+		expect(buildFooterOverview(fd)).toBeUndefined();
+	});
 });
 
 describe("buildFooterOverviewLines", () => {
@@ -41,8 +45,8 @@ describe("buildFooterOverviewLines", () => {
 			"    감싸져야 한다",
 		]);
 	});
-	it("renders skeleton lines when overview has only a title", () => {
-		expect(buildFooterOverviewLines(mockTheme(), { title: "세션 제목", summary: [] }, 20)).toEqual([" 세션 제목", " ░░░░░░░░░░░░░░░░", " ░░░░░░░░░░"]);
+	it("renders only title if called with an empty summary directly", () => {
+		expect(buildFooterOverviewLines(mockTheme(), { title: "세션 제목", summary: [] }, 20)).toEqual([" 세션 제목"]);
 	});
 	it("falls back to plain wrapping when width is narrower than bullet prefix", () => {
 		expect(buildFooterOverviewLines(mockTheme(), { summary: ["abc"] }, 2)).toEqual(["ab", "c"]);

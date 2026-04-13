@@ -4,11 +4,8 @@ import type { OverviewContext, SessionOverview } from "./overview-types.js";
 
 export function syncOverviewUi(ctx: OverviewContext, overview?: SessionOverview, fallbackTitle?: string): void {
 	if (!ctx.hasUI) return;
+	if (!overview?.summary.length) return clearOverviewDisplay(ctx);
 	if (syncOverviewStatus(ctx, overview, fallbackTitle)) {
-		clearOverlayState();
-		return;
-	}
-	if (!overview && !fallbackTitle) {
 		clearOverlayState();
 		return;
 	}

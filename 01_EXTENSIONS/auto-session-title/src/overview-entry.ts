@@ -1,8 +1,6 @@
 import { OVERVIEW_CUSTOM_TYPE } from "./overview-constants.js";
 import type { OverviewEntry, PersistedOverview, SessionOverview, StoredOverview } from "./overview-types.js";
 
-const OVERVIEW_SKELETON_LINES = ["░░░░░░░░░░░░░░", "░░░░░░░░"];
-
 function normalizeSummaryLine(line: unknown): string | undefined {
 	if (typeof line !== "string") return undefined;
 	const collapsed = line.replace(/^[-*•]\s*/, "").replace(/\s+/g, " ").trim();
@@ -40,7 +38,7 @@ export function resolveOverviewTitle(overview?: SessionOverview, fallbackTitle?:
 }
 
 export function buildOverviewBodyLines(overview?: SessionOverview): string[] {
-	return overview?.summary.length ? overview.summary : OVERVIEW_SKELETON_LINES;
+	return overview?.summary ?? [];
 }
 
 export function buildOverviewWidgetText(overview?: SessionOverview, fallbackTitle?: string): string {

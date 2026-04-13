@@ -75,7 +75,6 @@ var OVERVIEW_TITLE_KEY = "auto-session-title.overview.title";
 var OVERVIEW_SUMMARY_PREFIX = "auto-session-title.overview.summary.";
 var OVERVIEW_BULLET_PREFIX = "  \u2022 ";
 var OVERVIEW_CONTINUATION_PREFIX = "    ";
-var OVERVIEW_SKELETON_CHAR = "\u2591";
 function parseOverviewIndex(key) {
   const index = Number.parseInt(key.slice(OVERVIEW_SUMMARY_PREFIX.length), 10);
   return Number.isInteger(index) && index >= 0 ? index : void 0;
@@ -88,12 +87,6 @@ function wrapOverviewLine(prefix, text, width) {
   const bodyWidth = Math.max(1, width - visibleWidth(prefix));
   return wrapTextWithAnsi(text, bodyWidth).map((line, index) => `${index === 0 ? prefix : OVERVIEW_CONTINUATION_PREFIX}${line}`);
 }
-function buildOverviewSkeletonLines(theme, width) {
-  const lineWidth = Math.max(4, width - 1);
-  const long = truncateToWidth(` ${OVERVIEW_SKELETON_CHAR.repeat(Math.min(16, lineWidth))}`, width);
-  const short = truncateToWidth(` ${OVERVIEW_SKELETON_CHAR.repeat(Math.min(10, lineWidth))}`, width);
-  return [theme.fg("dim", long), theme.fg("dim", short)];
-}
 function isOverviewStatusKey(key) {
   return key === OVERVIEW_TITLE_KEY || key.startsWith(OVERVIEW_SUMMARY_PREFIX);
 }
@@ -101,12 +94,11 @@ function buildFooterOverview(footerData) {
   const statuses = footerData.getExtensionStatuses();
   const title = sanitizeStatusText(statuses.get(OVERVIEW_TITLE_KEY) ?? "") || void 0;
   const summary = Array.from(statuses.entries()).filter(([key]) => key.startsWith(OVERVIEW_SUMMARY_PREFIX)).map(([key, text]) => [parseOverviewIndex(key), sanitizeStatusText(text)]).filter((entry) => typeof entry[0] === "number" && Boolean(entry[1])).sort((left, right) => left[0] - right[0]).map(([, text]) => text);
-  return title || summary.length > 0 ? { title, summary } : void 0;
+  return summary.length > 0 ? { title, summary } : void 0;
 }
 function buildFooterOverviewLines(theme, overview, width) {
   const lines = [];
   if (overview.title) lines.push(...wrapFooterText(theme.bold(theme.fg("accent", ` ${overview.title}`)), width));
-  if (overview.summary.length === 0) return [...lines, ...buildOverviewSkeletonLines(theme, width)];
   for (const line of overview.summary) lines.push(...wrapOverviewLine(theme.fg("dim", OVERVIEW_BULLET_PREFIX), line, width));
   return lines;
 }

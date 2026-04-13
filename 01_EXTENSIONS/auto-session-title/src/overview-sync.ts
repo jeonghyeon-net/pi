@@ -2,7 +2,6 @@ import { buildConversationTranscript, resolveSessionOverview } from "./summarize
 import { OVERVIEW_CUSTOM_TYPE } from "./overview-constants.js";
 import { buildTerminalTitle } from "./title.js";
 import { findLatestOverview, getEntriesSince } from "./overview-entry.js";
-import { hasActiveOverviewStatus } from "./overview-status.js";
 import { clearOverviewDisplay, syncOverviewUi } from "./overview-ui.js";
 import type { OverviewContext, OverviewEntry, OverviewRuntime, PersistedOverview, SessionOverview, StoredOverview } from "./overview-types.js";
 
@@ -71,13 +70,8 @@ export async function refreshOverview(inFlight: Set<string>, runtime: OverviewRu
 		}
 		const next = await resolveSessionOverview({ recentText, previous, model: ctx.model, modelRegistry: ctx.modelRegistry });
 		if (!isActive(runtime)) return;
-		if (!next) return !previous && hasActiveOverviewStatus() ? undefined : restoreOverview(runtime, ctx);
-		if (next.summary.length === 0) {
-			if (previous) return restoreOverview(runtime, ctx);
-			if (hasActiveOverviewStatus()) return;
-			syncOverviewUi(ctx, next, next.title);
-			return syncTerminalTitle(ctx, next.title);
-		}
+		if (!next) return restoreOverview(runtime, ctx);
+		if (next.summary.length === 0) return previous ? restoreOverview(runtime, ctx) : clearOverviewDisplay(ctx);
 		if (shouldPersist(previous, next, coveredThroughEntryId)) runtime.appendEntry(OVERVIEW_CUSTOM_TYPE, toStoredOverview(next, coveredThroughEntryId));
 		if (runtime.getSessionName() !== next.title) runtime.setSessionName(next.title);
 		syncOverviewUi(ctx, next, next.title);

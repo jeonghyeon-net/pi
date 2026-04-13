@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearOverviewUi, previewOverviewFromInput, refreshOverview } from "../src/handlers.js";
+import { clearOverviewUi, refreshOverview } from "../src/handlers.js";
 import { stubContext, stubRuntime } from "./helpers.js";
 
 const { resolveSessionOverview } = vi.hoisted(() => ({ resolveSessionOverview: vi.fn() }));
@@ -11,29 +11,19 @@ describe("refreshOverview empty-state output", () => {
 		clearOverviewUi(new Set(), stubContext());
 	});
 
-	it("keeps preview skeleton when summarization returns nothing", async () => {
-		const setStatus = vi.fn();
-		const ctx = stubContext([{ type: "message", id: "1", message: { role: "user", content: [{ type: "text", text: "README.md에 설명 추가해줘" }] } }]);
-		ctx.ui = { ...ctx.ui, setStatus };
-		expect(previewOverviewFromInput(ctx, "README.md에 설명 추가해줘")).toBe(true);
-		setStatus.mockClear();
-		resolveSessionOverview.mockResolvedValue(undefined);
-		await refreshOverview(new Set(), stubRuntime(), ctx);
-		expect(setStatus).not.toHaveBeenCalled();
-	});
-
-	it("shows title-only skeleton when no previous overview exists", async () => {
+	it("keeps the overview blank when summarization returns nothing or empty state", async () => {
 		const setStatus = vi.fn();
 		const ctx = stubContext([{ type: "message", id: "1", message: { role: "assistant", content: [{ type: "text", text: "잡담만 있음" }] } }]);
 		ctx.ui = { ...ctx.ui, setStatus };
-		resolveSessionOverview.mockResolvedValue({ title: "대화 시작 상태", summary: [] });
 		const runtime = stubRuntime();
+		resolveSessionOverview.mockResolvedValue(undefined);
 		await refreshOverview(new Set(), runtime, ctx);
-		expect(setStatus).toHaveBeenCalledWith("auto-session-title.overview.title", "대화 시작 상태");
-		expect(setStatus).not.toHaveBeenCalledWith("auto-session-title.overview.summary.0", expect.anything());
+		resolveSessionOverview.mockResolvedValue({ title: "대화 시작 상태", summary: [] });
+		await refreshOverview(new Set(), runtime, ctx);
+		expect(setStatus).not.toHaveBeenCalled();
 		expect(runtime.appendEntry).not.toHaveBeenCalled();
 		expect(runtime.setSessionName).not.toHaveBeenCalled();
-		expect(ctx.ui.setTitle).toHaveBeenCalledWith("π - 대화 시작 상태");
+		expect(ctx.ui.setTitle).not.toHaveBeenCalled();
 	});
 
 	it("restores previous overview instead of replacing it with empty-state output", async () => {

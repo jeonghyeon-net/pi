@@ -24,10 +24,6 @@ export function syncOverviewStatus(ctx: OverviewContext, overview?: SessionOverv
 	return true;
 }
 
-export function hasActiveOverviewStatus(): boolean {
-	return activeOverviewStatusKeys.length > 0;
-}
-
 export function clearOverviewStatus(ctx?: OverviewContext): void {
 	if (!ctx) {
 		activeOverviewStatusKeys = [];
