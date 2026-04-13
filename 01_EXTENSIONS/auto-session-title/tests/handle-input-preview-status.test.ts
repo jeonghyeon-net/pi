@@ -13,9 +13,9 @@ describe("previewOverviewFromInput footer status", () => {
 		expect(ctx.ui.custom).not.toHaveBeenCalled();
 		expect(ctx.ui.setWidget).not.toHaveBeenCalled();
 		expect(setStatus).toHaveBeenCalledWith("auto-session-title.overview.title", "README.md에 설명 추가");
-		expect(setStatus).toHaveBeenCalledWith("auto-session-title.overview.summary.0", "현재 README.md에 설명 추가 요청 처리 중이다.");
+		expect(setStatus).not.toHaveBeenCalledWith("auto-session-title.overview.summary.0", expect.anything());
 		clearOverviewUi(new Set(), ctx);
 		expect(setStatus).toHaveBeenCalledWith("auto-session-title.overview.title", undefined);
-		expect(setStatus).toHaveBeenCalledWith("auto-session-title.overview.summary.0", undefined);
+		expect(setStatus).not.toHaveBeenCalledWith("auto-session-title.overview.summary.0", undefined);
 	});
 });

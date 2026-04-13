@@ -41,6 +41,9 @@ describe("buildFooterOverviewLines", () => {
 			"    감싸져야 한다",
 		]);
 	});
+	it("renders skeleton lines when overview has only a title", () => {
+		expect(buildFooterOverviewLines(mockTheme(), { title: "세션 제목", summary: [] }, 20)).toEqual([" 세션 제목", " ░░░░░░░░░░░░░░░░", " ░░░░░░░░░░"]);
+	});
 	it("falls back to plain wrapping when width is narrower than bullet prefix", () => {
 		expect(buildFooterOverviewLines(mockTheme(), { summary: ["abc"] }, 2)).toEqual(["ab", "c"]);
 	});

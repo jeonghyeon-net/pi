@@ -3,6 +3,7 @@ var OVERVIEW_CUSTOM_TYPE = "auto-session-title.overview";
 var OVERVIEW_OVERLAY_WIDTH = 80;
 
 // src/overview-entry.ts
+var OVERVIEW_SKELETON_LINES = ["\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591", "\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591"];
 function normalizeSummaryLine(line) {
   if (typeof line !== "string") return void 0;
   const collapsed = line.replace(/^[-*•]\s*/, "").replace(/\s+/g, " ").trim();
@@ -33,7 +34,7 @@ function resolveOverviewTitle(overview, fallbackTitle) {
   return overview?.title || fallbackTitle || "\uC138\uC158 \uC694\uC57D";
 }
 function buildOverviewBodyLines(overview) {
-  return overview?.summary ?? [];
+  return overview?.summary.length ? overview.summary : OVERVIEW_SKELETON_LINES;
 }
 
 // src/overlay-component.ts
@@ -210,6 +211,9 @@ function syncOverviewStatus(ctx, overview, fallbackTitle) {
   activeOverviewStatusKeys = nextKeys;
   return true;
 }
+function hasActiveOverviewStatus() {
+  return activeOverviewStatusKeys.length > 0;
+}
 function clearOverviewStatus(ctx) {
   if (!ctx) {
     activeOverviewStatusKeys = [];
@@ -288,15 +292,8 @@ function stripRequestNoise(text) {
   }
   return request.replace(/^please\s+/iu, "").replace(/^(?:can|could|would|will)\s+you(?:\s+please)?\s+/iu, "").replace(/[.!?~]+$/u, "").replace(/([가-힣]+?)해(?:줘|주세요|봐|줄래)\s*$/u, "$1").replace(/(?:해줘|해주세요|해봐|시켜봐|봐줘|보여줘|고쳐줘|넣어줘|바꿔줘|만들어줘|해줄래|부탁해|(?:,\s*)?please)\s*$/iu, "").replace(/[.!?~]+$/u, "").trim();
 }
-function resolvePreviewLanguage(request) {
-  if (/[가-힣]/u.test(request) && /(?:해줘|해주세요|해봐|시켜봐|봐줘|보여줘|고쳐줘|넣어줘|바꿔줘|만들어줘|추가|정리|설명|수정)/u.test(request)) return "ko";
-  const hangul = request.match(/[가-힣]/gu)?.length ?? 0, latin = request.match(/[A-Za-z]/g)?.length ?? 0;
-  if (hangul === 0) return "en";
-  if (latin === 0) return "ko";
-  return latin > hangul ? "en" : "ko";
-}
-function buildPreviewSummary(title, request) {
-  return resolvePreviewLanguage(request) === "ko" ? [`\uD604\uC7AC ${title} \uC694\uCCAD \uCC98\uB9AC \uC911\uC774\uB2E4.`] : [`Working on: ${title}.`];
+function buildPreviewSummary(_title, _request) {
+  return [];
 }
 function buildPreviewOverview(text) {
   const request = stripRequestNoise(text.replace(/```[\s\S]*?```/g, " ").split(/\r?\n\s*\r?\n/).find((part) => part.trim()) ?? "");
@@ -337,12 +334,30 @@ function buildOverviewPrompt(recentText, previous) {
     "Ignore routine greetings, acknowledgements, current-branch checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially changed the task.",
     "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
     "Prefer one dense paragraph. Use multiple paragraphs only for clearly separate concerns.",
+    "If there is still no durable task or state yet, do not invent one; leave SUMMARY blank.",
     buildCompactionNote(previous),
     previousSection,
     "",
     "Recent conversation updates below are raw chronological notes, not the desired output format:",
     recentText
   ].join("\n");
+}
+
+// src/summary-normalize.ts
+var EMPTY_STATE_PATTERNS = [
+  /실질적인 작업.*정해지지 않/u,
+  /인사 외에 이어갈 과제가 없/u,
+  /목표와 맥락부터 새로 정/u,
+  /no (?:substantial|concrete) task/i,
+  /nothing to resume/i,
+  /start .*goal and context/i
+];
+function isEmptyStateLine(line) {
+  return EMPTY_STATE_PATTERNS.some((pattern) => pattern.test(line));
+}
+function normalizeOverviewSummary(overview) {
+  const summary = overview.summary.filter((line) => !isEmptyStateLine(line));
+  return summary.length === overview.summary.length ? overview : { ...overview, summary };
 }
 
 // src/summary-types.ts
@@ -459,7 +474,8 @@ function parseOverviewResponse(response) {
   const inlineSummary = summaryIndex >= 0 ? lines[summaryIndex].replace(/^SUMMARY\s*:/i, "").trim() : "";
   const remainder = summaryIndex >= 0 ? lines.slice(summaryIndex + 1) : lines.filter((line) => !/^TITLE\s*:/i.test(line));
   const summary = extractSummaryLines([...inlineSummary ? [inlineSummary] : [], ...remainder].join("\n"));
-  return summary.length > 0 ? { title, summary } : void 0;
+  if (summaryIndex < 0 && summary.length === 0) return void 0;
+  return normalizeOverviewSummary({ title, summary });
 }
 function extractAssistantText(message) {
   return message.content.filter((part) => part.type === "text").map((part) => part.text).join("\n").trim();
@@ -539,7 +555,13 @@ async function refreshOverview(inFlight2, runtime2, ctx) {
     }
     const next = await resolveSessionOverview({ recentText, previous, model: ctx.model, modelRegistry: ctx.modelRegistry });
     if (!isActive(runtime2)) return;
-    if (!next) return restoreOverview(runtime2, ctx);
+    if (!next) return !previous && hasActiveOverviewStatus() ? void 0 : restoreOverview(runtime2, ctx);
+    if (next.summary.length === 0) {
+      if (previous) return restoreOverview(runtime2, ctx);
+      if (hasActiveOverviewStatus()) return;
+      syncOverviewUi(ctx, next, next.title);
+      return syncTerminalTitle(ctx, next.title);
+    }
     if (shouldPersist(previous, next, coveredThroughEntryId)) runtime2.appendEntry(OVERVIEW_CUSTOM_TYPE, toStoredOverview(next, coveredThroughEntryId));
     if (runtime2.getSessionName() !== next.title) runtime2.setSessionName(next.title);
     syncOverviewUi(ctx, next, next.title);

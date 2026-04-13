@@ -26,16 +26,8 @@ function stripRequestNoise(text: string): string {
 		.trim();
 }
 
-function resolvePreviewLanguage(request: string): "ko" | "en" {
-	if (/[가-힣]/u.test(request) && /(?:해줘|해주세요|해봐|시켜봐|봐줘|보여줘|고쳐줘|넣어줘|바꿔줘|만들어줘|추가|정리|설명|수정)/u.test(request)) return "ko";
-	const hangul = request.match(/[가-힣]/gu)?.length ?? 0, latin = request.match(/[A-Za-z]/g)?.length ?? 0;
-	if (hangul === 0) return "en";
-	if (latin === 0) return "ko";
-	return latin > hangul ? "en" : "ko";
-}
-
-function buildPreviewSummary(title: string, request: string): string[] {
-	return resolvePreviewLanguage(request) === "ko" ? [`현재 ${title} 요청 처리 중이다.`] : [`Working on: ${title}.`];
+function buildPreviewSummary(_title: string, _request: string): string[] {
+	return [];
 }
 
 function buildPreviewOverview(text: string): SessionOverview | undefined {

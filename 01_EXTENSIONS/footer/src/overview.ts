@@ -6,6 +6,7 @@ const OVERVIEW_TITLE_KEY = "auto-session-title.overview.title";
 const OVERVIEW_SUMMARY_PREFIX = "auto-session-title.overview.summary.";
 const OVERVIEW_BULLET_PREFIX = "  • ";
 const OVERVIEW_CONTINUATION_PREFIX = "    ";
+const OVERVIEW_SKELETON_CHAR = "░";
 
 function parseOverviewIndex(key: string): number | undefined {
 	const index = Number.parseInt(key.slice(OVERVIEW_SUMMARY_PREFIX.length), 10);
@@ -20,6 +21,13 @@ function wrapOverviewLine(prefix: string, text: string, width: number): string[]
 	if (width <= visibleWidth(prefix)) return wrapFooterText(text, width);
 	const bodyWidth = Math.max(1, width - visibleWidth(prefix));
 	return wrapTextWithAnsi(text, bodyWidth).map((line, index) => `${index === 0 ? prefix : OVERVIEW_CONTINUATION_PREFIX}${line}`);
+}
+
+function buildOverviewSkeletonLines(theme: FooterTheme, width: number): string[] {
+	const lineWidth = Math.max(4, width - 1);
+	const long = truncateToWidth(` ${OVERVIEW_SKELETON_CHAR.repeat(Math.min(16, lineWidth))}`, width);
+	const short = truncateToWidth(` ${OVERVIEW_SKELETON_CHAR.repeat(Math.min(10, lineWidth))}`, width);
+	return [theme.fg("dim", long), theme.fg("dim", short)];
 }
 
 export function isOverviewStatusKey(key: string): boolean {
@@ -41,6 +49,7 @@ export function buildFooterOverview(footerData: FooterStatusData): FooterOvervie
 export function buildFooterOverviewLines(theme: FooterTheme, overview: FooterOverview, width: number): string[] {
 	const lines: string[] = [];
 	if (overview.title) lines.push(...wrapFooterText(theme.bold(theme.fg("accent", ` ${overview.title}`)), width));
+	if (overview.summary.length === 0) return [...lines, ...buildOverviewSkeletonLines(theme, width)];
 	for (const line of overview.summary) lines.push(...wrapOverviewLine(theme.fg("dim", OVERVIEW_BULLET_PREFIX), line, width));
 	return lines;
 }

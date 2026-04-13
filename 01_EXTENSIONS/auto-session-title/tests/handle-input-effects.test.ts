@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearOverviewUi, refreshOverview, restoreOverview } from "../src/handlers.js";
+import { clearOverviewUi, previewOverviewFromInput, refreshOverview, restoreOverview } from "../src/handlers.js";
 import { stubContext, stubRuntime } from "./helpers.js";
 
 const { resolveSessionOverview } = vi.hoisted(() => ({ resolveSessionOverview: vi.fn() }));
@@ -34,6 +34,17 @@ describe("refreshOverview effects", () => {
 		expect(setStatus).toHaveBeenCalledWith("auto-session-title.overview.title", "새 제목");
 		expect(setStatus).toHaveBeenCalledWith("auto-session-title.overview.summary.0", "남길 한 줄");
 		expect(setStatus).toHaveBeenCalledWith("auto-session-title.overview.summary.1", undefined);
+	});
+
+	it("keeps preview skeleton when generated summary still has no durable content", async () => {
+		const setStatus = vi.fn();
+		const ctx = stubContext([{ type: "message", id: "1", message: { role: "user", content: [{ type: "text", text: "야" }] } }]);
+		ctx.ui = { ...ctx.ui, setStatus };
+		expect(previewOverviewFromInput(ctx, "README.md에 설명 추가해줘")).toBe(true);
+		setStatus.mockClear();
+		resolveSessionOverview.mockResolvedValue({ title: "대화 시작 상태", summary: [] });
+		await refreshOverview(new Set(), stubRuntime(), ctx);
+		expect(setStatus).not.toHaveBeenCalled();
 	});
 
 	it("advances the checkpoint even when the visible overview stays the same", async () => {

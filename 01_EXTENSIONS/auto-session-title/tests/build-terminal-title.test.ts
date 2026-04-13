@@ -10,9 +10,9 @@ describe("buildOverviewWidgetText", () => {
 		].join("\n"));
 	});
 
-	it("renders only the title when there is no summary yet", () => {
-		expect(buildOverviewWidgetText(undefined, "임시 제목")).toBe("임시 제목");
-		expect(buildOverviewWidgetText()).toBe("세션 요약");
+	it("renders skeleton lines when there is no summary yet", () => {
+		expect(buildOverviewWidgetText(undefined, "임시 제목")).toBe(["임시 제목", "░░░░░░░░░░░░░░", "░░░░░░░░"].join("\n"));
+		expect(buildOverviewWidgetText()).toBe(["세션 요약", "░░░░░░░░░░░░░░", "░░░░░░░░"].join("\n"));
 	});
 });
 

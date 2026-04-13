@@ -21,6 +21,7 @@ export function buildOverviewPrompt(recentText: string, previous?: { title: stri
 		"Ignore routine greetings, acknowledgements, current-branch checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially changed the task.",
 		"If the recent updates contain no durable change, keep the previous title and summary unchanged.",
 		"Prefer one dense paragraph. Use multiple paragraphs only for clearly separate concerns.",
+		"If there is still no durable task or state yet, do not invent one; leave SUMMARY blank.",
 		buildCompactionNote(previous),
 		previousSection,
 		"",

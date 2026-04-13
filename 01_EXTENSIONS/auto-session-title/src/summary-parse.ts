@@ -1,5 +1,6 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { normalizeTitle } from "./title.js";
+import { normalizeOverviewSummary } from "./summary-normalize.js";
 import { extractSummaryLines } from "./summary-text.js";
 import type { SessionOverview } from "./overview-types.js";
 
@@ -12,7 +13,8 @@ export function parseOverviewResponse(response: string): SessionOverview | undef
 	const inlineSummary = summaryIndex >= 0 ? lines[summaryIndex]!.replace(/^SUMMARY\s*:/i, "").trim() : "";
 	const remainder = summaryIndex >= 0 ? lines.slice(summaryIndex + 1) : lines.filter((line) => !/^TITLE\s*:/i.test(line));
 	const summary = extractSummaryLines([...(inlineSummary ? [inlineSummary] : []), ...remainder].join("\n"));
-	return summary.length > 0 ? { title, summary } : undefined;
+	if (summaryIndex < 0 && summary.length === 0) return undefined;
+	return normalizeOverviewSummary({ title, summary });
 }
 
 export function extractAssistantText(message: AssistantMessage): string {

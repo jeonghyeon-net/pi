@@ -9,6 +9,7 @@ describe("buildOverviewPrompt", () => {
 		expect(prompt).toContain("Preserve still-relevant goals, decisions, constraints, blockers, and completed work");
 		expect(prompt).toContain("Ignore routine greetings, acknowledgements, current-branch checks");
 		expect(prompt).toContain("If the recent updates contain no durable change, keep the previous title and summary unchanged.");
+		expect(prompt).toContain("leave SUMMARY blank");
 		expect(prompt).toContain("Keep the summary compact enough to scan quickly");
 		expect(prompt).toContain("Previous title: 기존 제목");
 		expect(prompt).toContain("rewrite them into cohesive prose if needed");
@@ -45,9 +46,14 @@ describe("parseOverviewResponse", () => {
 		expect(parsed?.summary).toEqual(["x".repeat(300)]);
 	});
 
-	it("returns undefined when title or summary is missing", () => {
+	it("returns undefined when title is missing and keeps explicit blank summaries as skeleton-ready state", () => {
 		expect(parseOverviewResponse("SUMMARY:\n요약만 있음")).toBeUndefined();
 		expect(parseOverviewResponse("TITLE: 제목만")).toBeUndefined();
+		expect(parseOverviewResponse("TITLE: 제목\nSUMMARY:")).toEqual({ title: "제목", summary: [] });
 		expect(parseOverviewResponse("TITLE: 제목\n현재 상태를 한 줄로 정리")).toEqual({ title: "제목", summary: ["현재 상태를 한 줄로 정리"] });
+	});
+
+	it("drops generic empty-session prose so ui can keep skeleton state", () => {
+		expect(parseOverviewResponse("TITLE: 대화 시작 상태\nSUMMARY: 아직 실질적인 작업, 목표, 결정사항, 제약, 진행 상황, 막힌 점이 정해지지 않았다. 현재 세션에는 인사 외에 이어갈 과제가 없으므로, 다음에 재개할 때는 무엇을 하려는지 목표와 맥락부터 새로 정하면 된다.")).toEqual({ title: "대화 시작 상태", summary: [] });
 	});
 });
