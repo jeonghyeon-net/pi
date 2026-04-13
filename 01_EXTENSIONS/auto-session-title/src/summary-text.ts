@@ -1,5 +1,6 @@
 import { MAX_SECTION_LENGTH, MAX_TRANSCRIPT_LENGTH } from "./summary-types.js";
 import type { OverviewEntry } from "./overview-types.js";
+export { extractSummaryLines } from "./summary-lines.js";
 
 interface ToolCallNote {
 	line: string;
@@ -58,10 +59,6 @@ function clipTranscript(text: string): string {
 	const head = text.slice(0, 4000).trimEnd();
 	const tail = text.slice(-(MAX_TRANSCRIPT_LENGTH - head.length - 32)).trimStart();
 	return `${head}\n\n[... earlier context omitted ...]\n\n${tail}`;
-}
-
-export function extractSummaryLines(raw: string): string[] {
-	return raw.split(/\r?\n\s*\r?\n+/).map((paragraph) => paragraph.split(/\r?\n/).map((line) => line.replace(/^(?:[-*•]+|\d+[.)])\s*/, "").trim()).filter(Boolean).join(" ")).map(collapseWhitespace).filter(Boolean);
 }
 
 export function buildConversationTranscript(entries: OverviewEntry[]): string {

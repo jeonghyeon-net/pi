@@ -133,7 +133,7 @@ function buildCompactionNote(previous) {
   return length > 700 ? `The stored summary is already ${length} characters long. Compact it noticeably while preserving only durable context.` : "Keep the summary compact enough to scan quickly, and compress older context instead of appending more prose each turn.";
 }
 function buildOverviewPrompt(recentText, previous) {
-  const previousSection = previous ? [`Previous title: ${previous.title}`, "Previous summary (older versions may contain legacy line breaks; rewrite them into cohesive prose if needed):", formatPreviousSummary(previous.summary)].join("\n") : "Previous summary: (none)";
+  const previousSection = previous ? [`Previous title: ${previous.title}`, "Previous summary (older versions may contain legacy line breaks; rewrite them into clean scan-friendly bullets if needed):", formatPreviousSummary(previous.summary)].join("\n") : "Previous summary: (none)";
   return [
     "Update the previous summary into a cohesive current-state brief, not a turn-by-turn log.",
     "Write it for quick future recall by the user, so prioritize what they would want to remember when resuming later.",
@@ -141,7 +141,8 @@ function buildOverviewPrompt(recentText, previous) {
     "Fold recent updates into the current state instead of listing events in order.",
     "Ignore routine greetings, acknowledgements, current-branch checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially changed the task.",
     "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
-    "Prefer one dense paragraph. Use multiple paragraphs only for clearly separate concerns.",
+    "Write SUMMARY as 2-4 short `- ` bullets when durable state exists. One bullet per durable point.",
+    "Keep bullets scan-friendly: prioritize current goal, finished work, constraints, blockers, or next important step. Do not collapse everything into one long paragraph.",
     "If there is still no durable task or state yet, do not invent one; leave SUMMARY blank.",
     buildCompactionNote(previous),
     previousSection,
@@ -197,12 +198,23 @@ var EMPTY_STATE_PATTERNS = [
   /nothing to resume/i,
   /start .*goal and context/i
 ];
+var LONG_SUMMARY_LINE = 160;
+var SENTENCE_SPLIT = /(?<=[.!?])\s+/u;
 function isEmptyStateLine(line) {
   return EMPTY_STATE_PATTERNS.some((pattern) => pattern.test(line));
 }
+function splitLongSummaryLine(line) {
+  if (line.length < LONG_SUMMARY_LINE) return [line];
+  const sentences = line.split(SENTENCE_SPLIT).map((part) => part.trim()).filter(Boolean);
+  if (sentences.length < 2) return [line];
+  const summary = sentences.slice(0, 4);
+  if (sentences.length > 4) summary[3] = `${summary[3]} ${sentences.slice(4).join(" ")}`;
+  return summary;
+}
 function normalizeOverviewSummary(overview) {
   const summary = overview.summary.filter((line) => !isEmptyStateLine(line));
-  return summary.length === overview.summary.length ? overview : { ...overview, summary };
+  const splitSummary = summary.length === 1 ? splitLongSummaryLine(summary[0]) : summary;
+  return splitSummary.length === overview.summary.length && splitSummary.every((line, index) => line === overview.summary[index]) ? overview : { ...overview, summary: splitSummary };
 }
 
 // src/summary-types.ts
@@ -219,32 +231,66 @@ var OVERVIEW_PROMPT = [
   "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
   "Return exactly this format:",
   "TITLE: <short title in the user's language, max 8 words, naming the durable task rather than chatty or incidental details>",
-  "SUMMARY: <a cohesive current-state summary in the user's language>",
-  "Prefer one dense paragraph; use a second short paragraph only when it materially improves clarity.",
-  "Describe the current state rather than retelling events in chronological order.",
-  "Merge related updates into prose instead of writing one line per turn or tool call.",
+  "SUMMARY:",
+  "- <short durable point in the user's language>",
+  "Use 2-4 short `- ` bullets when durable state exists. One bullet per durable point.",
+  "Keep bullets concrete and scannable, not chatty.",
+  "Describe current state rather than retelling events in chronological order.",
   "Keep the summary self-compacting: when it starts to sprawl, rewrite older still-relevant context more densely instead of letting the text grow turn after turn.",
   "Do not drop still-relevant context merely to make the summary shorter.",
-  "Do not use markdown bullets, numbered lists, code fences, or extra sections."
+  "Do not use numbered lists, code fences, or extra sections."
 ].join(" ");
 
-// src/summary-text.ts
+// src/summary-lines.ts
+var BULLET_PREFIX = /^(?:[-*•]+|\d+[.)])\s*/u;
 function collapseWhitespace2(text) {
   return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
 }
+function normalizeSummaryLine2(line) {
+  return line.replace(BULLET_PREFIX, "").trim();
+}
+function extractSummaryLines(raw) {
+  const summary = [];
+  let current = [];
+  const flush = () => {
+    const text = collapseWhitespace2(current.join(" "));
+    if (text) summary.push(text);
+    current = [];
+  };
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flush();
+      continue;
+    }
+    if (BULLET_PREFIX.test(trimmed)) {
+      flush();
+      current = [normalizeSummaryLine2(trimmed)];
+      continue;
+    }
+    current.push(trimmed);
+  }
+  flush();
+  return summary;
+}
+
+// src/summary-text.ts
+function collapseWhitespace3(text) {
+  return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+}
 function truncateSection(text, maxLength = MAX_SECTION_LENGTH) {
-  const collapsed = collapseWhitespace2(text);
+  const collapsed = collapseWhitespace3(text);
   return collapsed.length <= maxLength ? collapsed : `${collapsed.slice(0, maxLength - 1).trimEnd()}\u2026`;
 }
 function isRoutineSocialText(text) {
-  return /^(?:안녕(?:하세요)?|반가워(?:요)?|hi|hello|hey|thanks|thank you|고마워(?:요)?|감사(?:합니다|해요)?)$/iu.test(collapseWhitespace2(text).replace(/[.!?~]+$/u, ""));
+  return /^(?:안녕(?:하세요)?|반가워(?:요)?|hi|hello|hey|thanks|thank you|고마워(?:요)?|감사(?:합니다|해요)?)$/iu.test(collapseWhitespace3(text).replace(/[.!?~]+$/u, ""));
 }
 function extractTextContent(content) {
   if (typeof content === "string") return [content];
   return Array.isArray(content) ? content.filter((part) => Boolean(part) && typeof part === "object" && part.type === "text" && typeof part.text === "string").map((part) => part.text) : [];
 }
 function normalizeTextContent(content) {
-  return collapseWhitespace2(extractTextContent(content).join(" "));
+  return collapseWhitespace3(extractTextContent(content).join(" "));
 }
 function hasBashCommandArguments(value) {
   if (!value || typeof value !== "object" || !("command" in value)) return false;
@@ -252,7 +298,7 @@ function hasBashCommandArguments(value) {
 }
 function isRoutineBashCommand(argumentsValue) {
   if (!hasBashCommandArguments(argumentsValue)) return false;
-  return /^(?:cd\s+.+?\s*&&\s*)*git\s+branch\s+--show-current$/iu.test(collapseWhitespace2(argumentsValue.command));
+  return /^(?:cd\s+.+?\s*&&\s*)*git\s+branch\s+--show-current$/iu.test(collapseWhitespace3(argumentsValue.command));
 }
 function extractToolCalls(content) {
   if (!Array.isArray(content)) return [];
@@ -274,9 +320,6 @@ function clipTranscript(text) {
 [... earlier context omitted ...]
 
 ${tail}`;
-}
-function extractSummaryLines(raw) {
-  return raw.split(/\r?\n\s*\r?\n+/).map((paragraph) => paragraph.split(/\r?\n/).map((line) => line.replace(/^(?:[-*•]+|\d+[.)])\s*/, "").trim()).filter(Boolean).join(" ")).map(collapseWhitespace2).filter(Boolean);
 }
 function buildConversationTranscript(entries) {
   const lines = [];

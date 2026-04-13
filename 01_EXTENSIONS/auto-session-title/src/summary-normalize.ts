@@ -8,12 +8,26 @@ const EMPTY_STATE_PATTERNS = [
 	/nothing to resume/i,
 	/start .*goal and context/i,
 ];
+const LONG_SUMMARY_LINE = 160;
+const SENTENCE_SPLIT = /(?<=[.!?])\s+/u;
 
 function isEmptyStateLine(line: string): boolean {
 	return EMPTY_STATE_PATTERNS.some((pattern) => pattern.test(line));
 }
 
+function splitLongSummaryLine(line: string): string[] {
+	if (line.length < LONG_SUMMARY_LINE) return [line];
+	const sentences = line.split(SENTENCE_SPLIT).map((part) => part.trim()).filter(Boolean);
+	if (sentences.length < 2) return [line];
+	const summary = sentences.slice(0, 4);
+	if (sentences.length > 4) summary[3] = `${summary[3]} ${sentences.slice(4).join(" ")}`;
+	return summary;
+}
+
 export function normalizeOverviewSummary(overview: SessionOverview): SessionOverview {
 	const summary = overview.summary.filter((line) => !isEmptyStateLine(line));
-	return summary.length === overview.summary.length ? overview : { ...overview, summary };
+	const splitSummary = summary.length === 1 ? splitLongSummaryLine(summary[0]!) : summary;
+	return splitSummary.length === overview.summary.length && splitSummary.every((line, index) => line === overview.summary[index])
+		? overview
+		: { ...overview, summary: splitSummary };
 }

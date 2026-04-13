@@ -13,13 +13,14 @@ export const OVERVIEW_PROMPT = [
 	"If the recent updates contain no durable change, keep the previous title and summary unchanged.",
 	"Return exactly this format:",
 	"TITLE: <short title in the user's language, max 8 words, naming the durable task rather than chatty or incidental details>",
-	"SUMMARY: <a cohesive current-state summary in the user's language>",
-	"Prefer one dense paragraph; use a second short paragraph only when it materially improves clarity.",
-	"Describe the current state rather than retelling events in chronological order.",
-	"Merge related updates into prose instead of writing one line per turn or tool call.",
+	"SUMMARY:",
+	"- <short durable point in the user's language>",
+	"Use 2-4 short `- ` bullets when durable state exists. One bullet per durable point.",
+	"Keep bullets concrete and scannable, not chatty.",
+	"Describe current state rather than retelling events in chronological order.",
 	"Keep the summary self-compacting: when it starts to sprawl, rewrite older still-relevant context more densely instead of letting the text grow turn after turn.",
 	"Do not drop still-relevant context merely to make the summary shorter.",
-	"Do not use markdown bullets, numbered lists, code fences, or extra sections.",
+	"Do not use numbered lists, code fences, or extra sections.",
 ].join(" ");
 
 export type SessionOverviewModel = Model<Api>;

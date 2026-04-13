@@ -11,7 +11,7 @@ function buildCompactionNote(previous?: { summary: readonly string[] }): string 
 
 export function buildOverviewPrompt(recentText: string, previous?: { title: string; summary: readonly string[] }): string {
 	const previousSection = previous
-		? [`Previous title: ${previous.title}`, "Previous summary (older versions may contain legacy line breaks; rewrite them into cohesive prose if needed):", formatPreviousSummary(previous.summary)].join("\n")
+		? [`Previous title: ${previous.title}`, "Previous summary (older versions may contain legacy line breaks; rewrite them into clean scan-friendly bullets if needed):", formatPreviousSummary(previous.summary)].join("\n")
 		: "Previous summary: (none)";
 	return [
 		"Update the previous summary into a cohesive current-state brief, not a turn-by-turn log.",
@@ -20,7 +20,8 @@ export function buildOverviewPrompt(recentText: string, previous?: { title: stri
 		"Fold recent updates into the current state instead of listing events in order.",
 		"Ignore routine greetings, acknowledgements, current-branch checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially changed the task.",
 		"If the recent updates contain no durable change, keep the previous title and summary unchanged.",
-		"Prefer one dense paragraph. Use multiple paragraphs only for clearly separate concerns.",
+		"Write SUMMARY as 2-4 short `- ` bullets when durable state exists. One bullet per durable point.",
+		"Keep bullets scan-friendly: prioritize current goal, finished work, constraints, blockers, or next important step. Do not collapse everything into one long paragraph.",
 		"If there is still no durable task or state yet, do not invent one; leave SUMMARY blank.",
 		buildCompactionNote(previous),
 		previousSection,
