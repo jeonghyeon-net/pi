@@ -637,7 +637,9 @@ function clearOverviewUi(inFlight2, ctx) {
 }
 
 // src/hooks.ts
+var OVERVIEW_REFRESH_QUEUED_EVENT = "auto-session-title:overview-refresh-queued";
 var inFlight = /* @__PURE__ */ new Set();
+var pendingRefreshes = /* @__PURE__ */ new Map();
 var activeSessionId;
 var lifecycleId = 0;
 var viewId = 0;
@@ -654,7 +656,17 @@ function runtime(ctx, getSessionName, setSessionName, appendEntry) {
   return { getSessionName, setSessionName, appendEntry, isActive: () => activeSessionId === sessionId && lifecycleId === currentLifecycleId && viewId === currentViewId };
 }
 function queueRefresh(getSessionName, setSessionName, appendEntry, ctx) {
-  void refreshOverview(inFlight, runtime(ctx, getSessionName, setSessionName, appendEntry), ctx).catch(() => void 0);
+  const sessionId = ctx.sessionManager.getSessionId();
+  const pending = pendingRefreshes.get(sessionId);
+  if (pending) {
+    void refreshOverview(inFlight, runtime(ctx, getSessionName, setSessionName, appendEntry), ctx).catch(() => void 0);
+    return pending;
+  }
+  const next = refreshOverview(inFlight, runtime(ctx, getSessionName, setSessionName, appendEntry), ctx).catch(() => void 0).finally(() => {
+    if (pendingRefreshes.get(sessionId) === next) pendingRefreshes.delete(sessionId);
+  });
+  pendingRefreshes.set(sessionId, next);
+  return next;
 }
 function createInputHandler() {
   return (event, ctx) => {
@@ -673,9 +685,10 @@ function createTurnEndHandler(getSessionName, setSessionName, appendEntry) {
     if (ctx.hasPendingMessages?.()) queueRefresh(getSessionName, setSessionName, appendEntry, ctx);
   };
 }
-function createAgentEndHandler(getSessionName, setSessionName, appendEntry) {
+function createAgentEndHandler(getSessionName, setSessionName, appendEntry, events) {
   return (_event, ctx) => {
-    queueRefresh(getSessionName, setSessionName, appendEntry, ctx);
+    const pending = queueRefresh(getSessionName, setSessionName, appendEntry, ctx);
+    events?.emit(OVERVIEW_REFRESH_QUEUED_EVENT, { sessionId: ctx.sessionManager.getSessionId(), pending });
   };
 }
 function createSessionTreeHandler(getSessionName, setSessionName, appendEntry) {
@@ -690,6 +703,7 @@ function createSessionShutdownHandler() {
     lifecycleId += 1;
     viewId += 1;
     previewViewId = -1;
+    pendingRefreshes.clear();
     clearOverviewUi(inFlight, ctx);
   };
 }
@@ -700,7 +714,7 @@ function index_default(pi) {
   pi.on("session_start", createSessionStartHandler(() => pi.getSessionName(), (name) => pi.setSessionName(name), (customType, data) => pi.appendEntry(customType, data)));
   pi.on("session_tree", createSessionTreeHandler(() => pi.getSessionName(), (name) => pi.setSessionName(name), (customType, data) => pi.appendEntry(customType, data)));
   pi.on("turn_end", createTurnEndHandler(() => pi.getSessionName(), (name) => pi.setSessionName(name), (customType, data) => pi.appendEntry(customType, data)));
-  pi.on("agent_end", createAgentEndHandler(() => pi.getSessionName(), (name) => pi.setSessionName(name), (customType, data) => pi.appendEntry(customType, data)));
+  pi.on("agent_end", createAgentEndHandler(() => pi.getSessionName(), (name) => pi.setSessionName(name), (customType, data) => pi.appendEntry(customType, data), pi.events));
   pi.on("session_shutdown", createSessionShutdownHandler());
 }
 export {

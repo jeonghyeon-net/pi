@@ -1,6 +1,8 @@
 import { clearOverviewUi, previewOverviewFromInput, refreshOverview, restoreOverview, type OverviewContext, type OverviewRuntime } from "./handlers.js";
 
+const OVERVIEW_REFRESH_QUEUED_EVENT = "auto-session-title:overview-refresh-queued";
 const inFlight = new Set<string>();
+const pendingRefreshes = new Map<string, Promise<void>>();
 let activeSessionId: string | undefined;
 let lifecycleId = 0;
 let viewId = 0;
@@ -19,8 +21,18 @@ function runtime(ctx: OverviewContext, getSessionName: OverviewRuntime["getSessi
 	return { getSessionName, setSessionName, appendEntry, isActive: () => activeSessionId === sessionId && lifecycleId === currentLifecycleId && viewId === currentViewId };
 }
 
-function queueRefresh(getSessionName: OverviewRuntime["getSessionName"], setSessionName: OverviewRuntime["setSessionName"], appendEntry: OverviewRuntime["appendEntry"], ctx: OverviewContext): void {
-	void refreshOverview(inFlight, runtime(ctx, getSessionName, setSessionName, appendEntry), ctx).catch(() => undefined);
+function queueRefresh(getSessionName: OverviewRuntime["getSessionName"], setSessionName: OverviewRuntime["setSessionName"], appendEntry: OverviewRuntime["appendEntry"], ctx: OverviewContext): Promise<void> {
+	const sessionId = ctx.sessionManager.getSessionId();
+	const pending = pendingRefreshes.get(sessionId);
+	if (pending) {
+		void refreshOverview(inFlight, runtime(ctx, getSessionName, setSessionName, appendEntry), ctx).catch(() => undefined);
+		return pending;
+	}
+	const next = refreshOverview(inFlight, runtime(ctx, getSessionName, setSessionName, appendEntry), ctx)
+		.catch(() => undefined)
+		.finally(() => { if (pendingRefreshes.get(sessionId) === next) pendingRefreshes.delete(sessionId); });
+	pendingRefreshes.set(sessionId, next);
+	return next;
 }
 
 export function createInputHandler() {
@@ -41,8 +53,16 @@ export function createTurnEndHandler(getSessionName: OverviewRuntime["getSession
 	return (_event: object, ctx: OverviewContext) => { if (ctx.hasPendingMessages?.()) queueRefresh(getSessionName, setSessionName, appendEntry, ctx); };
 }
 
-export function createAgentEndHandler(getSessionName: OverviewRuntime["getSessionName"], setSessionName: OverviewRuntime["setSessionName"], appendEntry: OverviewRuntime["appendEntry"]) {
-	return (_event: object, ctx: OverviewContext) => { queueRefresh(getSessionName, setSessionName, appendEntry, ctx); };
+export function createAgentEndHandler(
+	getSessionName: OverviewRuntime["getSessionName"],
+	setSessionName: OverviewRuntime["setSessionName"],
+	appendEntry: OverviewRuntime["appendEntry"],
+	events?: { emit(name: string, data: unknown): void },
+) {
+	return (_event: object, ctx: OverviewContext) => {
+		const pending = queueRefresh(getSessionName, setSessionName, appendEntry, ctx);
+		events?.emit(OVERVIEW_REFRESH_QUEUED_EVENT, { sessionId: ctx.sessionManager.getSessionId(), pending });
+	};
 }
 
 export function createSessionTreeHandler(getSessionName: OverviewRuntime["getSessionName"], setSessionName: OverviewRuntime["setSessionName"], appendEntry: OverviewRuntime["appendEntry"]) {
@@ -58,6 +78,7 @@ export function createSessionShutdownHandler() {
 		lifecycleId += 1;
 		viewId += 1;
 		previewViewId = -1;
+		pendingRefreshes.clear();
 		clearOverviewUi(inFlight, ctx);
 	};
 }

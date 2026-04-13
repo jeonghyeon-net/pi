@@ -155,23 +155,46 @@ ${input}`,
 }
 
 // src/hooks.ts
-function createAgentEndHandler() {
-  return async (event, ctx) => {
-    const sessionTitle = sanitizeNotificationText(ctx.sessionManager.getSessionName() || "");
-    const fallback = buildCompletionNotification(sessionTitle, event.messages);
-    const koreanBody = await resolveKoreanNotificationSummary(
-      extractAssistantText(event.messages),
-      sessionTitle,
-      ctx.model,
-      ctx.modelRegistry
-    );
-    const body = stripLeadingTitle(koreanBody || "", fallback.title);
-    notify(fallback.title, body && hasKoreanText(body) ? body : fallback.body);
+var OVERVIEW_REFRESH_QUEUED_EVENT = "auto-session-title:overview-refresh-queued";
+var overviewRefreshes = /* @__PURE__ */ new Map();
+var overviewRefreshListening = false;
+function rememberOverviewRefresh(sessionId, pending) {
+  overviewRefreshes.set(sessionId, pending);
+  void pending.finally(() => {
+    if (overviewRefreshes.get(sessionId) === pending) overviewRefreshes.delete(sessionId);
+  });
+}
+function createSessionStartHandler(events) {
+  return async () => {
+    if (overviewRefreshListening) return;
+    overviewRefreshListening = true;
+    events.on(OVERVIEW_REFRESH_QUEUED_EVENT, (data) => {
+      const { sessionId, pending } = data;
+      rememberOverviewRefresh(sessionId, pending);
+    });
+  };
+}
+function createAgentEndHandler(getOverviewRefresh = (sessionId) => overviewRefreshes.get(sessionId)) {
+  return (event, ctx) => {
+    void (async () => {
+      await getOverviewRefresh(ctx.sessionManager.getSessionId())?.catch(() => void 0);
+      const sessionTitle = sanitizeNotificationText(ctx.sessionManager.getSessionName() || "");
+      const fallback = buildCompletionNotification(sessionTitle, event.messages);
+      const koreanBody = await resolveKoreanNotificationSummary(
+        extractAssistantText(event.messages),
+        sessionTitle,
+        ctx.model,
+        ctx.modelRegistry
+      );
+      const body = stripLeadingTitle(koreanBody || "", fallback.title);
+      notify(fallback.title, body && hasKoreanText(body) ? body : fallback.body);
+    })();
   };
 }
 
 // src/index.ts
 function index_default(pi) {
+  pi.on("session_start", createSessionStartHandler(pi.events));
   pi.on("agent_end", createAgentEndHandler());
 }
 export {
