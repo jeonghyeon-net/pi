@@ -141,7 +141,7 @@ function buildOverviewPrompt(recentText, previous) {
     "Fold recent updates into the current state instead of listing events in order.",
     "Ignore routine greetings, acknowledgements, current-branch checks, shell state, raw tool chatter, toy/demo exchanges, and the fact that the assistant replied unless they materially changed the task.",
     "If the recent updates contain no durable change, keep the previous title and summary unchanged.",
-    "Write SUMMARY as 2-4 short `- ` bullets when durable state exists. One bullet per durable point.",
+    "Write SUMMARY as 2-5 short `- ` bullets when durable state exists. One bullet per durable point.",
     "Make the user's current request or goal obvious, but do not restate the same point in both TITLE and the first bullet.",
     "Keep bullets scan-friendly: prioritize current goal, finished work, constraints, blockers, or next important step. Do not collapse everything into one long paragraph.",
     "If there is still no durable task or state yet, do not invent one; leave SUMMARY blank.",
@@ -200,6 +200,7 @@ var EMPTY_STATE_PATTERNS = [
   /start .*goal and context/i
 ];
 var LONG_SUMMARY_LINE = 160;
+var MAX_SUMMARY_LINES = 5;
 var SENTENCE_SPLIT = /(?<=[.!?])\s+/u;
 function isEmptyStateLine(line) {
   return EMPTY_STATE_PATTERNS.some((pattern) => pattern.test(line));
@@ -208,8 +209,8 @@ function splitLongSummaryLine(line) {
   if (line.length < LONG_SUMMARY_LINE) return [line];
   const sentences = line.split(SENTENCE_SPLIT).map((part) => part.trim()).filter(Boolean);
   if (sentences.length < 2) return [line];
-  const summary = sentences.slice(0, 4);
-  if (sentences.length > 4) summary[3] = `${summary[3]} ${sentences.slice(4).join(" ")}`;
+  const summary = sentences.slice(0, MAX_SUMMARY_LINES);
+  if (sentences.length > MAX_SUMMARY_LINES) summary[MAX_SUMMARY_LINES - 1] = `${summary[MAX_SUMMARY_LINES - 1]} ${sentences.slice(MAX_SUMMARY_LINES).join(" ")}`;
   return summary;
 }
 function normalizeOverviewSummary(overview) {
@@ -234,7 +235,7 @@ var OVERVIEW_PROMPT = [
   "TITLE: <short title in the user's language, max 8 words, naming the durable task rather than chatty or incidental details>",
   "SUMMARY:",
   "- <short durable point in the user's language>",
-  "Use 2-4 short `- ` bullets when durable state exists. One bullet per durable point.",
+  "Use 2-5 short `- ` bullets when durable state exists. One bullet per durable point.",
   "Make the user's current request or goal obvious from TITLE and SUMMARY.",
   "If TITLE already names that request clearly, first bullet should add non-duplicate state instead of restating it.",
   "Keep bullets concrete and scannable, not chatty.",
@@ -416,7 +417,7 @@ function ensureOverviewRequestLine(overview, recentText) {
   if (!request) return overview;
   const requestLines = overview.summary.filter((line) => isRequestSummaryLine(line, request));
   const otherLines = overview.summary.filter((line) => !isRequestSummaryLine(line, request));
-  const summary = overlapsEnough(overview.title, request) && otherLines.length > 0 ? otherLines : requestLines.length > 0 ? [requestLines[0], ...otherLines] : [buildRequestLine(request), ...overview.summary].slice(0, 4);
+  const summary = overlapsEnough(overview.title, request) && otherLines.length > 0 ? otherLines : requestLines.length > 0 ? [requestLines[0], ...otherLines] : [buildRequestLine(request), ...overview.summary].slice(0, 5);
   return summary.length === overview.summary.length && summary.every((line, index) => line === overview.summary[index]) ? overview : { ...overview, summary };
 }
 

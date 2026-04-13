@@ -9,6 +9,7 @@ const EMPTY_STATE_PATTERNS = [
 	/start .*goal and context/i,
 ];
 const LONG_SUMMARY_LINE = 160;
+const MAX_SUMMARY_LINES = 5;
 const SENTENCE_SPLIT = /(?<=[.!?])\s+/u;
 
 function isEmptyStateLine(line: string): boolean {
@@ -19,8 +20,8 @@ function splitLongSummaryLine(line: string): string[] {
 	if (line.length < LONG_SUMMARY_LINE) return [line];
 	const sentences = line.split(SENTENCE_SPLIT).map((part) => part.trim()).filter(Boolean);
 	if (sentences.length < 2) return [line];
-	const summary = sentences.slice(0, 4);
-	if (sentences.length > 4) summary[3] = `${summary[3]} ${sentences.slice(4).join(" ")}`;
+	const summary = sentences.slice(0, MAX_SUMMARY_LINES);
+	if (sentences.length > MAX_SUMMARY_LINES) summary[MAX_SUMMARY_LINES - 1] = `${summary[MAX_SUMMARY_LINES - 1]} ${sentences.slice(MAX_SUMMARY_LINES).join(" ")}`;
 	return summary;
 }
 

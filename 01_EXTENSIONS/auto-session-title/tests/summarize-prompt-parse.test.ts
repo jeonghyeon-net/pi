@@ -9,7 +9,7 @@ describe("buildOverviewPrompt", () => {
 		expect(prompt).toContain("Preserve still-relevant goals, decisions, constraints, blockers, and completed work");
 		expect(prompt).toContain("Ignore routine greetings, acknowledgements, current-branch checks");
 		expect(prompt).toContain("If the recent updates contain no durable change, keep the previous title and summary unchanged.");
-		expect(prompt).toContain("Write SUMMARY as 2-4 short `- ` bullets when durable state exists.");
+		expect(prompt).toContain("Write SUMMARY as 2-5 short `- ` bullets when durable state exists.");
 		expect(prompt).toContain("Make the user's current request or goal obvious, but do not restate the same point in both TITLE and the first bullet.");
 		expect(prompt).toContain("Keep bullets scan-friendly");
 		expect(prompt).toContain("leave SUMMARY blank");
@@ -68,8 +68,8 @@ describe("parseOverviewResponse", () => {
 		expect(parseOverviewResponse("TITLE: 말록스 콘트라 가격 재확인\nSUMMARY: 사용자는 Marleaux Contra 계열 베이스 가격을 재확인 중이다. 신품 기준 현재 다시 검증된 노출 가격은 국내 라이딩베이스 11,682,000원, Thomann 8,999€, John Fox Bass의 2025 Marleaux Contra 5-string $8,799.00이다. 필요하면 다음에 환율 반영 실구매가 비교를 이어갈 수 있다.")).toEqual({ title: "말록스 콘트라 가격 재확인", summary: ["사용자는 Marleaux Contra 계열 베이스 가격을 재확인 중이다.", "신품 기준 현재 다시 검증된 노출 가격은 국내 라이딩베이스 11,682,000원, Thomann 8,999€, John Fox Bass의 2025 Marleaux Contra 5-string $8,799.00이다.", "필요하면 다음에 환율 반영 실구매가 비교를 이어갈 수 있다."] });
 	});
 
-	it("caps fallback sentence splitting at four summary lines", () => {
-		expect(parseOverviewResponse("TITLE: 긴 요약\nSUMMARY: 첫 문장은 현재 목표와 방향을 길게 설명하는 문장이다. 둘째 문장은 이미 끝낸 검증과 확인 결과를 길게 설명하는 문장이다. 셋째 문장은 남아 있는 제약과 주의사항을 길게 설명하는 문장이다. 넷째 문장은 다음 단계 계획을 길게 설명하는 문장이다. 다섯째 문장은 마지막 줄에 합쳐질 추가 맥락이다. 여섯째 문장도 마지막 줄에 함께 붙어야 하는 추가 맥락이다.")).toEqual({ title: "긴 요약", summary: ["첫 문장은 현재 목표와 방향을 길게 설명하는 문장이다.", "둘째 문장은 이미 끝낸 검증과 확인 결과를 길게 설명하는 문장이다.", "셋째 문장은 남아 있는 제약과 주의사항을 길게 설명하는 문장이다.", "넷째 문장은 다음 단계 계획을 길게 설명하는 문장이다. 다섯째 문장은 마지막 줄에 합쳐질 추가 맥락이다. 여섯째 문장도 마지막 줄에 함께 붙어야 하는 추가 맥락이다."] });
+	it("caps fallback sentence splitting at five summary lines", () => {
+		expect(parseOverviewResponse("TITLE: 긴 요약\nSUMMARY: 첫 문장은 현재 목표와 방향을 길게 설명하는 문장이다. 둘째 문장은 이미 끝낸 검증과 확인 결과를 길게 설명하는 문장이다. 셋째 문장은 남아 있는 제약과 주의사항을 길게 설명하는 문장이다. 넷째 문장은 다음 단계 계획을 길게 설명하는 문장이다. 다섯째 문장은 마지막 줄에 합쳐질 추가 맥락이다. 여섯째 문장도 마지막 줄에 함께 붙어야 하는 추가 맥락이다.")).toEqual({ title: "긴 요약", summary: ["첫 문장은 현재 목표와 방향을 길게 설명하는 문장이다.", "둘째 문장은 이미 끝낸 검증과 확인 결과를 길게 설명하는 문장이다.", "셋째 문장은 남아 있는 제약과 주의사항을 길게 설명하는 문장이다.", "넷째 문장은 다음 단계 계획을 길게 설명하는 문장이다.", "다섯째 문장은 마지막 줄에 합쳐질 추가 맥락이다. 여섯째 문장도 마지막 줄에 함께 붙어야 하는 추가 맥락이다."] });
 	});
 
 	it("drops generic empty-session prose so ui can keep skeleton state", () => {

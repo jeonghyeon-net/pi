@@ -58,7 +58,7 @@ export function ensureOverviewRequestLine(overview: SessionOverview, recentText:
 		? otherLines
 		: requestLines.length > 0
 			? [requestLines[0]!, ...otherLines]
-			: [buildRequestLine(request), ...overview.summary].slice(0, 4);
+			: [buildRequestLine(request), ...overview.summary].slice(0, 5);
 	return summary.length === overview.summary.length && summary.every((line, index) => line === overview.summary[index])
 		? overview
 		: { ...overview, summary };

@@ -15,7 +15,7 @@ export const OVERVIEW_PROMPT = [
 	"TITLE: <short title in the user's language, max 8 words, naming the durable task rather than chatty or incidental details>",
 	"SUMMARY:",
 	"- <short durable point in the user's language>",
-	"Use 2-4 short `- ` bullets when durable state exists. One bullet per durable point.",
+	"Use 2-5 short `- ` bullets when durable state exists. One bullet per durable point.",
 	"Make the user's current request or goal obvious from TITLE and SUMMARY.",
 	"If TITLE already names that request clearly, first bullet should add non-duplicate state instead of restating it.",
 	"Keep bullets concrete and scannable, not chatty.",

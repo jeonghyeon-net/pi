@@ -30,9 +30,9 @@ describe("resolveSessionOverview", () => {
 		expect(completeSimple).toHaveBeenCalledWith(model, expect.objectContaining({ systemPrompt: OVERVIEW_PROMPT }), expect.objectContaining({ apiKey: "token" }));
 	});
 
-	it("caps request-aware summaries at four lines", async () => {
+	it("keeps up to five request-aware summary lines", async () => {
 		completeSimple.mockResolvedValue(assistantMessage([{ type: "text", text: "TITLE: 세션 제목\nSUMMARY:\n- 끝난 일 1\n- 끝난 일 2\n- 제약 3\n- 다음 단계 4" }]));
-		expect(await resolveSessionOverview({ recentText: "User: 말록스 콘트라 베이스 가격 다시 확인해줘", model, modelRegistry: registry })).toEqual({ title: "세션 제목", summary: ["요청: 말록스 콘트라 베이스 가격 다시 확인해줘", "끝난 일 1", "끝난 일 2", "제약 3"] });
+		expect(await resolveSessionOverview({ recentText: "User: 말록스 콘트라 베이스 가격 다시 확인해줘", model, modelRegistry: registry })).toEqual({ title: "세션 제목", summary: ["요청: 말록스 콘트라 베이스 가격 다시 확인해줘", "끝난 일 1", "끝난 일 2", "제약 3", "다음 단계 4"] });
 	});
 
 	it("drops duplicated request bullets when title already says same thing", async () => {
