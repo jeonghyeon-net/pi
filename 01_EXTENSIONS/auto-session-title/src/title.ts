@@ -37,6 +37,6 @@ export function normalizeTitle(text: string, maxLength: number = DEFAULT_MAX_TIT
 	return title || undefined;
 }
 
-export function buildTerminalTitle(sessionName: string): string {
-	return `π - ${sessionName}`;
+export function buildTerminalTitle(sessionName?: string): string {
+	return sessionName ? `π - ${sessionName}` : "π";
 }

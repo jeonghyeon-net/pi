@@ -23,7 +23,7 @@ describe("refreshOverview empty-state output", () => {
 		expect(setStatus).not.toHaveBeenCalled();
 		expect(runtime.appendEntry).not.toHaveBeenCalled();
 		expect(runtime.setSessionName).not.toHaveBeenCalled();
-		expect(ctx.ui.setTitle).not.toHaveBeenCalled();
+		expect(ctx.ui.setTitle).toHaveBeenCalledWith("π");
 	});
 
 	it("restores previous overview instead of replacing it with empty-state output", async () => {

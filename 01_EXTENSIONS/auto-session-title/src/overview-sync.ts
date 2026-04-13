@@ -26,7 +26,7 @@ function isActive(runtime: OverviewRuntime): boolean {
 }
 
 function syncTerminalTitle(ctx: OverviewContext, title?: string): void {
-	if (ctx.hasUI && title) ctx.ui.setTitle(buildTerminalTitle(title));
+	if (ctx.hasUI) ctx.ui.setTitle(buildTerminalTitle(title));
 }
 
 function toStoredOverview(overview: SessionOverview, coveredThroughEntryId?: string): StoredOverview {
@@ -44,6 +44,7 @@ export function restoreOverview(runtime: OverviewRuntime, ctx: OverviewContext):
 	const title = resolveFallbackTitle(overview, runtime, ctx);
 	if (!overview && !title) {
 		clearOverviewDisplay(ctx);
+		syncTerminalTitle(ctx);
 		return;
 	}
 	syncOverviewUi(ctx, overview, title);
@@ -71,7 +72,11 @@ export async function refreshOverview(inFlight: Set<string>, runtime: OverviewRu
 		const next = await resolveSessionOverview({ recentText, previous, model: ctx.model, modelRegistry: ctx.modelRegistry });
 		if (!isActive(runtime)) return;
 		if (!next) return restoreOverview(runtime, ctx);
-		if (next.summary.length === 0) return previous ? restoreOverview(runtime, ctx) : clearOverviewDisplay(ctx);
+		if (next.summary.length === 0) {
+			if (previous) return restoreOverview(runtime, ctx);
+			clearOverviewDisplay(ctx);
+			return syncTerminalTitle(ctx);
+		}
 		if (shouldPersist(previous, next, coveredThroughEntryId)) runtime.appendEntry(OVERVIEW_CUSTOM_TYPE, toStoredOverview(next, coveredThroughEntryId));
 		if (runtime.getSessionName() !== next.title) runtime.setSessionName(next.title);
 		syncOverviewUi(ctx, next, next.title);

@@ -36,5 +36,6 @@ describe("truncateTitle", () => {
 describe("buildTerminalTitle", () => {
 	it("formats the terminal title with a pi prefix", () => {
 		expect(buildTerminalTitle("세션 요약 갱신")).toBe("π - 세션 요약 갱신");
+		expect(buildTerminalTitle()).toBe("π");
 	});
 });

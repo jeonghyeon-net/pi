@@ -185,7 +185,7 @@ function normalizeTitle(text, maxLength = DEFAULT_MAX_TITLE_LENGTH) {
   return title || void 0;
 }
 function buildTerminalTitle(sessionName) {
-  return `\u03C0 - ${sessionName}`;
+  return sessionName ? `\u03C0 - ${sessionName}` : "\u03C0";
 }
 
 // src/summary-normalize.ts
@@ -478,7 +478,7 @@ function isActive(runtime2) {
   return runtime2.isActive?.() ?? true;
 }
 function syncTerminalTitle(ctx, title) {
-  if (ctx.hasUI && title) ctx.ui.setTitle(buildTerminalTitle(title));
+  if (ctx.hasUI) ctx.ui.setTitle(buildTerminalTitle(title));
 }
 function toStoredOverview(overview, coveredThroughEntryId) {
   return { title: overview.title, summary: overview.summary, coveredThroughEntryId };
@@ -493,6 +493,7 @@ function restoreOverview(runtime2, ctx) {
   const title = resolveFallbackTitle(overview, runtime2, ctx);
   if (!overview && !title) {
     clearOverviewDisplay(ctx);
+    syncTerminalTitle(ctx);
     return;
   }
   syncOverviewUi(ctx, overview, title);
@@ -519,7 +520,11 @@ async function refreshOverview(inFlight2, runtime2, ctx) {
     const next = await resolveSessionOverview({ recentText, previous, model: ctx.model, modelRegistry: ctx.modelRegistry });
     if (!isActive(runtime2)) return;
     if (!next) return restoreOverview(runtime2, ctx);
-    if (next.summary.length === 0) return previous ? restoreOverview(runtime2, ctx) : clearOverviewDisplay(ctx);
+    if (next.summary.length === 0) {
+      if (previous) return restoreOverview(runtime2, ctx);
+      clearOverviewDisplay(ctx);
+      return syncTerminalTitle(ctx);
+    }
     if (shouldPersist(previous, next, coveredThroughEntryId)) runtime2.appendEntry(OVERVIEW_CUSTOM_TYPE, toStoredOverview(next, coveredThroughEntryId));
     if (runtime2.getSessionName() !== next.title) runtime2.setSessionName(next.title);
     syncOverviewUi(ctx, next, next.title);

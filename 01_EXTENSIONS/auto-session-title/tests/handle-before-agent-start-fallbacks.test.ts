@@ -20,7 +20,7 @@ describe("overview restoration fallbacks", () => {
 		restoreOverview(stubRuntime(), ctx);
 		expect(ctx.ui.custom).not.toHaveBeenCalled();
 		expect(ctx.ui.setWidget).not.toHaveBeenCalled();
-		expect(ctx.ui.setTitle).not.toHaveBeenCalled();
+		expect(ctx.ui.setTitle).toHaveBeenCalledWith("π");
 	});
 
 	it("skips overlay and title updates when UI is unavailable", () => {
