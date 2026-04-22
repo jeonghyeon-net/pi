@@ -680,10 +680,29 @@ function composeReviewPrompt(files, payload) {
 }
 
 // lib/glimpse-window.ts
-import { spawn as spawn2 } from "node:child_process";
+import { spawn as spawn2, spawnSync } from "node:child_process";
 import { EventEmitter as EventEmitter2 } from "node:events";
-import { existsSync as existsSync3 } from "node:fs";
+import { chmodSync, existsSync as existsSync3 } from "node:fs";
+import { dirname as dirname3, join as join3 } from "node:path";
 import { createInterface as createInterface2 } from "node:readline";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
+var here = dirname3(fileURLToPath3(import.meta.url));
+function tryBuildMacHost(sourcePath, targetPath) {
+  if (process.platform !== "darwin" || !existsSync3(sourcePath)) return false;
+  const result = spawnSync("swiftc", ["-O", sourcePath, "-o", targetPath], { stdio: "ignore" });
+  if (result.status !== 0 || !existsSync3(targetPath)) return false;
+  chmodSync(targetPath, 493);
+  return true;
+}
+function resolveFallbackHost(host) {
+  if (existsSync3(host.path) || host.extraArgs?.length) return host;
+  const fileName = process.platform === "win32" ? "glimpse.exe" : "glimpse";
+  const packageDir = join3(here, "..", "node_modules", "glimpseui", "src");
+  const packageHost = join3(packageDir, fileName);
+  const packageSource = join3(packageDir, "glimpse.swift");
+  if ((existsSync3(packageHost) || tryBuildMacHost(packageSource, packageHost)) && process.platform !== "win32") chmodSync(packageHost, 493);
+  return existsSync3(packageHost) ? { ...host, path: packageHost } : host;
+}
 var QuietWindow = class extends EventEmitter2 {
   #proc;
   #closed = false;
@@ -726,8 +745,8 @@ async function getNativeHost() {
   return (await Promise.resolve().then(() => (init_glimpse(), glimpse_exports))).getNativeHostInfo();
 }
 async function openQuietGlimpse(html, options = {}) {
-  const host = await getNativeHost();
-  if (!existsSync3(host.path)) throw new Error(`Glimpse host not found at '${host.path}'.${host.buildHint ? ` ${host.buildHint}` : ""}`);
+  const host = resolveFallbackHost(await getNativeHost());
+  if (!existsSync3(host.path) && !host.extraArgs?.length) throw new Error(`Glimpse host not found at '${host.path}'.${host.buildHint ? ` ${host.buildHint}` : ""}`);
   const args = [options.width && `--width=${options.width}`, options.height && `--height=${options.height}`, options.title && "--title", options.title].filter((value) => typeof value === "string");
   return new QuietWindow(spawn2(host.path, [...host.extraArgs ?? [], ...args], { stdio: ["pipe", "pipe", "pipe"], windowsHide: process.platform === "win32", env: { ...process.env, OS_ACTIVITY_MODE: process.env.OS_ACTIVITY_MODE ?? "disable" } }), html);
 }
@@ -740,17 +759,17 @@ function sendWindowMessage(window, message) {
 
 // src/ui.ts
 import { readFileSync as readFileSync2 } from "node:fs";
-import { dirname as dirname3, join as join3 } from "node:path";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
-var here = dirname3(fileURLToPath3(import.meta.url));
-var webDir = join3(here, "..", "web");
+import { dirname as dirname4, join as join4 } from "node:path";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
+var here2 = dirname4(fileURLToPath4(import.meta.url));
+var webDir = join4(here2, "..", "web");
 function escapeInline(value) {
   return value.replace(/</gu, "\\u003c").replace(/>/gu, "\\u003e").replace(/&/gu, "\\u0026");
 }
 function buildReviewHtml(data) {
-  const html = readFileSync2(join3(webDir, "index.html"), "utf8");
-  const css = readFileSync2(join3(webDir, "style.css"), "utf8");
-  const js = readFileSync2(join3(webDir, "app.js"), "utf8");
+  const html = readFileSync2(join4(webDir, "index.html"), "utf8");
+  const css = readFileSync2(join4(webDir, "style.css"), "utf8");
+  const js = readFileSync2(join4(webDir, "app.js"), "utf8");
   return html.replace("__INLINE_STYLE__", css).replace('"__INLINE_DATA__"', escapeInline(JSON.stringify(data))).replace("__INLINE_JS__", js);
 }
 
