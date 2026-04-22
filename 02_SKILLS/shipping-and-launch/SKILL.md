@@ -32,7 +32,7 @@ Ship with confidence. The goal is not just to deploy — it's to deploy safely, 
 ### Security
 
 - [ ] No secrets in code or version control
-- [ ] `npm audit` shows no critical or high vulnerabilities
+- [ ] `[project dependency audit command]` shows no critical or high vulnerabilities
 - [ ] Input validation on all user-facing endpoints
 - [ ] Authentication and authorization checks in place
 - [ ] Security headers configured (CSP, HSTS, etc.)
@@ -254,8 +254,8 @@ Every deployment needs a rollback plan before it happens:
 2. Verify rollback: health check, error monitoring
 3. Communicate: notify team of rollback
 
-### Database Considerations
-- Migration [X] has a rollback: `npx prisma migrate rollback`
+### Data / State Considerations
+- Migration or state change [X] has a rollback or remediation plan: `[actual rollback command or documented procedure]`
 - Data inserted by new feature: [preserved / cleaned up]
 
 ### Time to Rollback

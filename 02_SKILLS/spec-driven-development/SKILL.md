@@ -39,10 +39,10 @@ Start with a high-level vision. Ask the human clarifying questions until require
 
 ```
 ASSUMPTIONS I'M MAKING:
-1. This is a web application (not native mobile)
-2. Authentication uses session-based cookies (not JWT)
-3. The database is PostgreSQL (based on existing Prisma schema)
-4. We're targeting modern browsers only (no IE11)
+1. This change targets [the relevant runtime or platform]
+2. The project's current verification workflow is [actual test/build/check commands]
+3. Existing architectural constraints still apply unless you redirect me
+4. Success will be judged by [specific acceptance criteria]
 → Correct me now or I'll proceed with these.
 ```
 
@@ -54,20 +54,20 @@ Don't silently fill in ambiguous requirements. The spec's entire purpose is to s
 
 2. **Commands** — Full executable commands with flags, not just tool names.
    ```
-   Build: npm run build
-   Test: npm test -- --coverage
-   Lint: npm run lint --fix
-   Dev: npm run dev
+   Install: [actual install/setup command]
+   Test: [actual test command]
+   Lint/format: [actual lint or format command]
+   Build/package: [actual build or packaging command]
+   Run locally: [actual local run command]
+   Static analysis/typecheck: [actual analysis command, if any]
    ```
 
 3. **Project Structure** — Where source code lives, where tests go, where docs belong.
    ```
-   src/           → Application source code
-   src/components → React components
-   src/lib        → Shared utilities
-   tests/         → Unit and integration tests
-   e2e/           → End-to-end tests
-   docs/          → Documentation
+   [source directory] → Main implementation
+   [test directory]   → Automated tests
+   [docs directory]   → Specs, ADRs, or operational docs
+   [assets/config]    → Supporting files required by the project
    ```
 
 4. **Code Style** — One real code snippet showing your style beats three paragraphs describing it. Include naming conventions, formatting rules, and examples of good output.

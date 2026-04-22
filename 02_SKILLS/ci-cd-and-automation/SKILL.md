@@ -7,7 +7,7 @@ description: Automates CI/CD pipeline setup. Use when setting up or modifying bu
 
 ## Overview
 
-Automate quality gates so that no change reaches production without passing tests, lint, type checking, and build. CI/CD is the enforcement mechanism for every other skill — it catches what humans and agents miss, and it does so consistently on every single change.
+Automate quality gates so that no change reaches production without passing the project's relevant verification steps: tests, static analysis, formatting/linting, packaging/build checks, and any domain-specific validations. CI/CD is the enforcement mechanism for every other skill — it catches what humans and agents miss, and it does so consistently on every single change.
 
 **Shift Left:** Catch problems as early in the pipeline as possible. A bug caught in linting costs minutes; the same bug caught in production costs hours. Move checks upstream — static analysis before tests, tests before staging, staging before production.
 
@@ -29,23 +29,21 @@ Every change goes through these gates before merge:
 Pull Request Opened
     │
     ▼
-┌─────────────────┐
-│   LINT CHECK     │  eslint, prettier
-│   ↓ pass         │
-│   TYPE CHECK     │  tsc --noEmit
-│   ↓ pass         │
-│   UNIT TESTS     │  jest/vitest
-│   ↓ pass         │
-│   BUILD          │  npm run build
-│   ↓ pass         │
-│   INTEGRATION    │  API/DB tests
-│   ↓ pass         │
-│   E2E (optional) │  Playwright/Cypress
-│   ↓ pass         │
-│   SECURITY AUDIT │  npm audit
-│   ↓ pass         │
-│   BUNDLE SIZE    │  bundlesize check
-└─────────────────┘
+┌─────────────────────┐
+│   STYLE CHECK        │  lint / format / schema validation
+│   ↓ pass             │
+│   STATIC ANALYSIS    │  typecheck / compile-check / linters
+│   ↓ pass             │
+│   AUTOMATED TESTS    │  unit / integration / contract tests
+│   ↓ pass             │
+│   BUILD / PACKAGE    │  artifact or release validation
+│   ↓ pass             │
+│   ENVIRONMENT TESTS  │  service / database / browser checks
+│   ↓ pass             │
+│   SECURITY AUDIT     │  dependency / policy / secret scans
+│   ↓ pass             │
+│   SIZE / PERF BUDGET │  optional artifact or runtime budgets
+└─────────────────────┘
     │
     ▼
   Ready for review
@@ -53,79 +51,49 @@ Pull Request Opened
 
 **No gate can be skipped.** If lint fails, fix lint — don't disable the rule. If a test fails, fix the code — don't skip the test.
 
-## GitHub Actions Configuration
+## CI Configuration Example
 
 ### Basic CI Pipeline
 
+Use your CI provider's syntax, but keep the stages explicit and technology-agnostic:
+
 ```yaml
-# .github/workflows/ci.yml
 name: CI
 
 on:
   pull_request:
-    branches: [main]
   push:
-    branches: [main]
 
 jobs:
   quality:
-    runs-on: ubuntu-latest
+    runs-on: <runner>
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Type check
-        run: npx tsc --noEmit
-
-      - name: Test
-        run: npm test -- --coverage
-
-      - name: Build
-        run: npm run build
-
-      - name: Security audit
-        run: npm audit --audit-level=high
+      - checkout source
+      - setup runtime/tooling for the project
+      - run: [project install command]
+      - run: [project lint/format command]
+      - run: [project static-analysis/typecheck command]
+      - run: [project test command]
+      - run: [project build/package command]
+      - run: [project dependency audit command]
 ```
 
-### With Database Integration Tests
+### With Service or Datastore Integration Tests
 
 ```yaml
   integration:
-    runs-on: ubuntu-latest
+    runs-on: <runner>
     services:
-      postgres:
-        image: postgres:16
+      datastore:
+        image: <service image>
         env:
-          POSTGRES_DB: testdb
-          POSTGRES_USER: ci_user
-          POSTGRES_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          <service env>: <value>
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-      - run: npm ci
-      - name: Run migrations
-        run: npx prisma migrate deploy
+      - checkout source
+      - setup runtime/tooling for the project
+      - run: [project install command]
+      - run: [project service setup or migration command]
         env:
           DATABASE_URL: postgresql://ci_user:${{ secrets.CI_DB_PASSWORD }}@localhost:5432/testdb
       - name: Integration tests
@@ -136,29 +104,19 @@ jobs:
 
 > **Note:** Even for CI-only test databases, use GitHub Secrets for credentials rather than hardcoding values. This builds good habits and prevents accidental reuse of test credentials in other contexts.
 
-### E2E Tests
+### End-to-End or System Tests
 
 ```yaml
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: <runner>
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-      - run: npm ci
-      - name: Install Playwright
-        run: npx playwright install --with-deps chromium
-      - name: Build
-        run: npm run build
-      - name: Run E2E tests
-        run: npx playwright test
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report/
+      - checkout source
+      - setup runtime/tooling
+      - run: [project install command]
+      - run: [project browser/system test setup command]
+      - run: [project build/package command]
+      - run: [project end-to-end test command]
+      - upload failure artifacts (screenshots, traces, logs) if supported by the provider
 ```
 
 ## Feeding CI Failures Back to Agents
@@ -184,7 +142,7 @@ Agent fixes → pushes → CI runs again
 **Key patterns:**
 
 ```
-Lint failure → Agent runs `npm run lint --fix` and commits
+Lint failure → Agent runs `[project lint/format command]` and commits
 Type error  → Agent reads the error location and fixes the type
 Test failure → Agent follows debugging-and-error-recovery skill
 Build error → Agent checks config and dependencies
@@ -329,32 +287,29 @@ Slow CI pipeline?
 **Example: caching and parallelism**
 ```yaml
 jobs:
-  lint:
-    runs-on: ubuntu-latest
+  style:
+    runs-on: <runner>
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
-      - run: npm run lint
+      - checkout source
+      - setup runtime/tooling
+      - run: [project install command]
+      - run: [project lint/format command]
 
-  typecheck:
-    runs-on: ubuntu-latest
+  analysis:
+    runs-on: <runner>
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
-      - run: npx tsc --noEmit
+      - checkout source
+      - setup runtime/tooling
+      - run: [project install command]
+      - run: [project static-analysis/typecheck command]
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: <runner>
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '22', cache: 'npm' }
-      - run: npm ci
-      - run: npm test -- --coverage
+      - checkout source
+      - setup runtime/tooling
+      - run: [project install command]
+      - run: [project test command]
 ```
 
 ## Common Rationalizations

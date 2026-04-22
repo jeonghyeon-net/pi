@@ -25,22 +25,31 @@ Use Chrome DevTools MCP to give your agent eyes into the browser. This bridges t
 
 ### Installation
 
-```bash
-# Add Chrome DevTools MCP server to your Claude Code config
-# In your project's .mcp.json or Claude Code settings:
+In pi, configure the server in either `.pi/mcp.json` (project-local) or `~/.pi/agent/mcp.json` (global):
+
+```json
 {
   "mcpServers": {
     "chrome-devtools": {
       "command": "npx",
-      "args": ["@anthropic/chrome-devtools-mcp@latest"]
+      "args": ["-y", "@anthropic/chrome-devtools-mcp@latest"]
     }
   }
 }
 ```
 
-### Available Tools
+After configuration, verify availability with pi's MCP workflow:
 
-Chrome DevTools MCP provides these capabilities:
+```bash
+/mcp status
+/mcp tools chrome-devtools
+```
+
+Or call the MCP proxy tool directly when needed.
+
+### Common Capabilities
+
+Exact tool names vary by server and configuration, but a Chrome DevTools MCP setup in pi typically provides capabilities like:
 
 | Tool | What It Does | When to Use |
 |------|-------------|-------------|

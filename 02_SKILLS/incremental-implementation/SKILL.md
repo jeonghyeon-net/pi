@@ -190,7 +190,7 @@ When directing an agent to implement incrementally:
 Start with just the database schema change and the API endpoint.
 Don't touch the UI yet — we'll do that in the next increment.
 
-After implementing, run `npm test` and `npm run build` to verify
+After implementing, run `[project test command]` and `[project build/package command]` to verify
 nothing is broken."
 ```
 
@@ -201,10 +201,10 @@ Be explicit about what's in scope and what's NOT in scope for each increment.
 After each increment, verify:
 
 - [ ] The change does one thing and does it completely
-- [ ] All existing tests still pass (`npm test`)
-- [ ] The build succeeds (`npm run build`)
-- [ ] Type checking passes (`npx tsc --noEmit`)
-- [ ] Linting passes (`npm run lint`)
+- [ ] All existing tests still pass (`[project test command]`)
+- [ ] The build succeeds (`[project build/package command]`)
+- [ ] Type checking passes (`[project static-analysis/typecheck command]`)
+- [ ] Linting passes (`[project lint/format command]`)
 - [ ] The new functionality works as expected
 - [ ] The change is committed with a descriptive message
 

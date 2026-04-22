@@ -219,31 +219,17 @@ git diff --staged
 # 2. Ensure no secrets
 git diff --staged | grep -i "password\|secret\|api_key\|token"
 
-# 3. Run tests
-npm test
-
-# 4. Run linting
-npm run lint
-
-# 5. Run type checking
-npx tsc --noEmit
+# 3. Run the project's focused verification commands
+[project test command]
+[project lint/format command]
+[project static-analysis/typecheck command]
 ```
 
-Automate this with git hooks:
-
-```json
-// package.json (using lint-staged + husky)
-{
-  "lint-staged": {
-    "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
-    "*.{json,md}": ["prettier --write"]
-  }
-}
-```
+Automate this with the hook system your project already uses. In pi projects, keep the hooks aligned with the repository's existing tooling rather than assuming a specific package manager or hook framework.
 
 ## Handling Generated Files
 
-- **Commit generated files** only if the project expects them (e.g., `package-lock.json`, Prisma migrations)
+- **Commit generated files** only if the project expects them (e.g., lockfiles, checked-in migrations, generated schemas)
 - **Don't commit** build output (`dist/`, `.next/`), environment files (`.env`), or IDE config (`.vscode/settings.json` unless shared)
 - **Have a `.gitignore`** that covers: `node_modules/`, `dist/`, `.env`, `.env.local`, `*.pem`
 

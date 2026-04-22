@@ -38,7 +38,7 @@ ADRs capture the reasoning behind significant technical decisions. They're the h
 Store ADRs in `docs/decisions/` with sequential numbering:
 
 ```markdown
-# ADR-001: Use PostgreSQL for primary database
+# ADR-001: Choose the primary datastore strategy
 
 ## Status
 Accepted | Superseded by ADR-XXX | Deprecated
@@ -47,37 +47,36 @@ Accepted | Superseded by ADR-XXX | Deprecated
 2025-01-15
 
 ## Context
-We need a primary database for the task management application. Key requirements:
-- Relational data model (users, tasks, teams with relationships)
-- ACID transactions for task state changes
-- Support for full-text search on task content
-- Managed hosting available (for small team, limited ops capacity)
+We need a primary datastore for this system. Key requirements:
+- Supports the project's data model and consistency requirements
+- Provides the query capabilities the product needs
+- Fits the team's operational capacity
+- Has a clear migration and backup story
 
 ## Decision
-Use PostgreSQL with Prisma ORM.
+Use the datastore and access layer described in the project architecture.
 
 ## Alternatives Considered
 
-### MongoDB
-- Pros: Flexible schema, easy to start with
-- Cons: Our data is inherently relational; would need to manage relationships manually
-- Rejected: Relational data in a document store leads to complex joins or data duplication
+### Option A
+- Pros: [advantages]
+- Cons: [tradeoffs]
+- Rejected: [why it was not the best fit]
 
-### SQLite
-- Pros: Zero configuration, embedded, fast for reads
-- Cons: Limited concurrent write support, no managed hosting for production
-- Rejected: Not suitable for multi-user web application in production
+### Option B
+- Pros: [advantages]
+- Cons: [tradeoffs]
+- Rejected: [why it was not the best fit]
 
-### MySQL
-- Pros: Mature, widely supported
-- Cons: PostgreSQL has better JSON support, full-text search, and ecosystem tooling
-- Rejected: PostgreSQL is the better fit for our feature requirements
+### Option C
+- Pros: [advantages]
+- Cons: [tradeoffs]
+- Rejected: [why it was not the best fit]
 
 ## Consequences
-- Prisma provides type-safe database access and migration management
-- We can use PostgreSQL's full-text search instead of adding Elasticsearch
-- Team needs PostgreSQL knowledge (standard skill, low risk)
-- Hosting on managed service (Supabase, Neon, or RDS)
+- The team must understand the operational model of the chosen datastore
+- Tooling, migrations, and backups must align with this decision
+- Future features should reuse this foundation unless a new ADR supersedes it
 ```
 
 ### ADR Lifecycle
@@ -198,17 +197,17 @@ One-paragraph description of what this project does.
 
 ## Quick Start
 1. Clone the repo
-2. Install dependencies: `npm install`
-3. Set up environment: `cp .env.example .env`
-4. Run the dev server: `npm run dev`
+2. Install dependencies: [actual install command]
+3. Set up environment: [actual environment/setup steps]
+4. Run the project locally: [actual local run command]
 
 ## Commands
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start development server |
-| `npm test` | Run tests |
-| `npm run build` | Production build |
-| `npm run lint` | Run linter |
+| `[local run command]` | Start the project locally |
+| `[test command]` | Run tests |
+| `[build/package command]` | Produce a build, bundle, or release artifact |
+| `[lint/format command]` | Run linting or formatting checks |
 
 ## Architecture
 Brief overview of the project structure and key design decisions.
@@ -241,7 +240,7 @@ For shipped features:
 
 Special consideration for AI agent context:
 
-- **CLAUDE.md / rules files** — Document project conventions so agents follow them
+- **Project guidance files** — Document project conventions so agents follow them (`README`, `docs/`, prompts, `AGENTS.md`, `CLAUDE.md`, or pi-specific guidance if present)
 - **Spec files** — Keep specs updated so agents build the right thing
 - **ADRs** — Help agents understand why past decisions were made (prevents re-deciding)
 - **Inline gotchas** — Prevent agents from falling into known traps
@@ -275,4 +274,4 @@ After documenting:
 - [ ] API functions have parameter and return type documentation
 - [ ] Known gotchas are documented inline where they matter
 - [ ] No commented-out code remains
-- [ ] Rules files (CLAUDE.md etc.) are current and accurate
+- [ ] Project guidance files are current and accurate

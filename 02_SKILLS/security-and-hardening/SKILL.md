@@ -29,7 +29,7 @@ Security-first development practices for web applications. Treat every external 
 - **Hash passwords** with bcrypt/scrypt/argon2 (never store plaintext)
 - **Set security headers** (CSP, HSTS, X-Frame-Options, X-Content-Type-Options)
 - **Use httpOnly, secure, sameSite cookies** for sessions
-- **Run `npm audit`** (or equivalent) before every release
+- **Run the project's dependency/security audit step** before every release
 
 ### Ask First (Requires Human Approval)
 
@@ -213,12 +213,12 @@ function validateUpload(file: UploadedFile) {
 }
 ```
 
-## Triaging npm audit Results
+## Triaging Dependency Audit Results
 
 Not all audit findings require immediate action. Use this decision tree:
 
 ```
-npm audit reports a vulnerability
+Dependency/security audit reports a vulnerability
 ├── Severity: critical or high
 │   ├── Is the vulnerable code reachable in your app?
 │   │   ├── YES --> Fix immediately (update, patch, or replace the dependency)
@@ -340,7 +340,7 @@ For detailed security checklists and pre-commit verification steps, see `referen
 
 After implementing security-relevant code:
 
-- [ ] `npm audit` shows no critical or high vulnerabilities
+- [ ] The project's dependency/security audit shows no critical or high vulnerabilities
 - [ ] No secrets in source code or git history
 - [ ] All user input validated at system boundaries
 - [ ] Authentication and authorization checked on every protected endpoint

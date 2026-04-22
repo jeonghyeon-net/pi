@@ -74,14 +74,14 @@ Cannot reproduce on demand:
 
 For test failures:
 ```bash
-# Run the specific failing test
-npm test -- --grep "test name"
+# Run the smallest reproducible test scope
+[project focused test command]
 
-# Run with verbose output
-npm test -- --verbose
+# Re-run with the most verbose diagnostics your test runner supports
+[project verbose test command]
 
-# Run in isolation (rules out test pollution)
-npm test -- --testPathPattern="specific-file" --runInBand
+# Run the failing scenario in isolation (rules out test pollution)
+[project isolated test command]
 ```
 
 ### Step 2: Localize
@@ -104,8 +104,8 @@ Which layer is failing?
 git bisect start
 git bisect bad                    # Current commit is broken
 git bisect good <known-good-sha> # This commit worked
-# Git will checkout midpoint commits; run your test at each
-git bisect run npm test -- --grep "failing test"
+# Git will checkout midpoint commits; run the smallest reproducible verification at each
+git bisect run [project focused test command]
 ```
 
 ### Step 3: Reduce
@@ -156,17 +156,18 @@ This test will prevent the same bug from recurring. It should fail without the f
 After fixing, verify the complete scenario:
 
 ```bash
-# Run the specific test
-npm test -- --grep "specific test"
+# Run the specific test or smallest reproducible check
+[project focused test command]
 
-# Run the full test suite (check for regressions)
-npm test
+# Run the broader verification suite (check for regressions)
+[project test command]
 
-# Build the project (check for type/compilation errors)
-npm run build
+# Run any build/package/static analysis steps relevant to the bug
+[project build/package command]
+[project static-analysis/typecheck command]
 
 # Manual spot check if applicable
-npm run dev  # Verify in browser
+[project local run command]  # Verify in the real runtime if needed
 ```
 
 ## Error-Specific Patterns

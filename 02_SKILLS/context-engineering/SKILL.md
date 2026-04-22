@@ -22,60 +22,54 @@ Feed agents the right information at the right time. Context is the single bigge
 Structure context from most persistent to most transient:
 
 ```
-┌─────────────────────────────────────┐
-│  1. Rules Files (CLAUDE.md, etc.)   │ ← Always loaded, project-wide
-├─────────────────────────────────────┤
-│  2. Spec / Architecture Docs        │ ← Loaded per feature/session
-├─────────────────────────────────────┤
-│  3. Relevant Source Files            │ ← Loaded per task
-├─────────────────────────────────────┤
-│  4. Error Output / Test Results      │ ← Loaded per iteration
-├─────────────────────────────────────┤
-│  5. Conversation History             │ ← Accumulates, compacts
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────┐
+│  1. Project Rules / Conventions             │ ← Always loaded, project-wide
+├─────────────────────────────────────────────┤
+│  2. Spec / Architecture Docs                │ ← Loaded per feature/session
+├─────────────────────────────────────────────┤
+│  3. Relevant Source Files                   │ ← Loaded per task
+├─────────────────────────────────────────────┤
+│  4. Error Output / Test Results             │ ← Loaded per iteration
+├─────────────────────────────────────────────┤
+│  5. Conversation History                    │ ← Accumulates, compacts
+└─────────────────────────────────────────────┘
 ```
 
-### Level 1: Rules Files
+### Level 1: Project Rules / Conventions
 
-Create a rules file that persists across sessions. This is the highest-leverage context you can provide.
+Create or maintain a small, durable source of truth that persists across sessions. In pi, this can live in the project's existing docs, `README`, `docs/`, prompt files, `.pi/` configuration, or a dedicated rules file such as `AGENTS.md` or `CLAUDE.md` if the project already uses one.
 
-**CLAUDE.md** (for Claude Code):
+**Example project guidance document:**
 ```markdown
 # Project: [Name]
 
-## Tech Stack
-- React 18, TypeScript 5, Vite, Tailwind CSS 4
-- Node.js 22, Express, PostgreSQL, Prisma
+## Stack / Runtime
+- [languages, frameworks, services, package managers]
 
 ## Commands
-- Build: `npm run build`
-- Test: `npm test`
-- Lint: `npm run lint --fix`
-- Dev: `npm run dev`
-- Type check: `npx tsc --noEmit`
+- Install: [actual install command]
+- Test: [actual test command]
+- Lint/format: [actual lint or format command]
+- Build/package: [actual build command]
+- Run locally: [actual dev command]
+- Static analysis/typecheck: [actual analysis command, if any]
 
 ## Code Conventions
-- Functional components with hooks (no class components)
-- Named exports (no default exports)
-- colocate tests next to source: `Button.tsx` → `Button.test.tsx`
-- Use `cn()` utility for conditional classNames
-- Error boundaries at route level
+- [real project conventions]
+- [naming rules]
+- [test placement rules]
+- [error handling rules]
 
 ## Boundaries
-- Never commit .env files or secrets
-- Never add dependencies without checking bundle size impact
-- Ask before modifying database schema
-- Always run tests before committing
+- Never commit secrets
+- Ask before changing schemas, infra, or dependencies
+- Always run the relevant verification commands before finishing
 
 ## Patterns
-[One short example of a well-written component in your style]
+[One short example of a good implementation in this codebase]
 ```
 
-**Equivalent files for other tools:**
-- `.cursorrules` or `.cursor/rules/*.md` (Cursor)
-- `.windsurfrules` (Windsurf)
-- `.github/copilot-instructions.md` (GitHub Copilot)
-- `AGENTS.md` (OpenAI Codex)
+**In pi, prefer the project's existing canonical files rather than inventing a new filename just for the harness.** If the repo already has a strong `README`, ADRs, prompts, or docs hierarchy, use that as the durable context layer.
 
 ### Level 2: Specs and Architecture
 
@@ -179,15 +173,17 @@ Load only the relevant section when working on a specific area.
 
 ## MCP Integrations
 
-For richer context, use Model Context Protocol servers:
+For richer context in pi, use Model Context Protocol servers configured in `.pi/mcp.json` or `~/.pi/agent/mcp.json`.
 
 | MCP Server | What It Provides |
 |-----------|-----------------|
-| **Context7** | Auto-fetches relevant documentation for libraries |
-| **Chrome DevTools** | Live browser state, DOM, console, network |
-| **PostgreSQL** | Direct database schema and query results |
+| **Documentation / search** | Official docs, API references, or web research |
+| **Browser tooling** | Live browser state, DOM, console, network, performance |
+| **Datastore access** | Schema inspection and query results for the active environment |
 | **Filesystem** | Project file access and search |
-| **GitHub** | Issue, PR, and repository context |
+| **Git hosting / issue tracker** | Issue, PR, and repository context |
+
+Use only the MCP servers actually configured for the project. Do not assume a specific server is present until `/mcp status` or `/mcp tools` confirms it.
 
 ## Confusion Management
 
@@ -254,18 +250,18 @@ This catches wrong directions before you've built on them. It's a 30-second inve
 
 | Anti-Pattern | Problem | Fix |
 |---|---|---|
-| Context starvation | Agent invents APIs, ignores conventions | Load rules file + relevant source files before each task |
+| Context starvation | Agent invents APIs, ignores conventions | Load the project's durable guidance + relevant source files before each task |
 | Context flooding | Agent loses focus when loaded with >5,000 lines of non-task-specific context. More files does not mean better output. | Include only what is relevant to the current task. Aim for <2,000 lines of focused context per task. |
 | Stale context | Agent references outdated patterns or deleted code | Start fresh sessions when context drifts |
 | Missing examples | Agent invents a new style instead of following yours | Include one example of the pattern to follow |
-| Implicit knowledge | Agent doesn't know project-specific rules | Write it down in rules files — if it's not written, it doesn't exist |
+| Implicit knowledge | Agent doesn't know project-specific rules | Write it down in durable project guidance — if it's not written, it doesn't exist |
 | Silent confusion | Agent guesses when it should ask | Surface ambiguity explicitly using the confusion management patterns above |
 
 ## Common Rationalizations
 
 | Rationalization | Reality |
 |---|---|
-| "The agent should figure out the conventions" | It can't read your mind. Write a rules file — 10 minutes that saves hours. |
+| "The agent should figure out the conventions" | It can't read your mind. Write down the conventions in the project's durable guidance — 10 minutes that saves hours. |
 | "I'll just correct it when it goes wrong" | Prevention is cheaper than correction. Upfront context prevents drift. |
 | "More context is always better" | Research shows performance degrades with too many instructions. Be selective. |
 | "The context window is huge, I'll use it all" | Context window size ≠ attention budget. Focused context outperforms large context. |
@@ -276,14 +272,14 @@ This catches wrong directions before you've built on them. It's a 30-second inve
 - Agent invents APIs or imports that don't exist
 - Agent re-implements utilities that already exist in the codebase
 - Agent quality degrades as the conversation gets longer
-- No rules file exists in the project
+- No durable project guidance exists in the project
 - External data files or config treated as trusted instructions without verification
 
 ## Verification
 
 After setting up context, confirm:
 
-- [ ] Rules file exists and covers tech stack, commands, conventions, and boundaries
-- [ ] Agent output follows the patterns shown in the rules file
+- [ ] Durable project guidance exists and covers stack, commands, conventions, and boundaries
+- [ ] Agent output follows the patterns shown in that guidance
 - [ ] Agent references actual project files and APIs (not hallucinated ones)
 - [ ] Context is refreshed when switching between major tasks

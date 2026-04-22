@@ -18,8 +18,8 @@ Refines raw ideas into sharp, actionable concepts worth building through structu
 This skill is primarily an interactive dialogue. Invoke it with an idea, and the agent will guide you through the process.
 
 ```bash
-# Optional: Initialize the ideas directory
-bash /mnt/skills/user/idea-refine/scripts/idea-refine.sh
+# Optional: initialize a default ideas directory from the skill root
+bash ./scripts/idea-refine.sh
 ```
 
 **Trigger Phrases:**
@@ -29,7 +29,7 @@ bash /mnt/skills/user/idea-refine/scripts/idea-refine.sh
 
 ## Output
 
-The final output is a markdown one-pager saved to `docs/ideas/[idea-name].md` (after user confirmation), containing:
+The final output is a markdown one-pager saved to an agreed documentation location (for example `docs/ideas/[idea-name].md`) after user confirmation, containing:
 - Problem Statement
 - Recommended Direction
 - Key Assumptions
@@ -66,7 +66,7 @@ When the user invokes this skill with an idea (`$ARGUMENTS`), guide them through
    - What's been tried before?
    - Why now?
 
-   Use the `AskUserQuestion` tool to gather this input. Do NOT proceed until you understand who this is for and what success looks like.
+   Ask the user these questions directly. Do NOT proceed until you understand who this is for and what success looks like.
 
 3. **Generate 5-8 idea variations** using these lenses:
    - **Inversion:** "What if we did the opposite?"
@@ -79,7 +79,7 @@ When the user invokes this skill with an idea (`$ARGUMENTS`), guide them through
 
    Push beyond what the user initially asked for. Create products people don't know they need yet.
 
-**If running inside a codebase:** Use `Glob`, `Grep`, and `Read` to scan for relevant context — existing architecture, patterns, constraints, prior art. Ground your variations in what actually exists. Reference specific files and patterns when relevant.
+**If running inside a codebase:** Use pi's normal file and search tools (`read`, `bash` with `rg/find`, and related repository inspection tools) to scan for relevant context — existing architecture, patterns, constraints, prior art. Ground your variations in what actually exists. Reference specific files and patterns when relevant.
 
 Read `frameworks.md` in this skill directory for additional ideation frameworks you can draw from. Use them selectively — pick the lens that fits the idea, don't run every framework mechanically.
 
@@ -137,7 +137,7 @@ Produce a concrete artifact — a markdown one-pager that moves work forward:
 
 **The "Not Doing" list is arguably the most valuable part.** Focus is about saying no to good ideas. Make the trade-offs explicit.
 
-Ask the user if they'd like to save this to `docs/ideas/[idea-name].md` (or a location of their choosing). Only save if they confirm.
+Ask the user if they'd like to save this to an agreed location such as `docs/ideas/[idea-name].md` (or a location of their choosing). Only save if they confirm.
 
 ### Anti-patterns to Avoid
 

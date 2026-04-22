@@ -52,9 +52,9 @@ State what you found explicitly:
 
 ```
 STACK DETECTED:
-- React 19.1.0 (from package.json)
-- Vite 6.2.0
-- Tailwind CSS 4.0.3
+- [framework/runtime] [version] (from the project's dependency/config files)
+- [build/tooling] [version]
+- [supporting libraries] [version]
 → Fetching official docs for the relevant patterns.
 ```
 

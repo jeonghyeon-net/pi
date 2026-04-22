@@ -372,7 +372,7 @@ For detailed testing patterns, examples, and anti-patterns across frameworks, se
 After completing any implementation:
 
 - [ ] Every new behavior has a corresponding test
-- [ ] All tests pass: `npm test`
+- [ ] All tests pass: `[project test command]`
 - [ ] Bug fixes include a reproduction test that failed before the fix
 - [ ] Test names describe the behavior being verified
 - [ ] No tests were skipped or disabled
