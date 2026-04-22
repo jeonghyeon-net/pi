@@ -255,7 +255,7 @@ function applyClaudeChrome(ctx) {
   ctx.ui.setWidget("claude-code-ui-prompt", void 0);
   ctx.ui.setEditorComponent((tui, theme, keybindings) => new ClaudeCodeEditor(tui, theme, keybindings));
   ctx.ui.setWorkingIndicator(WORKING_INDICATOR);
-  ctx.ui.setHiddenThinkingLabel("\u2026");
+  ctx.ui.setHiddenThinkingLabel("");
   ctx.ui.setTitle(`Claude Code \xB7 ${getProjectName(ctx)}`);
   if (!themeResult.success) {
     ctx.ui.notify(
