@@ -13,6 +13,7 @@
 
   EXTENSIONS
     mcp … MCP 서버 통합 (proxy tool, lazy connection, metadata caching)
+    spinner … `@ryan_nookpi/pi-extension-claude-spinner` 기반 Claude 스타일 작업 스피너
     subagent … `@jeonghyeon.net/pi-subagents` 기반 subagent 실행/관리
     supervisor … `@jeonghyeon.net/pi-supervisor` 기반 목표 감시/steer
     tasks … `@jeonghyeon.net/pi-tasks` 기반 작업 추적
