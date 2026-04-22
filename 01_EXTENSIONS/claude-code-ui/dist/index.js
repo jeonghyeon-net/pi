@@ -363,57 +363,6 @@ function applyClaudeChrome(ctx) {
   }
 }
 
-// src/interactive-mode-patch.ts
-var ORDER = ["agents", "tasks"];
-var STATE = /* @__PURE__ */ Symbol.for("claudeCodeUi.widgetOrder");
-function reorder(mode) {
-  const ui = mode.ui;
-  if (!ui) return;
-  const children = ui.children;
-  const targets = [mode.widgetContainerAbove, mode.statusContainer, mode.editorContainer];
-  if (targets.some((item) => item === void 0)) return;
-  let inserted = false;
-  ui.children = children.flatMap((child) => {
-    if (!targets.includes(child)) return [child];
-    if (inserted) return [];
-    inserted = true;
-    return targets;
-  });
-}
-function applyOrderedWidgets(mode, setWidget) {
-  for (const key of ORDER) {
-    const entry = mode[STATE]?.get(key);
-    if (entry) setWidget.call(mode, key, entry.content, entry.options);
-  }
-}
-function patchInteractiveModePrototype(prototype) {
-  if (!prototype || prototype.__claudeCodeUiPatched) return false;
-  const setWidget = prototype.setExtensionWidget;
-  prototype.setExtensionWidget = function setExtensionWidgetPatched(key, content, options) {
-    reorder(this);
-    if (!ORDER.includes(key)) return setWidget.call(this, key, content, options);
-    const placement = options?.placement ?? "aboveEditor";
-    if (!this[STATE]) this[STATE] = /* @__PURE__ */ new Map();
-    if (content === void 0 || placement !== "aboveEditor") {
-      this[STATE]?.delete(key);
-      setWidget.call(this, key, content, options);
-      return applyOrderedWidgets(this, setWidget);
-    }
-    this[STATE]?.set(key, { content, options });
-    applyOrderedWidgets(this, setWidget);
-  };
-  prototype.__claudeCodeUiPatched = true;
-  return true;
-}
-async function loadInteractiveModeModule() {
-  const main = import.meta.resolve("@mariozechner/pi-coding-agent");
-  return import(resolveFromModule(main, "../modes/interactive/interactive-mode.js"));
-}
-async function applyInteractiveModePatch(load = loadInteractiveModeModule) {
-  const module = await load();
-  patchInteractiveModePrototype(module.InteractiveMode?.prototype);
-}
-
 // src/loader-patch.ts
 function trim2(lines) {
   while (lines.length && !stripAnsi(lines[0] ?? "").trim()) lines.shift();
@@ -544,7 +493,6 @@ async function applyRuntimePatch(run) {
 async function onSessionStart(_event, ctx) {
   if (!ctx.hasUI) return;
   await applyRuntimePatch(applyAssistantMessagePatch);
-  await applyRuntimePatch(applyInteractiveModePatch);
   await applyRuntimePatch(applyLoaderPatch);
   await applyRuntimePatch(applyToolExecutionPatch);
   applyClaudeChrome(ctx);
