@@ -1,5 +1,6 @@
 const ANSI_RESET_FG = "\x1b[39m";
 const ANSI_RE = /\x1b\[[0-9;]*m/g;
+const OSC_RE = /\x1b\][\s\S]*?(?:\u0007|\x1b\\)/g;
 
 export function colorizeRgb(text: string, rgb: [number, number, number]) {
 	const [r, g, b] = rgb;
@@ -7,5 +8,5 @@ export function colorizeRgb(text: string, rgb: [number, number, number]) {
 }
 
 export function stripAnsi(text: string) {
-	return text.replace(ANSI_RE, "");
+	return text.replace(OSC_RE, "").replace(ANSI_RE, "");
 }

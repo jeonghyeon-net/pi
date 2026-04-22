@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { stripAnsi } from "../src/ansi.ts";
 import { applyAssistantMessagePatch, patchAssistantMessagePrototype } from "../src/assistant-message-patch.ts";
 
 class BlankThinkingMessage {
@@ -6,7 +7,7 @@ class BlankThinkingMessage {
 	hiddenThinkingLabel = "";
 	lastMessage = { content: [{ type: "thinking", thinking: "reasoning" }] };
 	render() {
-		return ["", ""];
+		return ["\x1b]133;A\u0007", "\x1b]133;B\u0007"];
 	}
 }
 
@@ -20,9 +21,13 @@ describe("assistant message patch", () => {
 	});
 
 	it("keeps visible assistant text and supports injected loaders", async () => {
-		class HiddenLabelMessage extends BlankThinkingMessage {
-			hiddenThinkingLabel = "reasoning";
+		class VisibleTextMessage extends BlankThinkingMessage {
+			lastMessage = { content: [{ type: "text", text: "hello" }, { type: "thinking", thinking: "reasoning" }] };
+			render() {
+				return ["hello"];
+			}
 		}
+		class HiddenLabelMessage extends BlankThinkingMessage { hiddenThinkingLabel = "reasoning"; }
 		class MissingMessage extends BlankThinkingMessage { lastMessage = undefined; }
 		class TextOnlyMessage extends BlankThinkingMessage { lastMessage = { content: [{ type: "text", text: "hello" }] }; }
 		class VisibleThinkingLines {
@@ -34,15 +39,13 @@ describe("assistant message patch", () => {
 			}
 		}
 		class LoadedMessage extends BlankThinkingMessage {}
-		const visibleText = new BlankThinkingMessage();
-		visibleText.lastMessage = { content: [{ type: "text", text: "hello" }, { type: "thinking", thinking: "reasoning" }] };
 		expect(patchAssistantMessagePrototype(VisibleThinkingLines.prototype)).toBe(true);
 		await applyAssistantMessagePatch(async () => ({ AssistantMessageComponent: LoadedMessage }));
 		expect(new LoadedMessage().render()).toEqual([]);
-		expect(visibleText.render()).toEqual(["", ""]);
-		expect(new HiddenLabelMessage().render()).toEqual(["", ""]);
-		expect(new MissingMessage().render()).toEqual(["", ""]);
-		expect(new TextOnlyMessage().render()).toEqual(["", ""]);
+		expect(new VisibleTextMessage().render()).toEqual(["hello"]);
+		expect(stripAnsi(new HiddenLabelMessage().render().join(""))).toBe("");
+		expect(stripAnsi(new MissingMessage().render().join(""))).toBe("");
+		expect(stripAnsi(new TextOnlyMessage().render().join(""))).toBe("");
 		expect(new VisibleThinkingLines().render()).toEqual(["Thinking..."]);
 	});
 });

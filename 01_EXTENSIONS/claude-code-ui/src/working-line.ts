@@ -2,11 +2,10 @@ import type { AgentEndEvent, AgentStartEvent, ExtensionContext, SessionShutdownE
 import { WORKING_INDICATOR } from "./indicator.js";
 import { formatElapsed, formatWorkingLine } from "./working-line-format.js";
 
-type WorkingContext = Pick<ExtensionContext, "ui">;
 type ToolEvent = { toolName: string };
 type MessageEvent = { assistantMessageEvent: { type: string } };
 
-let activeCtx: WorkingContext | undefined;
+let activeCtx: Pick<ExtensionContext, "ui"> | undefined;
 let activeTool: string | undefined;
 let hasVisibleOutput = false;
 let startedAt = 0;
@@ -17,14 +16,12 @@ function toolLabel(toolName: string) {
 }
 
 function renderWorkingLine() {
-	if (!activeTool && hasVisibleOutput) {
-		activeCtx?.ui.setWorkingIndicator({ frames: [] });
+	activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
+	if (!activeTool || hasVisibleOutput) {
 		activeCtx?.ui.setWorkingMessage("");
 		return;
 	}
-	const label = activeTool ? toolLabel(activeTool) : "Thinking...";
-	activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
-	activeCtx?.ui.setWorkingMessage(formatWorkingLine([label, formatElapsed(Date.now() - startedAt)]));
+	activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel(activeTool), formatElapsed(Date.now() - startedAt)]));
 }
 
 function resetWorkingLine(ctx?: ExtensionContext) {
@@ -34,7 +31,7 @@ function resetWorkingLine(ctx?: ExtensionContext) {
 	activeTool = undefined;
 	hasVisibleOutput = false;
 	(activeCtx ?? ctx)?.ui.setWorkingIndicator(WORKING_INDICATOR);
-	(activeCtx ?? ctx)?.ui.setWorkingMessage();
+	(activeCtx ?? ctx)?.ui.setWorkingMessage("");
 	activeCtx = undefined;
 }
 

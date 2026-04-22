@@ -9,9 +9,11 @@ import { theme } from "./helpers.ts";
 describe("claude-code-ui utils", () => {
 	it("colors frames and strips ansi codes", () => {
 		const colored = colorizeRgb("x", [1, 2, 3]);
+		const osc = "\x1b]133;A\u0007x\x1b]133;B\u0007";
 		expect(colored).toContain("[38;2;1;2;3m");
 		expect(stripAnsi(colored)).toBe("x");
-		expect(WORKING_INDICATOR.frames).toHaveLength(4);
+		expect(stripAnsi(osc)).toBe("x");
+		expect(WORKING_INDICATOR.frames).toHaveLength(0);
 	});
 
 	it("builds chrome rules, prompt frames and finds rule rows", () => {

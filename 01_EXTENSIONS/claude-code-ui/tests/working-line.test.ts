@@ -19,13 +19,9 @@ describe("working-line handlers", () => {
 		vi.useRealTimers();
 	});
 
-	it("hides idle thinking once visible output has started", () => {
+	it("keeps hidden reasoning quiet and only shows active tool progress", () => {
 		onToolExecutionStart({ toolName: "bash" });
 		onToolExecutionEnd({});
-		onMessageUpdate({ assistantMessageEvent: { type: "thinking_start" } });
-		expect(setWorkingMessage).not.toHaveBeenCalled();
-		onMessageUpdate({ assistantMessageEvent: { type: "thinking_end" } });
-		expect(setWorkingMessage).not.toHaveBeenCalled();
 		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
 		expect(setWorkingMessage).not.toHaveBeenCalled();
 		onAgentStart({} as AgentStartEvent, { hasUI: false } as ExtensionContext);
@@ -33,28 +29,27 @@ describe("working-line handlers", () => {
 		onAgentStart({} as AgentStartEvent, ctx);
 		vi.advanceTimersByTime(1000);
 		expect(setWorkingIndicator.mock.lastCall).toEqual([WORKING_INDICATOR]);
-		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Thinking...");
+		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 		onToolExecutionStart({ toolName: "bash" });
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running bash");
-		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
-		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running bash");
-		onToolExecutionEnd({});
-		expect(setWorkingIndicator.mock.lastCall).toEqual([{ frames: [] }]);
-		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 		onToolExecutionStart({ toolName: "mcp" });
-		expect(setWorkingIndicator.mock.lastCall).toEqual([WORKING_INDICATOR]);
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running mcp");
+		onMessageUpdate({ assistantMessageEvent: { type: "thinking_start" } });
+		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running mcp");
+		onMessageUpdate({ assistantMessageEvent: { type: "thinking_end" } });
+		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running mcp");
+		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
+		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 		onToolExecutionEnd({});
-		expect(setWorkingIndicator.mock.lastCall).toEqual([{ frames: [] }]);
 		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 		onAgentEnd({} as AgentEndEvent, ctx);
 		expect(setWorkingIndicator.mock.lastCall).toEqual([WORKING_INDICATOR]);
-		expect(setWorkingMessage.mock.lastCall).toEqual([]);
+		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 	});
 
-	it("can clear on session shutdown without an active turn", () => {
+	it("clears quietly on session shutdown", () => {
 		onSessionShutdown({} as SessionShutdownEvent, ctx);
 		expect(setWorkingIndicator.mock.lastCall).toEqual([WORKING_INDICATOR]);
-		expect(setWorkingMessage.mock.lastCall).toEqual([]);
+		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 	});
 });

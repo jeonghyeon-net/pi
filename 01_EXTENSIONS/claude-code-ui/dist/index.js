@@ -116,14 +116,10 @@ function createClaudeReadTool(cwd) {
 }
 
 // src/ansi.ts
-var ANSI_RESET_FG = "\x1B[39m";
 var ANSI_RE = /\x1b\[[0-9;]*m/g;
-function colorizeRgb(text, rgb) {
-  const [r, g, b] = rgb;
-  return `\x1B[38;2;${r};${g};${b}m${text}${ANSI_RESET_FG}`;
-}
+var OSC_RE = /\x1b\][\s\S]*?(?:\u0007|\x1b\\)/g;
 function stripAnsi(text) {
-  return text.replace(ANSI_RE, "");
+  return text.replace(OSC_RE, "").replace(ANSI_RE, "");
 }
 
 // src/internal-module.ts
@@ -264,17 +260,8 @@ function createClaudeFooter(ctx) {
 }
 
 // src/indicator.ts
-var CLAUDE_ORANGE = [215, 119, 87];
-var CLAUDE_ORANGE_SOFT = [235, 159, 127];
-var CLAUDE_BLUE = [177, 185, 249];
 var WORKING_INDICATOR = {
-  frames: [
-    colorizeRgb("\u273B", CLAUDE_ORANGE),
-    colorizeRgb("\u2726", CLAUDE_BLUE),
-    colorizeRgb("\u25CF", CLAUDE_ORANGE_SOFT),
-    colorizeRgb("\u2726", CLAUDE_BLUE)
-  ],
-  intervalMs: 110
+  frames: []
 };
 
 // src/theme.ts
@@ -365,14 +352,12 @@ function toolLabel(toolName) {
   return { bash: "Running bash", read: "Reading file", write: "Writing file", edit: "Editing file" }[toolName] ?? `Running ${toolName}`;
 }
 function renderWorkingLine() {
-  if (!activeTool && hasVisibleOutput) {
-    activeCtx?.ui.setWorkingIndicator({ frames: [] });
+  activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
+  if (!activeTool || hasVisibleOutput) {
     activeCtx?.ui.setWorkingMessage("");
     return;
   }
-  const label = activeTool ? toolLabel(activeTool) : "Thinking...";
-  activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
-  activeCtx?.ui.setWorkingMessage(formatWorkingLine([label, formatElapsed(Date.now() - startedAt)]));
+  activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel(activeTool), formatElapsed(Date.now() - startedAt)]));
 }
 function resetWorkingLine(ctx) {
   if (timer) clearInterval(timer);
@@ -381,7 +366,7 @@ function resetWorkingLine(ctx) {
   activeTool = void 0;
   hasVisibleOutput = false;
   (activeCtx ?? ctx)?.ui.setWorkingIndicator(WORKING_INDICATOR);
-  (activeCtx ?? ctx)?.ui.setWorkingMessage();
+  (activeCtx ?? ctx)?.ui.setWorkingMessage("");
   activeCtx = void 0;
 }
 function onAgentStart(_event, ctx) {
