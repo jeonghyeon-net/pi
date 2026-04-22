@@ -2,10 +2,10 @@
 import { truncateToWidth as truncateToWidth2 } from "@mariozechner/pi-tui";
 
 // src/build.ts
-import { visibleWidth as visibleWidth2 } from "@mariozechner/pi-tui";
+import { visibleWidth } from "@mariozechner/pi-tui";
 
 // src/overview.ts
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import { truncateToWidth } from "@mariozechner/pi-tui";
 
 // src/types.ts
 var BAR_WIDTH = 10;
@@ -73,19 +73,10 @@ async function hasUncommittedChanges(cwd, exec) {
 // src/overview.ts
 var OVERVIEW_TITLE_KEY = "auto-session-title.overview.title";
 var OVERVIEW_SUMMARY_PREFIX = "auto-session-title.overview.summary.";
-var OVERVIEW_BULLET_PREFIX = "  \u2022 ";
-var OVERVIEW_CONTINUATION_PREFIX = "    ";
+var OVERVIEW_SUMMARY_DELIMITER = " \xB7 ";
 function parseOverviewIndex(key) {
   const index = Number.parseInt(key.slice(OVERVIEW_SUMMARY_PREFIX.length), 10);
   return Number.isInteger(index) && index >= 0 ? index : void 0;
-}
-function wrapFooterText(text, width) {
-  return wrapTextWithAnsi(text, Math.max(1, width)).map((line) => truncateToWidth(line, width));
-}
-function wrapOverviewLine(prefix, text, width) {
-  if (width <= visibleWidth(prefix)) return wrapFooterText(text, width);
-  const bodyWidth = Math.max(1, width - visibleWidth(prefix));
-  return wrapTextWithAnsi(text, bodyWidth).map((line, index) => `${index === 0 ? prefix : OVERVIEW_CONTINUATION_PREFIX}${line}`);
 }
 function isOverviewStatusKey(key) {
   return key === OVERVIEW_TITLE_KEY || key.startsWith(OVERVIEW_SUMMARY_PREFIX);
@@ -98,8 +89,8 @@ function buildFooterOverview(footerData) {
 }
 function buildFooterOverviewLines(theme, overview, width) {
   const lines = [];
-  if (overview.title) lines.push(...wrapFooterText(theme.bold(theme.fg("accent", ` ${overview.title}`)), width));
-  for (const line of overview.summary) lines.push(...wrapOverviewLine(theme.fg("dim", OVERVIEW_BULLET_PREFIX), line, width));
+  if (overview.title) lines.push(truncateToWidth(theme.bold(theme.fg("accent", ` ${overview.title}`)), width));
+  if (overview.summary.length > 0) lines.push(truncateToWidth(theme.fg("dim", ` ${overview.summary.join(OVERVIEW_SUMMARY_DELIMITER)}`), width));
   return lines;
 }
 
@@ -204,7 +195,7 @@ function buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges,
   const remaining = 100 - pct;
   const barColor = remaining <= 15 ? "error" : remaining <= 40 ? "warning" : "dim";
   const right = theme.fg(barColor, `[${bar}] ${pct}% `);
-  const pad = " ".repeat(Math.max(1, width - visibleWidth2(left) - visibleWidth2(mid) - visibleWidth2(right)));
+  const pad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(mid) - visibleWidth(right)));
   return { statusEntries, overview, left, mid, right, pad };
 }
 
@@ -297,7 +288,7 @@ function installFooter(ctx, exec) {
         const { statusEntries, overview, left, mid, right, pad } = buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges, prStatus, width);
         const lines = [truncateToWidth2(left + mid + pad + right, width)], delimiter = theme.fg("dim", " \xB7 ");
         if (statusEntries.length > 0) lines.push(truncateToWidth2(` ${statusEntries.map(([k, t]) => styleStatus(theme, k, t)).join(delimiter)}`, width));
-        if (overview) lines.push("", ...buildFooterOverviewLines(theme, overview, width));
+        if (overview) lines.push(...buildFooterOverviewLines(theme, overview, width));
         return lines;
       }
     };

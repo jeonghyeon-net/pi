@@ -36,19 +36,18 @@ describe("buildFooterOverview", () => {
 });
 
 describe("buildFooterOverviewLines", () => {
-	it("renders title and wraps full summary lines under footer", () => {
-		expect(buildFooterOverviewLines(mockTheme(), { title: "세션 제목", summary: ["이 줄은 길어서 푸터 아래에서 여러 줄로 감싸져야 한다"] }, 20)).toEqual([
+	it("renders title and joined summary as single lines", () => {
+		expect(buildFooterOverviewLines(mockTheme(), { title: "세션 제목", summary: ["첫 줄", "둘째 줄"] }, 40)).toEqual([
 			" 세션 제목",
-			"  • 이 줄은 길어서",
-			"    푸터 아래에서",
-			"    여러 줄로",
-			"    감싸져야 한다",
+			" 첫 줄 · 둘째 줄",
 		]);
 	});
 	it("renders only title if called with an empty summary directly", () => {
 		expect(buildFooterOverviewLines(mockTheme(), { title: "세션 제목", summary: [] }, 20)).toEqual([" 세션 제목"]);
 	});
-	it("falls back to plain wrapping when width is narrower than bullet prefix", () => {
-		expect(buildFooterOverviewLines(mockTheme(), { summary: ["abc"] }, 2)).toEqual(["ab", "c"]);
+	it("keeps summary to one truncated line", () => {
+		const [line] = buildFooterOverviewLines(mockTheme(), { summary: ["abcdef"] }, 4);
+		expect(line).toContain("...");
+		expect(buildFooterOverviewLines(mockTheme(), { summary: ["abcdef"] }, 4)).toHaveLength(1);
 	});
 });

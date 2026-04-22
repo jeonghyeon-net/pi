@@ -1,25 +1,14 @@
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import { truncateToWidth } from "@mariozechner/pi-tui";
 import type { FooterOverview, FooterStatusData, FooterTheme } from "./types.js";
 import { sanitizeStatusText } from "./utils.js";
 
 const OVERVIEW_TITLE_KEY = "auto-session-title.overview.title";
 const OVERVIEW_SUMMARY_PREFIX = "auto-session-title.overview.summary.";
-const OVERVIEW_BULLET_PREFIX = "  • ";
-const OVERVIEW_CONTINUATION_PREFIX = "    ";
+const OVERVIEW_SUMMARY_DELIMITER = " · ";
 
 function parseOverviewIndex(key: string): number | undefined {
 	const index = Number.parseInt(key.slice(OVERVIEW_SUMMARY_PREFIX.length), 10);
 	return Number.isInteger(index) && index >= 0 ? index : undefined;
-}
-
-function wrapFooterText(text: string, width: number): string[] {
-	return wrapTextWithAnsi(text, Math.max(1, width)).map((line) => truncateToWidth(line, width));
-}
-
-function wrapOverviewLine(prefix: string, text: string, width: number): string[] {
-	if (width <= visibleWidth(prefix)) return wrapFooterText(text, width);
-	const bodyWidth = Math.max(1, width - visibleWidth(prefix));
-	return wrapTextWithAnsi(text, bodyWidth).map((line, index) => `${index === 0 ? prefix : OVERVIEW_CONTINUATION_PREFIX}${line}`);
 }
 
 export function isOverviewStatusKey(key: string): boolean {
@@ -40,7 +29,7 @@ export function buildFooterOverview(footerData: FooterStatusData): FooterOvervie
 
 export function buildFooterOverviewLines(theme: FooterTheme, overview: FooterOverview, width: number): string[] {
 	const lines: string[] = [];
-	if (overview.title) lines.push(...wrapFooterText(theme.bold(theme.fg("accent", ` ${overview.title}`)), width));
-	for (const line of overview.summary) lines.push(...wrapOverviewLine(theme.fg("dim", OVERVIEW_BULLET_PREFIX), line, width));
+	if (overview.title) lines.push(truncateToWidth(theme.bold(theme.fg("accent", ` ${overview.title}`)), width));
+	if (overview.summary.length > 0) lines.push(truncateToWidth(theme.fg("dim", ` ${overview.summary.join(OVERVIEW_SUMMARY_DELIMITER)}`), width));
 	return lines;
 }

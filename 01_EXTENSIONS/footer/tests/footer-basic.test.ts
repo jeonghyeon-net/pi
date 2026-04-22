@@ -28,10 +28,11 @@ describe("footer basic behavior", () => {
 		expect(c.render(120)).toHaveLength(2);
 		c.dispose();
 	});
-	it("renders session overview below footer lines with breathing room", () => {
+	it("renders session overview as title line plus one summary line", () => {
 		const { factory } = setup();
-		const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData({ getExtensionStatuses: () => new Map([["todo", "doing"], ["auto-session-title.overview.title", "세션 제목"], ["auto-session-title.overview.summary.0", "첫 요약 줄"]]) }));
-		expect(c.render(120)).toEqual(expect.arrayContaining([expect.stringContaining("doing"), "", " 세션 제목", "  • 첫 요약 줄"]));
+		const c = factory({ requestRender: vi.fn() }, mockTheme(), mockFooterData({ getExtensionStatuses: () => new Map([["todo", "doing"], ["auto-session-title.overview.title", "세션 제목"], ["auto-session-title.overview.summary.0", "첫 요약 줄"], ["auto-session-title.overview.summary.1", "둘째 요약 줄"]]) }));
+		expect(c.render(120)).toEqual(expect.arrayContaining([expect.stringContaining("doing"), " 세션 제목", " 첫 요약 줄 · 둘째 요약 줄"]));
+		expect(c.render(120)).not.toContain("");
 		c.dispose();
 	});
 	it("renders PR review and merge on first line", async () => {

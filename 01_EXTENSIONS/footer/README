@@ -1,4 +1,4 @@
 커스텀 footer: 모델명, 저장소/브랜치, context 사용률, 브랜치 뒤 PR 리뷰 상태/머지 가능 여부 표시
-- `auto-session-title` 가 넘긴 세션 요약은 footer 아래 별도 블록으로 전부 렌더링
+- `auto-session-title` 세션 요약은 footer 아래에 제목 1줄 + 요약 1줄로 압축 렌더링
 - PR 상태 문구: `src/pr.ts`
 - PR 상태별 색상: `src/types.ts` 의 `STATUS_STYLE_MAP`

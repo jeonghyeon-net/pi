@@ -43,7 +43,7 @@ export function installFooter(ctx: FooterContext, exec: ExecFn) {
 				const { statusEntries, overview, left, mid, right, pad } = buildFooterLineParts(theme, ctx, footerData, repoName, hasDirtyChanges, prStatus, width);
 				const lines = [truncateToWidth(left + mid + pad + right, width)], delimiter = theme.fg("dim", " · ");
 				if (statusEntries.length > 0) lines.push(truncateToWidth(` ${statusEntries.map(([k, t]) => styleStatus(theme, k, t)).join(delimiter)}`, width));
-				if (overview) lines.push("", ...buildFooterOverviewLines(theme, overview, width));
+				if (overview) lines.push(...buildFooterOverviewLines(theme, overview, width));
 				return lines;
 			},
 		};

@@ -1,6 +1,0 @@
-
-  JuliusBrussee/caveman의 `skills/caveman/SKILL.md` full mode를 기준으로 응답 스타일을 맞추는 always-on extension.
-  기본값은 켜짐(true)이며, 관사·군더더기·예의 표현을 줄이고 fragment를 허용해 upstream caveman full과 같은 방향으로 짧게 답하게 만든다.
-  `/terse on|off|status|toggle`로 전역 활성 상태를 바꿀 수 있고, 값은 `~/.pi/agent/extensions/terse-mode.json`에 저장되어 새 세션에도 유지된다.
-  보안 경고, 파괴적 작업, 애매한 다단계 안내처럼 명확성이 중요한 경우에는 upstream caveman의 Auto-Clarity 규칙대로 잠시 풀어쓰도록 지시한다.
-  또한 upstream boundary와 맞춰 코드/커밋/PR 본문은 일반 톤으로 두고, 대화 응답만 caveman full 스타일로 압축한다.
