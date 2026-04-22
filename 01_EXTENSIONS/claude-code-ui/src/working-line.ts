@@ -1,23 +1,30 @@
 import type { AgentEndEvent, AgentStartEvent, ExtensionContext, SessionShutdownEvent } from "@mariozechner/pi-coding-agent";
+import { WORKING_INDICATOR } from "./indicator.js";
 import { formatElapsed, formatWorkingLine } from "./working-line-format.js";
 
-let activeCtx: ExtensionContext | undefined;
+type WorkingContext = Pick<ExtensionContext, "ui">;
+type ToolEvent = { toolName: string };
+type MessageEvent = { assistantMessageEvent: { type: string } };
+
+let activeCtx: WorkingContext | undefined;
 let activeTool: string | undefined;
 let hasVisibleOutput = false;
 let startedAt = 0;
 let timer: ReturnType<typeof setInterval> | undefined;
-
-type ToolEvent = { toolName: string };
-type MessageEvent = { assistantMessageEvent: { type: string } };
 
 function toolLabel(toolName: string) {
 	return { bash: "Running bash", read: "Reading file", write: "Writing file", edit: "Editing file" }[toolName] ?? `Running ${toolName}`;
 }
 
 function renderWorkingLine() {
+	if (!activeTool && hasVisibleOutput) {
+		activeCtx?.ui.setWorkingIndicator({ frames: [] });
+		activeCtx?.ui.setWorkingMessage("");
+		return;
+	}
 	const label = activeTool ? toolLabel(activeTool) : "Thinking...";
-	const message = !activeTool && hasVisibleOutput ? undefined : formatWorkingLine([label, formatElapsed(Date.now() - startedAt)]);
-	activeCtx?.ui.setWorkingMessage(message);
+	activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
+	activeCtx?.ui.setWorkingMessage(formatWorkingLine([label, formatElapsed(Date.now() - startedAt)]));
 }
 
 function resetWorkingLine(ctx?: ExtensionContext) {
@@ -26,6 +33,7 @@ function resetWorkingLine(ctx?: ExtensionContext) {
 	startedAt = 0;
 	activeTool = undefined;
 	hasVisibleOutput = false;
+	(activeCtx ?? ctx)?.ui.setWorkingIndicator(WORKING_INDICATOR);
 	(activeCtx ?? ctx)?.ui.setWorkingMessage();
 	activeCtx = undefined;
 }

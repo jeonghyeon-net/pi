@@ -115,9 +115,6 @@ function createClaudeReadTool(cwd) {
   });
 }
 
-// src/editor.ts
-import { CustomEditor } from "@mariozechner/pi-coding-agent";
-
 // src/ansi.ts
 var ANSI_RESET_FG = "\x1B[39m";
 var ANSI_RE = /\x1b\[[0-9;]*m/g;
@@ -128,6 +125,60 @@ function colorizeRgb(text, rgb) {
 function stripAnsi(text) {
   return text.replace(ANSI_RE, "");
 }
+
+// src/internal-module.ts
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+var require2 = createRequire(import.meta.url);
+function resolvePackageFile(packageName, file) {
+  for (const base of require2.resolve.paths(packageName) ?? []) {
+    const candidate = join(base, packageName, file);
+    if (existsSync(candidate)) return pathToFileURL(candidate).href;
+  }
+  throw new Error(`Could not resolve ${packageName}/${file}`);
+}
+
+// src/assistant-message-patch.ts
+function hasVisibleText(message) {
+  if (!message) return false;
+  for (const content of message.content) {
+    if (content.type === "text" && content.text?.trim()) return true;
+  }
+  return false;
+}
+function hasHiddenThinking(message) {
+  if (!message) return false;
+  for (const content of message.content) {
+    if (content.type === "thinking" && content.thinking?.trim()) return true;
+  }
+  return false;
+}
+function patchAssistantMessagePrototype(prototype) {
+  if (!prototype || prototype.__claudeCodeUiPatched) return false;
+  const render = prototype.render;
+  prototype.render = function renderPatched(width) {
+    const lines = render.call(this, width);
+    const hiddenLabel = this.hiddenThinkingLabel?.trim();
+    const hasText = hasVisibleText(this.lastMessage);
+    const shouldHide = this.hideThinkingBlock && !hiddenLabel && hasHiddenThinking(this.lastMessage);
+    if (!shouldHide || hasText) return lines;
+    return lines.every((line) => !stripAnsi(line).trim()) ? [] : lines;
+  };
+  prototype.__claudeCodeUiPatched = true;
+  return true;
+}
+async function loadAssistantMessageModule() {
+  return import(resolvePackageFile("@mariozechner/pi-coding-agent", "dist/modes/interactive/components/assistant-message.js"));
+}
+async function applyAssistantMessagePatch(load = loadAssistantMessageModule) {
+  const module = await load();
+  patchAssistantMessagePrototype(module.AssistantMessageComponent?.prototype);
+}
+
+// src/editor.ts
+import { CustomEditor } from "@mariozechner/pi-coding-agent";
 
 // src/rules.ts
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
@@ -265,9 +316,36 @@ function applyClaudeChrome(ctx) {
   }
 }
 
+// src/loader-patch.ts
+function isBlank(lines) {
+  for (const line of lines) {
+    if (stripAnsi(line).trim()) return false;
+  }
+  return true;
+}
+function patchLoaderPrototype(prototype) {
+  if (!prototype || prototype.__claudeCodeUiPatched) return false;
+  const render = prototype.render;
+  prototype.render = function renderPatched(width) {
+    const lines = render.call(this, width);
+    return isBlank(lines) ? [] : lines;
+  };
+  prototype.__claudeCodeUiPatched = true;
+  return true;
+}
+async function loadLoaderModule() {
+  return import(resolvePackageFile("@mariozechner/pi-tui", "dist/components/loader.js"));
+}
+async function applyLoaderPatch(load = loadLoaderModule) {
+  const module = await load();
+  patchLoaderPrototype(module.Loader?.prototype);
+}
+
 // src/session-start.ts
 async function onSessionStart(_event, ctx) {
   if (!ctx.hasUI) return;
+  await applyAssistantMessagePatch();
+  await applyLoaderPatch();
   applyClaudeChrome(ctx);
 }
 
@@ -292,9 +370,14 @@ function toolLabel(toolName) {
   return { bash: "Running bash", read: "Reading file", write: "Writing file", edit: "Editing file" }[toolName] ?? `Running ${toolName}`;
 }
 function renderWorkingLine() {
+  if (!activeTool && hasVisibleOutput) {
+    activeCtx?.ui.setWorkingIndicator({ frames: [] });
+    activeCtx?.ui.setWorkingMessage("");
+    return;
+  }
   const label = activeTool ? toolLabel(activeTool) : "Thinking...";
-  const message = !activeTool && hasVisibleOutput ? void 0 : formatWorkingLine([label, formatElapsed(Date.now() - startedAt)]);
-  activeCtx?.ui.setWorkingMessage(message);
+  activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
+  activeCtx?.ui.setWorkingMessage(formatWorkingLine([label, formatElapsed(Date.now() - startedAt)]));
 }
 function resetWorkingLine(ctx) {
   if (timer) clearInterval(timer);
@@ -302,6 +385,7 @@ function resetWorkingLine(ctx) {
   startedAt = 0;
   activeTool = void 0;
   hasVisibleOutput = false;
+  (activeCtx ?? ctx)?.ui.setWorkingIndicator(WORKING_INDICATOR);
   (activeCtx ?? ctx)?.ui.setWorkingMessage();
   activeCtx = void 0;
 }
