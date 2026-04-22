@@ -856,6 +856,9 @@ var init_conversation_viewer = __esm({
   }
 });
 
+// src/register-subagents.ts
+import { basename as basename2 } from "node:path";
+
 // node_modules/@tintinweb/pi-subagents/dist/index.js
 import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync3, unlinkSync } from "node:fs";
 import { homedir as homedir4 } from "node:os";
@@ -3504,9 +3507,60 @@ ${systemPrompt}
   });
 }
 
+// src/register-subagents.ts
+var fallbackSessionIds = /* @__PURE__ */ new WeakMap();
+function getFallbackSessionId(sessionManager) {
+  const cached = fallbackSessionIds.get(sessionManager);
+  if (cached) return cached;
+  const sessionFile = sessionManager.getSessionFile?.();
+  const fileName = typeof sessionFile === "string" && sessionFile.length > 0 ? basename2(sessionFile).replace(/\.[^.]+$/, "") : "";
+  const fallback = fileName || `session-${Date.now().toString(36)}`;
+  fallbackSessionIds.set(sessionManager, fallback);
+  return fallback;
+}
+function patchSessionManager(sessionManager) {
+  if (!sessionManager) return;
+  const originalGetSessionId = sessionManager.getSessionId;
+  if (typeof originalGetSessionId === "function") {
+    const current = originalGetSessionId();
+    if (typeof current === "string" && current.length > 0) return;
+    const fallback2 = getFallbackSessionId(sessionManager);
+    sessionManager.getSessionId = () => {
+      const next = originalGetSessionId();
+      return typeof next === "string" && next.length > 0 ? next : fallback2;
+    };
+    return;
+  }
+  const fallback = getFallbackSessionId(sessionManager);
+  sessionManager.getSessionId = () => fallback;
+}
+function wrapAgentTool(tool) {
+  if (tool.name !== "Agent" || typeof tool.execute !== "function") return tool;
+  const originalExecute = tool.execute;
+  return {
+    ...tool,
+    execute(toolCallId, params, signal, onUpdate, ctx) {
+      patchSessionManager(ctx.sessionManager);
+      return originalExecute(toolCallId, params, signal, onUpdate, ctx);
+    }
+  };
+}
+function defaultRegisterSubagents(pi) {
+  dist_default(pi);
+}
+function registerSubagentsWrapper(pi, registerImpl = defaultRegisterSubagents) {
+  const originalRegisterTool = pi.registerTool.bind(pi);
+  pi.registerTool = (tool) => originalRegisterTool(wrapAgentTool(tool));
+  try {
+    if (registerImpl) registerImpl(pi);
+  } finally {
+    pi.registerTool = originalRegisterTool;
+  }
+}
+
 // src/index.ts
 function index_default(pi) {
-  return dist_default(arguments[0]);
+  return registerSubagentsWrapper(arguments[0]);
 }
 export {
   index_default as default

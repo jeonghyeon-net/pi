@@ -12,6 +12,7 @@
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@tintinweb/pi-subagents": "^0.5.2",
+    "@types/node": "^24.5.2",
     "esbuild": "^0.28.0",
     "typescript": "^5.8.0",
     "vitest": "^3.1.0"

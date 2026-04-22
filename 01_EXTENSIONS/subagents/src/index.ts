@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import registerSubagents from "@tintinweb/pi-subagents/dist/index.js";
+import { registerSubagentsWrapper } from "./register-subagents";
 
 export default function (pi: ExtensionAPI) {
-	return registerSubagents(arguments[0]);
+	return registerSubagentsWrapper(arguments[0]);
 }
