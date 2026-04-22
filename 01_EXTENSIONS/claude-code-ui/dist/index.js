@@ -110,8 +110,8 @@ function createClaudeBashTool(cwd) {
     renderResult(result, { expanded, isPartial }, theme, context) {
       const output = result.content[0]?.type === "text" ? result.content[0].text : "";
       const exitCode = output.match(/exit code: (\d+)/)?.[1];
-      const status = isPartial ? theme.fg("warning", "running\u2026") : exitCode && exitCode !== "0" ? theme.fg("error", `exit ${exitCode}`) : theme.fg("success", "done");
-      const summary = `${status}${theme.fg("dim", ` \xB7 ${output.split("\n").filter((line) => line.trim()).length} lines`)}${result.details?.truncation?.truncated ? theme.fg("dim", " \xB7 truncated") : ""}`;
+      const status2 = isPartial ? theme.fg("warning", "running\u2026") : exitCode && exitCode !== "0" ? theme.fg("error", `exit ${exitCode}`) : theme.fg("success", "done");
+      const summary = `${status2}${theme.fg("dim", ` \xB7 ${output.split("\n").filter((line) => line.trim()).length} lines`)}${result.details?.truncation?.truncated ? theme.fg("dim", " \xB7 truncated") : ""}`;
       setSummary(context, summary);
       if (!expanded || !output.trim()) return context.lastComponent instanceof Container ? context.lastComponent : new Container();
       return new Text(branchBlock(theme, summarizeTextPreview(theme, output, 18)), 0, 0);
@@ -392,15 +392,55 @@ async function applyLoaderPatch(load = loadLoaderModule) {
   patchLoaderPrototype(module.Loader?.prototype);
 }
 
-// src/tool-execution-patch.ts
+// src/generic-tool-renderer.ts
 import { Container as Container4, Text as Text4 } from "@mariozechner/pi-tui";
-function isGenericTool(tool) {
-  return !!tool.toolDefinition && !tool.builtInToolDefinition;
-}
-function summarizeDetails(details) {
+function summarize(details) {
   if (typeof details?.totalResults === "number") return `${details.totalResults} sources`;
   if (typeof details?.successful === "number" && typeof details?.urlCount === "number") return `${details.successful}/${details.urlCount} URLs`;
   if (typeof details?.totalChars === "number") return `${details.totalChars} chars`;
+}
+function status(theme, isPartial, isError, details) {
+  if (isPartial) return theme.fg("warning", "running\u2026");
+  if (isError) return theme.fg("error", "error");
+  return theme.fg("success", summarize(details) ?? "done");
+}
+function outputOf(result) {
+  return result.content?.filter((item) => item.type === "text" && !!item.text).map((item) => item.text).join("\n") ?? "";
+}
+function setSummary4(context, summary) {
+  if (context.state.summary === summary) return;
+  context.state.summary = summary;
+  context.invalidate();
+}
+function createCallRenderer(name) {
+  return (args, theme, context) => {
+    const text = context.lastComponent instanceof Text4 ? context.lastComponent : new Text4("", 0, 0);
+    const suffix = inlineSuffix(theme, context.state.summary);
+    const preview = summarizeArgs(args);
+    text.setText(`${toolPrefix(theme, toolLabel(name))}${preview ? ` ${theme.fg("muted", preview)}` : ""}${suffix}`);
+    return text;
+  };
+}
+function createResultRenderer(isError) {
+  return (result, options, theme, context) => {
+    const output = outputOf(result);
+    setSummary4(context, `${status(theme, options.isPartial, isError(), result.details)}${result.details?.truncation?.truncated ? theme.fg("dim", " \xB7 truncated") : ""}`);
+    if (!options.expanded || !output.trim()) return context.lastComponent instanceof Container4 ? context.lastComponent : new Container4();
+    return new Text4(branchBlock(theme, summarizeTextPreview(theme, output, 4)), 0, 0);
+  };
+}
+function renderCallFallback(name, args, summary, theme) {
+  const preview = summarizeArgs(args);
+  return new Text4(`${toolPrefix(theme, toolLabel(name))}${preview ? ` ${theme.fg("muted", preview)}` : ""}${inlineSuffix(theme, summary)}`, 0, 0);
+}
+function renderResultFallback(output, isPartial, isError, details, expanded, theme) {
+  const summary = `${status(theme, isPartial, isError, details)}${details?.truncation?.truncated ? theme.fg("dim", " \xB7 truncated") : ""}`;
+  return { summary, component: !expanded || !output.trim() ? new Container4() : new Text4(branchBlock(theme, summarizeTextPreview(theme, output, 4)), 0, 0) };
+}
+
+// src/tool-execution-patch.ts
+function isGenericTool(tool) {
+  return !!tool.toolDefinition && !tool.builtInToolDefinition;
 }
 function patchToolExecutionPrototype(prototype, theme) {
   if (!prototype || !theme || prototype.__claudeCodeUiPatched) return false;
@@ -410,26 +450,22 @@ function patchToolExecutionPrototype(prototype, theme) {
   const call = prototype.createCallFallback;
   const result = prototype.createResultFallback;
   prototype.getCallRenderer = function getCallRendererPatched() {
-    return isGenericTool(this) ? void 0 : getCallRenderer.call(this);
+    return isGenericTool(this) ? createCallRenderer(this.toolName) : getCallRenderer.call(this);
   };
   prototype.getResultRenderer = function getResultRendererPatched() {
-    return isGenericTool(this) ? void 0 : getResultRenderer.call(this);
+    return isGenericTool(this) ? createResultRenderer(() => this.result?.isError) : getResultRenderer.call(this);
   };
   prototype.getRenderShell = function getRenderShellPatched() {
     return isGenericTool(this) ? "self" : shell.call(this);
   };
   prototype.createCallFallback = function createCallFallbackPatched() {
-    if (!isGenericTool(this)) return call.call(this);
-    const args = summarizeArgs(this.args);
-    return new Text4(`${toolPrefix(theme, toolLabel(this.toolName))}${args ? ` ${theme.fg("muted", args)}` : ""}${inlineSuffix(theme, this.rendererState.summary)}`, 0, 0);
+    return isGenericTool(this) ? renderCallFallback(this.toolName, this.args, this.rendererState.summary, theme) : call.call(this);
   };
   prototype.createResultFallback = function createResultFallbackPatched() {
     if (!isGenericTool(this)) return result.call(this);
-    const output = this.getTextOutput() ?? "";
-    const status = this.isPartial ? theme.fg("warning", "running\u2026") : this.result?.isError ? theme.fg("error", "error") : theme.fg("success", summarizeDetails(this.result?.details) ?? "done");
-    this.rendererState.summary = `${status}${this.result?.details?.truncation?.truncated ? theme.fg("dim", " \xB7 truncated") : ""}`;
-    if (!this.expanded || !output.trim()) return new Container4();
-    return new Text4(branchBlock(theme, summarizeTextPreview(theme, output, 4)), 0, 0);
+    const rendered = renderResultFallback(this.getTextOutput() ?? "", this.isPartial, this.result?.isError, this.result?.details, this.expanded, theme);
+    this.rendererState.summary = rendered.summary;
+    return rendered.component;
   };
   prototype.__claudeCodeUiPatched = true;
   return true;
@@ -529,7 +565,7 @@ function onSessionShutdown(_event, ctx) {
 // src/write-tool.ts
 import { defineTool as defineTool4, createWriteToolDefinition } from "@mariozechner/pi-coding-agent";
 import { Container as Container5, Text as Text5 } from "@mariozechner/pi-tui";
-function setSummary4(context, summary) {
+function setSummary5(context, summary) {
   if (context.state.summary === summary) return;
   context.state.summary = summary;
   context.invalidate();
@@ -548,7 +584,7 @@ function createClaudeWriteTool(cwd) {
     renderResult(result, { isPartial }, theme, context) {
       const content = result.content[0];
       const summary = isPartial ? theme.fg("warning", "writing\u2026") : content?.type === "text" && content.text.startsWith("Error") ? theme.fg("error", content.text.split("\n")[0]) : theme.fg("success", "written");
-      setSummary4(context, summary);
+      setSummary5(context, summary);
       return context.lastComponent instanceof Container5 ? context.lastComponent : new Container5();
     }
   });

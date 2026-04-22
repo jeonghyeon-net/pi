@@ -1,15 +1,6 @@
 import type { Theme } from "@mariozechner/pi-coding-agent";
-import { Container, Text } from "@mariozechner/pi-tui";
 import { resolveFromModule } from "./internal-module.js";
-import { branchBlock, inlineSuffix, summarizeArgs, summarizeTextPreview, toolLabel, toolPrefix } from "./tool-utils.js";
-
-type ResultDetails = {
-	truncation?: { truncated?: boolean };
-	totalResults?: number;
-	successful?: number;
-	urlCount?: number;
-	totalChars?: number;
-};
+import { createCallRenderer, createResultRenderer, renderCallFallback, renderResultFallback, type ResultDetails } from "./generic-tool-renderer.js";
 
 type ToolExecutionPrototype = {
 	createCallFallback(): object;
@@ -36,12 +27,6 @@ function isGenericTool(tool: ToolExecutionPrototype) {
 	return !!tool.toolDefinition && !tool.builtInToolDefinition;
 }
 
-function summarizeDetails(details?: ResultDetails) {
-	if (typeof details?.totalResults === "number") return `${details.totalResults} sources`;
-	if (typeof details?.successful === "number" && typeof details?.urlCount === "number") return `${details.successful}/${details.urlCount} URLs`;
-	if (typeof details?.totalChars === "number") return `${details.totalChars} chars`;
-}
-
 export function patchToolExecutionPrototype(prototype?: ToolExecutionPrototype, theme?: Theme) {
 	if (!prototype || !theme || prototype.__claudeCodeUiPatched) return false;
 	const shell = prototype.getRenderShell;
@@ -49,21 +34,17 @@ export function patchToolExecutionPrototype(prototype?: ToolExecutionPrototype, 
 	const getResultRenderer = prototype.getResultRenderer;
 	const call = prototype.createCallFallback;
 	const result = prototype.createResultFallback;
-	prototype.getCallRenderer = function getCallRendererPatched() { return isGenericTool(this) ? undefined : getCallRenderer.call(this); };
-	prototype.getResultRenderer = function getResultRendererPatched() { return isGenericTool(this) ? undefined : getResultRenderer.call(this); };
+	prototype.getCallRenderer = function getCallRendererPatched() { return isGenericTool(this) ? createCallRenderer(this.toolName) : getCallRenderer.call(this); };
+	prototype.getResultRenderer = function getResultRendererPatched() { return isGenericTool(this) ? createResultRenderer(() => this.result?.isError) : getResultRenderer.call(this); };
 	prototype.getRenderShell = function getRenderShellPatched() { return isGenericTool(this) ? "self" : shell.call(this); };
 	prototype.createCallFallback = function createCallFallbackPatched() {
-		if (!isGenericTool(this)) return call.call(this);
-		const args = summarizeArgs(this.args);
-		return new Text(`${toolPrefix(theme, toolLabel(this.toolName))}${args ? ` ${theme.fg("muted", args)}` : ""}${inlineSuffix(theme, this.rendererState.summary)}`, 0, 0);
+		return isGenericTool(this) ? renderCallFallback(this.toolName, this.args, this.rendererState.summary, theme) : call.call(this);
 	};
 	prototype.createResultFallback = function createResultFallbackPatched() {
 		if (!isGenericTool(this)) return result.call(this);
-		const output = this.getTextOutput() ?? "";
-		const status = this.isPartial ? theme.fg("warning", "running…") : this.result?.isError ? theme.fg("error", "error") : theme.fg("success", summarizeDetails(this.result?.details) ?? "done");
-		this.rendererState.summary = `${status}${this.result?.details?.truncation?.truncated ? theme.fg("dim", " · truncated") : ""}`;
-		if (!this.expanded || !output.trim()) return new Container();
-		return new Text(branchBlock(theme, summarizeTextPreview(theme, output, 4)), 0, 0);
+		const rendered = renderResultFallback(this.getTextOutput() ?? "", this.isPartial, this.result?.isError, this.result?.details, this.expanded, theme);
+		this.rendererState.summary = rendered.summary;
+		return rendered.component;
 	};
 	prototype.__claudeCodeUiPatched = true;
 	return true;
