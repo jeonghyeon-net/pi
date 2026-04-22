@@ -1,5 +1,6 @@
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
+import { stripAnsi } from "../src/ansi.ts";
 import { createClaudeFooter } from "../src/footer.ts";
 import { getProjectName } from "../src/header.ts";
 import { THEME_NAME, applyClaudeTheme } from "../src/theme.ts";
@@ -15,6 +16,10 @@ function createCtx(percent: number | null, branchEntries: object[], modelId = "s
 	} as ExtensionContext;
 }
 
+function plain(text: string) {
+	return stripAnsi(text).replace(/<[^>]+>/g, "");
+}
+
 describe("theme, header and footer", () => {
 	it("applies the claude dark theme and resolves project names", () => {
 		const ctx = createCtx(42, []);
@@ -24,7 +29,7 @@ describe("theme, header and footer", () => {
 		expect(getProjectName({ cwd: "" } as ExtensionContext)).toBe("");
 	});
 
-	it("renders branch, model and a context badge", () => {
+	it("renders branch, model and a fill-style context badge", () => {
 		const entries = [{ type: "message", message: { role: "assistant", usage: { input: 5000, output: 12000, cost: { total: 1.234 } } } }];
 		const ctx = createCtx(42, entries);
 		let onChange = () => {};
@@ -32,33 +37,35 @@ describe("theme, header and footer", () => {
 		footer.invalidate();
 		onChange();
 		const text = render(footer, 220);
-		expect(text).toContain("main");
-		expect(text).toContain("sonnet");
-		expect(text).toContain("context 42%");
+		expect(plain(text)).toContain("main");
+		expect(plain(text)).toContain("sonnet");
+		expect(plain(text)).toContain("context 42%");
+		expect(text).toContain("\u001b[48;2;215;119;87m");
+		expect(text).toContain("<bg:selectedBg>");
 		expect(text).not.toContain("●●○○○");
 		expect(text).not.toContain("$1.234");
 		expect(text).not.toContain("↑5.0k ↓12k");
 	});
 
 	it("renders fallback values when branch or model are missing", () => {
-		const entries = [
-			{ type: "message", message: { role: "user" } },
-			{ type: "message", message: { role: "assistant", usage: { input: 12, output: 900, cost: { total: 0.5 } } } },
-		];
+		const entries = [{ type: "message", message: { role: "user" } }, { type: "message", message: { role: "assistant", usage: { input: 12, output: 900, cost: { total: 0.5 } } } }];
 		const ctx = createCtx(null, entries, "");
 		const footer = createClaudeFooter(ctx)({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => null });
 		const text = render(footer, 220);
-		expect(text).toContain("no-model");
-		expect(text).toContain("context --");
+		expect(plain(text)).toContain("no-model");
+		expect(plain(text)).toContain("context --");
+		expect(text).not.toContain("\u001b[48;2;215;119;87m");
 		expect(text).not.toContain("·····");
 	});
 
-	it("keeps the context badge neutral across usage levels", () => {
-		const warm = createClaudeFooter(createCtx(74, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
-		const hot = createClaudeFooter(createCtx(80, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
-		const critical = createClaudeFooter(createCtx(91, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
-		expect(render(warm, 220)).toContain("<muted> context 74% </muted>");
-		expect(render(hot, 220)).toContain("<muted> context 80% </muted>");
-		expect(render(critical, 220)).toContain("<muted> context 91% </muted>");
+	it("fills more of the badge as context usage increases", () => {
+		const empty = render(createClaudeFooter(createCtx(0, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" }), 220);
+		const partial = render(createClaudeFooter(createCtx(42, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" }), 220);
+		const full = render(createClaudeFooter(createCtx(100, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" }), 220);
+		expect(empty).not.toContain("\u001b[48;2;215;119;87m");
+		expect(partial).toContain("\u001b[48;2;215;119;87m");
+		expect(partial).toContain("<bg:selectedBg>");
+		expect(full).toContain("\u001b[48;2;215;119;87m");
+		expect(full).not.toContain("<bg:selectedBg>");
 	});
 });

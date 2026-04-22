@@ -1,17 +1,20 @@
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { describe, expect, it } from "vitest";
-import { colorizeRgb, stripAnsi } from "../src/ansi.ts";
+import { colorizeBgRgb, colorizeRgb, stripAnsi } from "../src/ansi.ts";
 import { WORKING_INDICATOR } from "../src/indicator.ts";
 import { buildChromeRule, buildPromptFrame, findBottomRuleIndex, frameBodyLine } from "../src/rules.ts";
-import { summarizeTextPreview, toolPrefix } from "../src/tool-utils.ts";
+import { summarizeArgs, summarizeTextPreview, toolLabel, toolPrefix } from "../src/tool-utils.ts";
 import { theme } from "./helpers.ts";
 
 describe("claude-code-ui utils", () => {
 	it("colors frames and strips ansi codes", () => {
 		const colored = colorizeRgb("x", [1, 2, 3]);
+		const highlighted = colorizeBgRgb("x", [4, 5, 6]);
 		const osc = "\x1b]133;A\u0007x\x1b]133;B\u0007";
 		expect(colored).toContain("[38;2;1;2;3m");
+		expect(highlighted).toContain("[48;2;4;5;6m");
 		expect(stripAnsi(colored)).toBe("x");
+		expect(stripAnsi(highlighted)).toBe("x");
 		expect(stripAnsi(osc)).toBe("x");
 		expect(WORKING_INDICATOR.frames).toHaveLength(6);
 		expect(WORKING_INDICATOR.intervalMs).toBe(120);
@@ -33,8 +36,18 @@ describe("claude-code-ui utils", () => {
 		expect(findBottomRuleIndex(["a", "b"])).toBe(-1);
 	});
 
-	it("formats tool labels and previews", () => {
+	it("formats tool labels, args and previews", () => {
 		expect(toolPrefix(theme, "Read")).toContain("Read");
+		expect(toolLabel("mcp")).toBe("MCP");
+		expect(toolLabel("task-create")).toBe("Task Create");
+		expect(toolLabel("task__create")).toBe("Task  Create");
+		expect(summarizeArgs({ action: "status", server: "creatrip-internal" })).toContain("status");
+		expect(summarizeArgs({ value: true })).toContain("value=true");
+		expect(summarizeArgs({ a: 1, b: 2, c: 3 })).toContain("a=1 · b=2");
+		expect(summarizeArgs({})).toBe("");
+		expect(summarizeArgs({ action: "status", server: "creatrip-internal" }, 6)).toContain("…");
+		expect(summarizeArgs([])).toBe("");
+		expect(summarizeArgs(undefined)).toBe("");
 		expect(summarizeTextPreview(theme, "a\nb\nc", 2)).toContain("1 more lines");
 		expect(summarizeTextPreview(theme, "a\nb", 5)).not.toContain("more lines");
 	});

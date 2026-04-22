@@ -9,6 +9,21 @@ function toolPrefix(theme, label) {
 function inlineSuffix(theme, text) {
   return text ? `${theme.fg("dim", " \xB7 ")}${text}` : "";
 }
+function toolLabel(name) {
+  if (name === "mcp") return "MCP";
+  return name.split(/[-_]/).map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(" ");
+}
+function summarizeArgs(args, max = 72) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return "";
+  const record = args;
+  const keys = ["action", "tool", "server", "query", "path", "taskId", "agent_id", "subject", "url", "command"];
+  const parts = keys.map((key) => record[key]).filter((value) => typeof value === "string" || typeof value === "number").slice(0, 2).map(String);
+  if (!parts.length) {
+    for (const [key, value] of Object.entries(record)) if ((typeof value === "string" || typeof value === "number" || typeof value === "boolean") && parts.push(`${key}=${value}`) >= 2) break;
+  }
+  const text = parts.join(" \xB7 ");
+  return text.length > max ? `${text.slice(0, max - 1)}\u2026` : text;
+}
 function branchBlock(theme, text) {
   const [first = "", ...rest] = text.split("\n");
   return [`${theme.fg("dim", "  \u2514 ")}${first}`, ...rest.map((line) => `${theme.fg("dim", "    ")}${line}`)].join("\n");
@@ -116,8 +131,13 @@ function createClaudeReadTool(cwd) {
 }
 
 // src/ansi.ts
+var ANSI_RESET_BG = "\x1B[49m";
 var ANSI_RE = /\x1b\[[0-9;]*m/g;
 var OSC_RE = /\x1b\][\s\S]*?(?:\u0007|\x1b\\)/g;
+function colorizeBgRgb(text, rgb) {
+  const [r, g, b] = rgb;
+  return `\x1B[48;2;${r};${g};${b}m${text}${ANSI_RESET_BG}`;
+}
 function stripAnsi(text) {
   return text.replace(OSC_RE, "").replace(ANSI_RE, "");
 }
@@ -234,9 +254,24 @@ function getProjectName(ctx) {
 }
 
 // src/footer.ts
+var FILL_BG = [215, 119, 87];
+function paintBase(theme, fg, text) {
+  return theme.bg("selectedBg", theme.fg(fg, text));
+}
+function paintFill(theme, text) {
+  return colorizeBgRgb(theme.fg("text", text), FILL_BG);
+}
+function clampPercent(percent) {
+  if (percent == null) return null;
+  return Math.max(0, Math.min(100, Math.round(percent)));
+}
 function renderContextBadge(theme, percent) {
-  const rounded = percent == null ? "--" : `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
-  return theme.bg("selectedBg", theme.fg("muted", ` context ${rounded} `));
+  const value = clampPercent(percent);
+  const label = `context ${value == null ? "--" : `${value}%`}`;
+  if (value == null || value <= 0) return paintBase(theme, "muted", ` ${label} `);
+  if (value >= 100) return paintFill(theme, ` ${label} `);
+  const fill = Math.min(label.length - 1, Math.max(1, Math.ceil(label.length * value / 100)));
+  return [paintBase(theme, "muted", " "), paintFill(theme, label.slice(0, fill)), paintBase(theme, "muted", label.slice(fill)), paintBase(theme, "muted", " ")].join("");
 }
 function createClaudeFooter(ctx) {
   const projectName = getProjectName(ctx);
@@ -327,6 +362,49 @@ async function applyLoaderPatch(load = loadLoaderModule) {
   patchLoaderPrototype(module.Loader?.prototype);
 }
 
+// src/tool-execution-patch.ts
+import { Container as Container4, Text as Text4 } from "@mariozechner/pi-tui";
+function isGenericTool(tool) {
+  return !!tool.toolDefinition && !tool.builtInToolDefinition && !tool.toolDefinition.renderCall && !tool.toolDefinition.renderResult;
+}
+function patchToolExecutionPrototype(prototype, theme) {
+  if (!prototype || !theme || prototype.__claudeCodeUiPatched) return false;
+  const shell = prototype.getRenderShell;
+  const call = prototype.createCallFallback;
+  const result = prototype.createResultFallback;
+  prototype.getRenderShell = function getRenderShellPatched() {
+    return isGenericTool(this) ? "self" : shell.call(this);
+  };
+  prototype.createCallFallback = function createCallFallbackPatched() {
+    if (!isGenericTool(this)) return call.call(this);
+    const args = summarizeArgs(this.args);
+    return new Text4(`${toolPrefix(theme, toolLabel(this.toolName))}${args ? ` ${theme.fg("muted", args)}` : ""}${inlineSuffix(theme, this.rendererState.summary)}`, 0, 0);
+  };
+  prototype.createResultFallback = function createResultFallbackPatched() {
+    if (!isGenericTool(this)) return result.call(this);
+    const output = this.getTextOutput() ?? "";
+    const lines = output.split("\n").filter((line) => line.trim()).length;
+    const status = this.isPartial ? theme.fg("warning", "running\u2026") : this.result?.isError ? theme.fg("error", "error") : theme.fg("success", "done");
+    this.rendererState.summary = `${status}${lines ? theme.fg("dim", ` \xB7 ${lines} lines`) : ""}${this.result?.details?.truncation?.truncated ? theme.fg("dim", " \xB7 truncated") : ""}`;
+    if (!this.expanded || !output.trim()) return new Container4();
+    return new Text4(branchBlock(theme, summarizeTextPreview(theme, output, 18)), 0, 0);
+  };
+  prototype.__claudeCodeUiPatched = true;
+  return true;
+}
+async function loadToolExecutionModule() {
+  const main = import.meta.resolve("@mariozechner/pi-coding-agent");
+  const [toolExecution, interactiveTheme] = await Promise.all([
+    import(resolveFromModule(main, "modes/interactive/components/tool-execution.js")),
+    import(resolveFromModule(main, "modes/interactive/theme/theme.js"))
+  ]);
+  return { ToolExecutionComponent: toolExecution.ToolExecutionComponent, theme: interactiveTheme.theme };
+}
+async function applyToolExecutionPatch(load = loadToolExecutionModule) {
+  const module = await load();
+  patchToolExecutionPrototype(module.ToolExecutionComponent?.prototype, module.theme);
+}
+
 // src/session-start.ts
 async function applyRuntimePatch(run) {
   try {
@@ -338,6 +416,7 @@ async function onSessionStart(_event, ctx) {
   if (!ctx.hasUI) return;
   await applyRuntimePatch(applyAssistantMessagePatch);
   await applyRuntimePatch(applyLoaderPatch);
+  await applyRuntimePatch(applyToolExecutionPatch);
   applyClaudeChrome(ctx);
 }
 
@@ -358,13 +437,13 @@ var activeTool;
 var hasVisibleOutput = false;
 var startedAt = 0;
 var timer;
-function toolLabel(toolName) {
+function toolLabel2(toolName) {
   return { bash: "Running bash", read: "Reading file", write: "Writing file", edit: "Editing file" }[toolName] ?? `Running ${toolName}`;
 }
 function renderWorkingLine() {
   activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
   if (activeTool) {
-    activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel(activeTool), formatElapsed(Date.now() - startedAt)]));
+    activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel2(activeTool), formatElapsed(Date.now() - startedAt)]));
     return;
   }
   if (hasVisibleOutput || !startedAt) {
@@ -415,7 +494,7 @@ function onSessionShutdown(_event, ctx) {
 
 // src/write-tool.ts
 import { defineTool as defineTool4, createWriteToolDefinition } from "@mariozechner/pi-coding-agent";
-import { Container as Container4, Text as Text4 } from "@mariozechner/pi-tui";
+import { Container as Container5, Text as Text5 } from "@mariozechner/pi-tui";
 function setSummary4(context, summary) {
   if (context.state.summary === summary) return;
   context.state.summary = summary;
@@ -428,7 +507,7 @@ function createClaudeWriteTool(cwd) {
     renderShell: "self",
     renderCall(args, theme, context) {
       const suffix = theme.fg("dim", ` \xB7 ${args.content.split("\n").length} lines`);
-      const text = context.lastComponent instanceof Text4 ? context.lastComponent : new Text4("", 0, 0);
+      const text = context.lastComponent instanceof Text5 ? context.lastComponent : new Text5("", 0, 0);
       text.setText(`${toolPrefix(theme, "Write")} ${theme.fg("muted", args.path)}${suffix}${inlineSuffix(theme, context.state.summary)}`);
       return text;
     },
@@ -436,7 +515,7 @@ function createClaudeWriteTool(cwd) {
       const content = result.content[0];
       const summary = isPartial ? theme.fg("warning", "writing\u2026") : content?.type === "text" && content.text.startsWith("Error") ? theme.fg("error", content.text.split("\n")[0]) : theme.fg("success", "written");
       setSummary4(context, summary);
-      return context.lastComponent instanceof Container4 ? context.lastComponent : new Container4();
+      return context.lastComponent instanceof Container5 ? context.lastComponent : new Container5();
     }
   });
 }
