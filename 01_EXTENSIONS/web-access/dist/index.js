@@ -74985,8 +74985,11 @@ var CONFIG_PATH7 = join9(homedir9(), ".pi", "web-search.json");
 var USAGE_PATH = join9(homedir9(), ".pi", "exa-usage.json");
 var MONTHLY_LIMIT = 1e3;
 var WARNING_THRESHOLD = 800;
+var MCP_TOOLS_CACHE_TTL_MS = 5 * 60 * 1e3;
+var CODE_SEARCH_FETCH_URL_LIMIT = 4;
 var cachedConfig6 = null;
 var warnedMonth = null;
+var cachedMcpTools = null;
 function loadConfig4() {
   if (cachedConfig6) return cachedConfig6;
   if (!existsSync8(CONFIG_PATH7)) {
@@ -75116,7 +75119,29 @@ function mapInlineContent(results) {
     error: null
   }));
 }
-async function callExaMcp(toolName, args, signal) {
+function parseExaMcpResponse(body) {
+  const dataLines = body.split("\n").filter((line) => line.startsWith("data:"));
+  for (const line of dataLines) {
+    const payload = line.slice(5).trim();
+    if (!payload) continue;
+    try {
+      const candidate = JSON.parse(payload);
+      if (candidate?.result || candidate?.error) {
+        return candidate;
+      }
+    } catch {
+    }
+  }
+  try {
+    const candidate = JSON.parse(body);
+    if (candidate?.result || candidate?.error) {
+      return candidate;
+    }
+  } catch {
+  }
+  return null;
+}
+async function exaMcpRpc(method, params, signal) {
   const response = await fetch(EXA_MCP_URL, {
     method: "POST",
     headers: {
@@ -75126,11 +75151,8 @@ async function callExaMcp(toolName, args, signal) {
     body: JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
-      method: "tools/call",
-      params: {
-        name: toolName,
-        arguments: args
-      }
+      method,
+      params
     }),
     signal: requestSignal(signal)
   });
@@ -75139,29 +75161,7 @@ async function callExaMcp(toolName, args, signal) {
     throw new Error(`Exa MCP error ${response.status}: ${errorText.slice(0, 300)}`);
   }
   const body = await response.text();
-  const dataLines = body.split("\n").filter((line) => line.startsWith("data:"));
-  let parsed = null;
-  for (const line of dataLines) {
-    const payload = line.slice(5).trim();
-    if (!payload) continue;
-    try {
-      const candidate = JSON.parse(payload);
-      if (candidate?.result || candidate?.error) {
-        parsed = candidate;
-        break;
-      }
-    } catch {
-    }
-  }
-  if (!parsed) {
-    try {
-      const candidate = JSON.parse(body);
-      if (candidate?.result || candidate?.error) {
-        parsed = candidate;
-      }
-    } catch {
-    }
-  }
+  const parsed = parseExaMcpResponse(body);
   if (!parsed) {
     throw new Error("Exa MCP returned an empty response");
   }
@@ -75170,6 +75170,128 @@ async function callExaMcp(toolName, args, signal) {
     const message = parsed.error.message || "Unknown error";
     throw new Error(`Exa MCP error${code}: ${message}`);
   }
+  return parsed;
+}
+async function listExaMcpToolDefinitions(signal) {
+  if (cachedMcpTools && Date.now() - cachedMcpTools.fetchedAt < MCP_TOOLS_CACHE_TTL_MS) {
+    return cachedMcpTools.tools;
+  }
+  const parsed = await exaMcpRpc("tools/list", {}, signal);
+  const tools = parsed.result?.tools?.filter((tool) => !!tool && typeof tool === "object") ?? [];
+  cachedMcpTools = { fetchedAt: Date.now(), tools };
+  return tools;
+}
+async function listExaMcpTools(signal) {
+  const tools = await listExaMcpToolDefinitions(signal);
+  return tools.map((tool) => typeof tool.name === "string" ? tool.name.trim() : "").filter((name) => name.length > 0);
+}
+function formatAvailableExaMcpTools(tools) {
+  return tools.length > 0 ? tools.join(", ") : "unknown";
+}
+function isMissingExaMcpToolError(message) {
+  return /tool\s+.+\s+(?:not found|unavailable)/i.test(message);
+}
+function buildCodeSearchFallbackQuery(query2) {
+  return `Programming documentation, API references, GitHub issues, Stack Overflow answers, and concrete code examples for: ${query2}`;
+}
+function truncateText(text, maxChars) {
+  if (text.length <= maxChars) return text;
+  return text.slice(0, Math.max(0, maxChars - 16)).trimEnd() + "\n\n[truncated]";
+}
+function parseMcpFetchedContent(text) {
+  const blocks = text.split(/(?=^# .+\nURL: )/m).filter((block) => block.trim().length > 0);
+  return blocks.map((block) => {
+    const title = block.match(/^# (.+)/m)?.[1]?.trim() ?? "";
+    const url = block.match(/^URL: (.+)/m)?.[1]?.trim() ?? "";
+    return {
+      url,
+      title,
+      content: block.trim(),
+      error: null
+    };
+  }).filter((item) => item.url.length > 0 && item.content.length > 0);
+}
+async function buildCodeSearchFallback(query2, maxTokens, knownTools, signal) {
+  const tools = knownTools ?? await listExaMcpTools(signal).catch(() => []);
+  if (tools.length > 0 && !tools.includes("web_search_exa")) {
+    throw new Error(`Exa MCP code_search fallback unavailable. Available tools: ${tools.join(", ")}`);
+  }
+  const searchText = await callExaMcp(
+    "web_search_exa",
+    {
+      query: buildCodeSearchFallbackQuery(query2),
+      numResults: 6
+    },
+    signal
+  );
+  const parsedResults = parseMcpResults(searchText) ?? [];
+  const urls = Array.from(new Set(parsedResults.map((result) => result.url).filter(Boolean))).slice(0, CODE_SEARCH_FETCH_URL_LIMIT);
+  const targetChars = Math.min(Math.max(maxTokens * 4, 4e3), 24e3);
+  const sections = [
+    "Exa MCP fallback: assembled code context via web_search_exa/web_fetch_exa because get_code_context_exa is unavailable on the current Exa MCP server.",
+    `Query: ${query2}`,
+    "",
+    "Search results:",
+    searchText.trim()
+  ];
+  if (urls.length > 0 && (tools.length === 0 || tools.includes("web_fetch_exa"))) {
+    try {
+      const fetchText = await callExaMcp(
+        "web_fetch_exa",
+        {
+          urls,
+          maxCharacters: Math.max(1500, Math.floor(targetChars / urls.length))
+        },
+        signal
+      );
+      if (fetchText.trim()) {
+        sections.push("", "Fetched source content:", fetchText.trim());
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      sections.push("", `Note: web_fetch_exa fallback failed: ${message}`);
+    }
+  }
+  return truncateText(sections.join("\n"), targetChars);
+}
+async function executeExaCodeSearch(query2, maxTokens, signal) {
+  let knownTools = null;
+  try {
+    knownTools = await listExaMcpTools(signal);
+  } catch {
+  }
+  if (!knownTools || knownTools.includes("get_code_context_exa")) {
+    try {
+      const text2 = await callExaMcp(
+        "get_code_context_exa",
+        {
+          query: query2,
+          tokensNum: maxTokens
+        },
+        signal
+      );
+      return { text: text2, strategy: "get_code_context_exa" };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!isMissingExaMcpToolError(message)) {
+        throw err;
+      }
+      cachedMcpTools = null;
+      knownTools = await listExaMcpTools(signal).catch(() => null);
+    }
+  }
+  const text = await buildCodeSearchFallback(query2, maxTokens, knownTools, signal);
+  return { text, strategy: "web_search_exa_fallback" };
+}
+async function callExaMcp(toolName, args, signal) {
+  const knownTools = await listExaMcpTools(signal).catch(() => []);
+  if (knownTools.length > 0 && !knownTools.includes(toolName)) {
+    throw new Error(`Exa MCP tool unavailable: ${toolName}. Available tools: ${formatAvailableExaMcpTools(knownTools)}`);
+  }
+  const parsed = await exaMcpRpc("tools/call", {
+    name: toolName,
+    arguments: args
+  }, signal);
   if (parsed.result?.isError) {
     const message = parsed.result.content?.find((item) => item.type === "text" && typeof item.text === "string")?.text?.trim();
     throw new Error(message || "Exa MCP returned an error");
@@ -75251,14 +75373,15 @@ async function searchWithExaMcp(query2, options = {}) {
   const enrichedQuery = buildMcpQuery(query2, options);
   const activityId = activityMonitor.logStart({ type: "api", query: enrichedQuery });
   try {
+    const tools = await listExaMcpTools(options.signal).catch(() => []);
+    if (tools.length > 0 && !tools.includes("web_search_exa")) {
+      throw new Error(`Exa MCP tool unavailable: web_search_exa. Available tools: ${formatAvailableExaMcpTools(tools)}`);
+    }
     const text = await callExaMcp(
       "web_search_exa",
       {
         query: enrichedQuery,
-        numResults: options.numResults ?? 5,
-        livecrawl: "fallback",
-        type: "auto",
-        contextMaxCharacters: options.includeContent ? 5e4 : 3e3
+        numResults: options.numResults ?? 5
       },
       options.signal
     );
@@ -75274,8 +75397,32 @@ async function searchWithExaMcp(query2, options = {}) {
       }))
     };
     if (options.includeContent) {
-      const inlineContent = mapMcpInlineContent(parsedResults);
-      if (inlineContent.length > 0) response.inlineContent = inlineContent;
+      const urls = Array.from(new Set(parsedResults.map((result) => result.url).filter(Boolean))).slice(0, options.numResults ?? 5);
+      if (urls.length > 0 && (tools.length === 0 || tools.includes("web_fetch_exa"))) {
+        try {
+          const fetchText = await callExaMcp(
+            "web_fetch_exa",
+            {
+              urls,
+              maxCharacters: 5e4
+            },
+            options.signal
+          );
+          const inlineContent = parseMcpFetchedContent(fetchText);
+          if (inlineContent.length > 0) {
+            response.inlineContent = inlineContent;
+          } else {
+            const partialInlineContent = mapMcpInlineContent(parsedResults);
+            if (partialInlineContent.length > 0) response.inlineContent = partialInlineContent;
+          }
+        } catch {
+          const partialInlineContent = mapMcpInlineContent(parsedResults);
+          if (partialInlineContent.length > 0) response.inlineContent = partialInlineContent;
+        }
+      } else {
+        const inlineContent = mapMcpInlineContent(parsedResults);
+        if (inlineContent.length > 0) response.inlineContent = inlineContent;
+      }
     }
     return response;
   } catch (err) {
@@ -75655,18 +75802,11 @@ async function executeCodeSearch(_toolCallId, params, signal) {
   const maxTokens = params.maxTokens ?? 5e3;
   const activityId = activityMonitor.logStart({ type: "api", query: query2 });
   try {
-    const text = await callExaMcp(
-      "get_code_context_exa",
-      {
-        query: query2,
-        tokensNum: maxTokens
-      },
-      signal
-    );
+    const { text, strategy } = await executeExaCodeSearch(query2, maxTokens, signal);
     activityMonitor.logComplete(activityId, 200);
     return {
       content: [{ type: "text", text }],
-      details: { query: query2, maxTokens }
+      details: { query: query2, maxTokens, strategy }
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -81063,7 +81203,8 @@ Content fetching in background [${fetchId}]. Will notify when ready.`;
       if (details?.error) {
         return new Text5(theme.fg("error", `Error: ${details.error}`), 0, 0);
       }
-      const summary = theme.fg("success", "code context returned") + theme.fg("muted", ` (${details?.maxTokens ?? 5e3} tokens max)`);
+      const strategyLabel = details?.strategy === "web_search_exa_fallback" ? "fallback via web_search_exa" : "via get_code_context_exa";
+      const summary = theme.fg("success", "code context returned") + theme.fg("muted", ` (${details?.maxTokens ?? 5e3} tokens max, ${strategyLabel})`);
       if (!expanded) return new Text5(summary, 0, 0);
       const textContent2 = result.content.find((c) => c.type === "text")?.text || "";
       const preview = textContent2.length > 500 ? textContent2.slice(0, 500) + "..." : textContent2;
