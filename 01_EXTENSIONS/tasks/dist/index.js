@@ -962,6 +962,7 @@ Complete this task fully. Do not attempt to manage tasks yourself.`;
     currentTurn++;
     latestCtx = ctx;
     widget.setUICtx(ctx.ui);
+    widget.setForegroundBusy(true);
     upgradeStoreIfNeeded(ctx);
     if (autoClear.onTurnStart(currentTurn))
       widget.update();
@@ -1023,6 +1024,7 @@ Complete this task fully. Do not attempt to manage tasks yourself.`;
   pi.on("tool_execution_start", async (_event, ctx) => {
     latestCtx = ctx;
     widget.setUICtx(ctx.ui);
+    widget.setForegroundBusy(true);
     upgradeStoreIfNeeded(ctx);
     widget.update();
   });
