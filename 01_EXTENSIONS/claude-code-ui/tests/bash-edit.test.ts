@@ -8,29 +8,14 @@ describe("bash and edit tool renderers", () => {
 	it("renders bash tool inline and only expands previews on demand", () => {
 		const bash = createClaudeBashTool(process.cwd());
 		const args = { command: "echo hi", timeout: 1 };
+		const multilineArgs = { command: "cat > 01_EXTENSIONS/claude-hooks-bridge/src/types.ts <<'EOF'\nexport const x = 1\nEOF", timeout: 1 };
 		const state = {};
 		expect(bash.renderShell).toBe("self");
 		const call = bash.renderCall?.(args, theme, toolContext(args, state))!;
 		expect(render(call)).toContain("echo hi");
 		expect(render(bash.renderCall?.({ command: "x".repeat(100), timeout: 1 }, theme, toolContext(args, state))!)).toContain("…");
-		expect(
-			render(
-				bash.renderCall?.(
-					{ command: "cat > 01_EXTENSIONS/claude-hooks-bridge/src/types.ts <<'EOF'\nexport const x = 1\nEOF", timeout: 1 },
-					theme,
-					toolContext(args, state),
-				)!,
-			),
-		).toContain(" · 3 lines");
-		expect(
-			render(
-				bash.renderCall?.(
-					{ command: "cat > 01_EXTENSIONS/claude-hooks-bridge/src/types.ts <<'EOF'\nexport const x = 1\nEOF", timeout: 1 },
-					theme,
-					toolContext(args, state),
-				)!,
-			),
-		).not.toContain("\nexport const x = 1");
+		expect(render(bash.renderCall?.(multilineArgs, theme, toolContext(args, state))!)).toContain(" · 3 lines");
+		expect(render(bash.renderCall?.(multilineArgs, theme, toolContext(args, state))!)).not.toContain("\nexport const x = 1");
 		expect(render(bash.renderCall?.({ command: "\n  \n", timeout: 1 }, theme, toolContext(args, state))!)).not.toContain("\n");
 		expect(bash.renderCall?.(args, theme, toolContext(args, state, false, call))).toBe(call);
 		render(bash.renderResult?.({ content: [] } as AgentToolResult<BashToolDetails | undefined>, { expanded: false, isPartial: true, showImages: false, isError: false }, theme, toolContext(args, state, false, emptyComponent()))!);
@@ -39,6 +24,9 @@ describe("bash and edit tool renderers", () => {
 		render(bash.renderResult?.(ok, { expanded: false, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state))!);
 		render(bash.renderResult?.(ok, { expanded: false, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state))!);
 		expect(render(bash.renderCall?.(args, theme, toolContext(args, state))!)).toContain("truncated");
+		const multilineState = {};
+		render(bash.renderResult?.(ok, { expanded: false, isPartial: false, showImages: false, isError: false }, theme, toolContext(multilineArgs, multilineState))!);
+		expect((render(bash.renderCall?.(multilineArgs, theme, toolContext(multilineArgs, multilineState))!)?.match(/lines/g) ?? []).length).toBe(1);
 		expect(render(bash.renderResult?.(ok, { expanded: true, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state, true))!)).toContain("└");
 		const fail = { content: [{ type: "text", text: "bad\nexit code: 2" }], details: undefined } as AgentToolResult<BashToolDetails | undefined>;
 		render(bash.renderResult?.(fail, { expanded: false, isPartial: false, showImages: false, isError: true }, theme, toolContext(args, state))!);

@@ -114,7 +114,7 @@ function createClaudeBashTool(cwd) {
     renderCall(args, theme, context) {
       const command = summarizeCommand(args.command);
       const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
-      const meta = command.multiline ? theme.fg("dim", ` \xB7 ${command.lineCount} lines`) : "";
+      const meta = command.multiline && !context.state.summary ? theme.fg("dim", ` \xB7 ${command.lineCount} lines`) : "";
       text.setText(`${toolPrefix(theme, "Bash")} ${theme.fg("muted", command.preview)}${meta}${inlineSuffix(theme, context.state.summary)}`);
       return text;
     },
