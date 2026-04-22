@@ -636,7 +636,7 @@ function src_default(pi) {
         timestamp: Date.now()
       });
       updateUI(ctx, state.getState(), { type: "steering", message: decision.message });
-      pi.sendUserMessage(decision.message);
+      pi.sendUserMessage(decision.message, { deliverAs: "followUp" });
     } else if (decision.action === "done") {
       idleSteers = 0;
       updateUI(ctx, state.getState(), { type: "done" });
