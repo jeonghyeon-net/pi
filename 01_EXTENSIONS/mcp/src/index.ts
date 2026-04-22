@@ -8,10 +8,10 @@ import { wireShutdownOps } from "./wire-shutdown.js";
 import { wireProxyDeps, buildProxyDescription } from "./wire-proxy.js";
 import { wireCommandConnect, wireCommandClose } from "./wire-command.js";
 
-export default function (pi: ExtensionAPI) {
-	pi.registerTool(createProxyTool(pi, buildProxyDescription, wireProxyDeps));
-	pi.registerCommand("mcp", createMcpCommand(pi, wireCommandConnect(), wireCommandClose()));
-	pi.registerFlag("mcp-config", MCP_CONFIG_FLAG);
-	pi.on("session_start", wireSessionStart(pi));
-	pi.on("session_shutdown", onSessionShutdown(wireShutdownOps()));
+export default function (_pi: ExtensionAPI) {
+	_pi.registerTool(createProxyTool(_pi, buildProxyDescription, wireProxyDeps));
+	_pi.registerCommand("mcp", createMcpCommand(_pi, wireCommandConnect(), wireCommandClose()));
+	_pi.registerFlag("mcp-config", MCP_CONFIG_FLAG);
+	_pi.on("session_start", wireSessionStart(_pi));
+	_pi.on("session_shutdown", onSessionShutdown(wireShutdownOps()));
 }

@@ -1,8 +1,8 @@
+import extension from "../src/index.ts";
 import { describe, expect, it } from "vitest";
-import extension from "../src/index";
 
-describe("subagents wrapper", () => {
-	it("exports upstream extension", () => {
+describe("subagent index", () => {
+	it("exports an extension function", () => {
 		expect(typeof extension).toBe("function");
 	});
 });

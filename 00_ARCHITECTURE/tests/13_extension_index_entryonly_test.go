@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -10,89 +9,61 @@ import (
 )
 
 var (
-	importLineRe   = regexp.MustCompile(`^import\s+`)
-	exportFuncRe   = regexp.MustCompile(`^export\s+default\s+function\s*\((\w+)`)
-	closingLineRe  = regexp.MustCompile(`^[\s}\);,]*$`)
-	importedCallRe = regexp.MustCompile(`^\s*(?:return\s+)?(?:await\s+)?(\w+)\s*\(`)
-	importNamesRe  = regexp.MustCompile(`import\s+(?:type\s+)?(?:\{([^}]+)\}|(\w+))`)
+	indexImportRe = regexp.MustCompile(`^import\s+`)
+	indexReExpRe = regexp.MustCompile(`^export\s+\{\s*default\s*\}\s+from\s+["'][^"']+["'];?$`)
+	indexFuncRe = regexp.MustCompile(`^export\s+default\s+function\s*\(_pi:\s*ExtensionAPI\)\s*\{$`)
+	indexCloseRe = regexp.MustCompile(`^[\s}\);,]*$`)
+	indexCallRe = regexp.MustCompile(`^\s*(?:return\s+)?(?:await\s+)?(\w+)\s*\(`)
+	indexNamesRe = regexp.MustCompile(`import\s+(?:type\s+)?(?:\{([^}]+)\}|(\w+))`)
+	indexPiArgRe = regexp.MustCompile(`\b_pi\b`)
 )
 
 func TestExtension_IndexTs_EntryOnly(t *testing.T) {
 	dir := filepath.Join(root, "01_EXTENSIONS")
 	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("01_EXTENSIONS 읽기 실패: %v", err)
-	}
+	if err != nil { t.Fatalf("01_EXTENSIONS 읽기 실패: %v", err) }
 	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
+		if !e.IsDir() { continue }
 		t.Run(e.Name(), func(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join(dir, e.Name(), "src/index.ts"))
-			if err != nil {
-				t.Fatalf("src/index.ts 읽기 실패: %v", err)
-			}
-			lines := strings.Split(string(data), "\n")
-			imports := map[string]bool{}
-			inBody, braceDepth, paramName := false, 0, ""
-			for _, line := range lines {
-				trimmed := strings.TrimSpace(line)
-				if trimmed == "" || strings.HasPrefix(trimmed, "//") {
-					continue
-				}
-				if !inBody {
-					if importLineRe.MatchString(trimmed) {
-						collectImports(trimmed, imports)
+			if err != nil { t.Fatalf("src/index.ts 읽기 실패: %v", err) }
+			imports, mode, depth, reexports := map[string]bool{}, "", 0, 0
+			for _, line := range strings.Split(string(data), "\n") {
+				s := strings.TrimSpace(line)
+				if s == "" || strings.HasPrefix(s, "//") { continue }
+				switch mode {
+				case "":
+					if indexImportRe.MatchString(s) { collectIndexImports(s, imports); continue }
+					if indexReExpRe.MatchString(s) { mode, reexports = "reexport", 1; continue }
+					if indexFuncRe.MatchString(s) { mode, depth = "function", 1; continue }
+					t.Errorf("index.ts는 direct re-export 또는 export default function (_pi: ExtensionAPI) { 만 허용: %s", s)
+				case "reexport":
+					if indexReExpRe.MatchString(s) { reexports++; continue }
+					t.Errorf("re-export 모드에서는 단일 direct re-export 외 금지: %s", s)
+				case "function":
+					depth += strings.Count(s, "{") - strings.Count(s, "}")
+					if depth <= 0 { mode = "done"; continue }
+					if indexCloseRe.MatchString(s) || strings.HasPrefix(s, "_pi.") { continue }
+					if m := indexCallRe.FindStringSubmatch(s); m != nil && imports[m[1]] {
+						if indexPiArgRe.MatchString(s) { t.Errorf("_pi를 다른 함수에 전달 금지: %s", s) }
 						continue
 					}
-					if m := exportFuncRe.FindStringSubmatch(trimmed); m != nil {
-						paramName = m[1]
-						inBody = true
-						braceDepth = strings.Count(trimmed, "{") - strings.Count(trimmed, "}")
-						continue
-					}
-					t.Errorf("import 또는 export default function 외 구문: %s", trimmed)
-					continue
+					t.Errorf("function 모드에서 허용되지 않은 구문: %s", s)
+				case "done":
+					t.Errorf("function 뒤 top-level 구문 금지: %s", s)
 				}
-				braceDepth += strings.Count(trimmed, "{") - strings.Count(trimmed, "}")
-				if braceDepth <= 0 {
-					inBody = false
-					continue
-				}
-				if closingLineRe.MatchString(trimmed) {
-					continue
-				}
-				apiRe := regexp.MustCompile(fmt.Sprintf(`^\s*%s\.\w+\(`, regexp.QuoteMeta(paramName)))
-				if apiRe.MatchString(line) {
-					continue
-				}
-				if m := importedCallRe.FindStringSubmatch(trimmed); m != nil && imports[m[1]] {
-					paramRe := regexp.MustCompile(fmt.Sprintf(`\b%s\b`, regexp.QuoteMeta(paramName)))
-					if paramRe.MatchString(trimmed) {
-						t.Errorf("파라미터를 다른 함수에 전달 금지: %s", trimmed)
-					}
-					continue
-				}
-				t.Errorf("허용되지 않은 구문: %s", trimmed)
 			}
-			if paramName == "" {
-				t.Error("export default function이 없음")
-			}
+			if mode == "" { t.Error("export default function 또는 direct re-export가 없음") }
+			if mode == "reexport" && (len(imports) > 0 || reexports != 1) { t.Error("re-export는 import 없이 단일 한 줄만 허용") }
 		})
 	}
 }
 
-func collectImports(line string, imports map[string]bool) {
-	m := importNamesRe.FindStringSubmatch(line)
-	if m == nil {
-		return
-	}
+func collectIndexImports(line string, imports map[string]bool) {
+	m := indexNamesRe.FindStringSubmatch(line)
+	if m == nil { return }
 	if m[1] != "" {
-		for _, name := range strings.Split(m[1], ",") {
-			imports[strings.TrimSpace(name)] = true
-		}
+		for _, name := range strings.Split(m[1], ",") { imports[strings.TrimSpace(name)] = true }
 	}
-	if m[2] != "" {
-		imports[m[2]] = true
-	}
+	if m[2] != "" { imports[m[2]] = true }
 }

@@ -25327,12 +25327,12 @@ function buildProxyDescription() {
 }
 
 // src/index.ts
-function index_default(pi) {
-  pi.registerTool(createProxyTool(pi, buildProxyDescription, wireProxyDeps));
-  pi.registerCommand("mcp", createMcpCommand(pi, wireCommandConnect(), wireCommandClose()));
-  pi.registerFlag("mcp-config", MCP_CONFIG_FLAG);
-  pi.on("session_start", wireSessionStart(pi));
-  pi.on("session_shutdown", onSessionShutdown(wireShutdownOps()));
+function index_default(_pi) {
+  _pi.registerTool(createProxyTool(_pi, buildProxyDescription, wireProxyDeps));
+  _pi.registerCommand("mcp", createMcpCommand(_pi, wireCommandConnect(), wireCommandClose()));
+  _pi.registerFlag("mcp-config", MCP_CONFIG_FLAG);
+  _pi.on("session_start", wireSessionStart(_pi));
+  _pi.on("session_shutdown", onSessionShutdown(wireShutdownOps()));
 }
 export {
   index_default as default
