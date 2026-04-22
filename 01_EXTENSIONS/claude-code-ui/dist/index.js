@@ -177,12 +177,8 @@ function getContextTone(percent) {
   return "error";
 }
 function renderContextBadge(theme, percent) {
-  const rounded = percent == null ? void 0 : Math.max(0, Math.min(100, Math.round(percent)));
-  const filled = rounded == null ? 0 : Math.max(1, Math.min(5, Math.round(rounded / 20)));
-  const meter = rounded == null ? "\xB7\xB7\xB7\xB7\xB7" : `${"\u25CF".repeat(filled)}${"\u25CB".repeat(5 - filled)}`;
-  const tone = getContextTone(percent);
-  const text = rounded == null ? ` context -- ${meter} ` : ` context ${rounded}% ${meter} `;
-  return theme.bg("selectedBg", theme.fg(tone, text));
+  const rounded = percent == null ? "--" : `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
+  return theme.bg("selectedBg", theme.fg(getContextTone(percent), ` context ${rounded} `));
 }
 function createClaudeFooter(ctx) {
   const projectName = getProjectName(ctx);

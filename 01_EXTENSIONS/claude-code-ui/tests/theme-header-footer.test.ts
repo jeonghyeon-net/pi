@@ -35,7 +35,7 @@ describe("theme, header and footer", () => {
 		expect(text).toContain("main");
 		expect(text).toContain("sonnet");
 		expect(text).toContain("context 42%");
-		expect(text).toContain("●●○○○");
+		expect(text).not.toContain("●●○○○");
 		expect(text).not.toContain("$1.234");
 		expect(text).not.toContain("↑5.0k ↓12k");
 	});
@@ -50,15 +50,15 @@ describe("theme, header and footer", () => {
 		const text = render(footer, 220);
 		expect(text).toContain("no-model");
 		expect(text).toContain("context --");
-		expect(text).toContain("·····");
+		expect(text).not.toContain("·····");
 	});
 
 	it("uses different context badge tones as usage increases", () => {
 		const warm = createClaudeFooter(createCtx(74, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
 		const hot = createClaudeFooter(createCtx(80, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
 		const critical = createClaudeFooter(createCtx(91, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
-		expect(render(warm, 220)).toContain("<accent> context 74% ●●●●○ </accent>");
-		expect(render(hot, 220)).toContain("<warning> context 80% ●●●●○ </warning>");
-		expect(render(critical, 220)).toContain("<error> context 91% ●●●●● </error>");
+		expect(render(warm, 220)).toContain("<accent> context 74% </accent>");
+		expect(render(hot, 220)).toContain("<warning> context 80% </warning>");
+		expect(render(critical, 220)).toContain("<error> context 91% </error>");
 	});
 });
