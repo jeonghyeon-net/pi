@@ -10,6 +10,11 @@ tasks … `@jeonghyeon.net/pi-tasks` 기반 작업 목록, 의존성, 진행 상
   여러 세션이 같은 task 목록을 공유 가능
   subagent extension과 함께 쓰면 TaskExecute로 task 자동 실행 가능
 
+ID 규약
+  TaskExecute 결과에는 stable task_id와 runtime agent_id가 함께 표시된다.
+  TaskOutput은 둘 다 받을 수 있지만, stable task_id 사용을 권장한다.
+  runtime agent_id도 같은 세션 안에서는 실행 중/완료 후 모두 계속 조회 가능하도록 래핑했다.
+
 사용 예
   큰 리팩터링을 단계별 task로 관리할 때
   여러 agent나 세션이 같은 TODO를 공유할 때

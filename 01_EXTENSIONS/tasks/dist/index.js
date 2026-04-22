@@ -104,8 +104,8 @@ var ProcessTracker = class {
       }
       bp.exitCode = code ?? void 0;
       bp.completedAt = Date.now();
-      for (const resolve2 of bp.waiters)
-        resolve2();
+      for (const resolve3 of bp.waiters)
+        resolve3();
       bp.waiters = [];
     });
     proc.on("error", (err) => {
@@ -113,8 +113,8 @@ var ProcessTracker = class {
         bp.status = "error";
         bp.output.push(`Process error: ${err.message}`);
         bp.completedAt = Date.now();
-        for (const resolve2 of bp.waiters)
-          resolve2();
+        for (const resolve3 of bp.waiters)
+          resolve3();
         bp.waiters = [];
       }
     });
@@ -141,7 +141,7 @@ var ProcessTracker = class {
       return Promise.resolve(void 0);
     if (bp.status !== "running")
       return Promise.resolve(this.getOutput(taskId));
-    return new Promise((resolve2) => {
+    return new Promise((resolve3) => {
       let settled = false;
       const timer = setTimeout(finish, timeout);
       function finish() {
@@ -149,7 +149,7 @@ var ProcessTracker = class {
           return;
         settled = true;
         clearTimeout(timer);
-        resolve2(self.getOutput(taskId));
+        resolve3(self.getOutput(taskId));
       }
       const self = this;
       bp.waiters.push(finish);
@@ -163,22 +163,22 @@ var ProcessTracker = class {
       return false;
     bp.status = "stopped";
     bp.proc.kill("SIGTERM");
-    await new Promise((resolve2) => {
+    await new Promise((resolve3) => {
       const timer = setTimeout(() => {
         try {
           bp.proc.kill("SIGKILL");
         } catch {
         }
-        resolve2();
+        resolve3();
       }, 5e3);
       bp.proc.on("close", () => {
         clearTimeout(timer);
-        resolve2();
+        resolve3();
       });
     });
     bp.completedAt = Date.now();
-    for (const resolve2 of bp.waiters)
-      resolve2();
+    for (const resolve3 of bp.waiters)
+      resolve3();
     bp.waiters = [];
     return true;
   }
@@ -793,7 +793,7 @@ The task tools haven't been used recently. If you're working on tasks that would
 function dist_default(pi) {
   const cfg = loadTasksConfig();
   const piTasks = process.env.PI_TASKS;
-  const taskScope = cfg.taskScope ?? "session";
+  const taskScope2 = cfg.taskScope ?? "session";
   function resolveStorePath(sessionId) {
     if (piTasks === "off")
       return void 0;
@@ -803,12 +803,12 @@ function dist_default(pi) {
       return resolve(piTasks);
     if (piTasks)
       return piTasks;
-    if (taskScope === "memory")
+    if (taskScope2 === "memory")
       return void 0;
-    if (taskScope === "session" && sessionId) {
+    if (taskScope2 === "session" && sessionId) {
       return join3(process.cwd(), ".pi", "tasks", `tasks-${sessionId}.json`);
     }
-    if (taskScope === "session")
+    if (taskScope2 === "session")
       return void 0;
     return join3(process.cwd(), ".pi", "tasks", "tasks.json");
   }
@@ -821,7 +821,7 @@ function dist_default(pi) {
   function rpcCall(channel, params, timeoutMs) {
     const requestId = randomUUID();
     debug(`rpc:send ${channel}`, { requestId });
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve3, reject) => {
       const timer = setTimeout(() => {
         unsub();
         debug(`rpc:timeout ${channel}`, { requestId });
@@ -833,7 +833,7 @@ function dist_default(pi) {
         debug(`rpc:reply ${channel}`, { requestId, raw });
         const reply = raw;
         if (reply.success)
-          resolve2(reply.data);
+          resolve3(reply.data);
         else
           reject(new Error(reply.error));
       });
@@ -949,7 +949,7 @@ Complete this task fully. Do not attempt to manage tasks yourself.`;
   function upgradeStoreIfNeeded(ctx) {
     if (storeUpgraded)
       return;
-    if (taskScope === "session" && !piTasks) {
+    if (taskScope2 === "session" && !piTasks) {
       const sessionId = ctx.sessionManager.getSessionId();
       const path = resolveStorePath(sessionId);
       store = new TaskStore(path);
@@ -965,7 +965,7 @@ Complete this task fully. Do not attempt to manage tasks yourself.`;
     if (tasks.length > 0) {
       if (!isResume && tasks.every((t) => t.status === "completed")) {
         store.clearCompleted();
-        if (taskScope === "session")
+        if (taskScope2 === "session")
           store.deleteFileIfEmpty();
       } else {
         widget.update();
@@ -1032,7 +1032,7 @@ Complete this task fully. Do not attempt to manage tasks yourself.`;
     reminderInjectedThisCycle = false;
     widget.setForegroundBusy(false);
     autoClear.reset();
-    if (!isResume && taskScope === "memory") {
+    if (!isResume && taskScope2 === "memory") {
       store.clearAll();
     }
     upgradeStoreIfNeeded(ctx);
@@ -1379,15 +1379,15 @@ Set up task dependencies:
           throw new Error(`No task found with ID ${task_id}`);
         if (task.metadata?.agentId) {
           if (block && task.status === "in_progress") {
-            await new Promise((resolve2) => {
+            await new Promise((resolve3) => {
               const timer = setTimeout(() => {
                 unsubOk();
                 unsubFail();
-                resolve2();
+                resolve3();
               }, timeout ?? 3e4);
               const cleanup = () => {
                 clearTimeout(timer);
-                resolve2();
+                resolve3();
               };
               const unsubOk = pi.events.on("subagents:completed", (d) => {
                 if (d.id === task.metadata?.agentId) {
@@ -1599,13 +1599,13 @@ ${results.join("\n")}`);
           await settingsMenu();
         } else if (choice.startsWith("Clear completed")) {
           store.clearCompleted();
-          if (taskScope === "session")
+          if (taskScope2 === "session")
             store.deleteFileIfEmpty();
           widget.update();
           await mainMenu();
         } else if (choice.startsWith("Clear all")) {
           store.clearAll();
-          if (taskScope === "session")
+          if (taskScope2 === "session")
             store.deleteFileIfEmpty();
           widget.update();
           await mainMenu();
@@ -1689,6 +1689,173 @@ ${task.description}`;
     }
   });
 }
+
+// src/execute-text.ts
+var LAUNCH_RE = /^#(\d+)\s+→\s+agent\s+(\S+)$/;
+function launchesOf(text) {
+  return text.split("\n").flatMap((line) => {
+    const match = line.match(LAUNCH_RE);
+    return match ? [{ taskId: match[1], agentId: match[2] }] : [];
+  });
+}
+function rememberLaunchedTasks(text, launches) {
+  for (const launch of launchesOf(text)) launches.set(launch.agentId, launch.taskId);
+}
+function rewriteExecuteMessage(text) {
+  const launches = launchesOf(text);
+  if (launches.length === 0) return text;
+  const skipped = text.split("\n\n").find((block) => block.startsWith("Skipped:"));
+  const body = launches.map(({ taskId, agentId }) => `- task_id=${taskId} (stable), agent_id=${agentId} (runtime)`).join("\n");
+  const lines = [
+    `Launched ${launches.length} agent(s):`,
+    body,
+    "Use TaskOutput with the stable task_id (recommended) or the runtime agent_id above. Both remain valid after completion in this session."
+  ];
+  if (skipped) lines.push(skipped);
+  return lines.join("\n\n");
+}
+
+// src/results.ts
+function textIndex(result) {
+  return result.content?.findIndex((item) => item.type === "text" && typeof item.text === "string") ?? -1;
+}
+function readTextContent(result) {
+  const index = textIndex(result);
+  if (index < 0) return "";
+  return String(result.content[index].text);
+}
+function replaceTextContent(result, text) {
+  const content = result.content ?? [];
+  const index = textIndex(result);
+  if (index < 0) return { ...result, content: [...content, { type: "text", text }] };
+  return {
+    ...result,
+    content: content.map((item, itemIndex) => itemIndex === index ? { ...item, text } : item)
+  };
+}
+
+// src/wrap-execute.ts
+var DESCRIPTION = [
+  "Execute one or more tasks as subagents.",
+  "- The result shows stable task_id values and runtime agent_id values.",
+  "- Use TaskOutput with the stable task_id (recommended) or the runtime agent_id."
+].join("\n");
+function wrapTaskExecute(tool, launchMap) {
+  if (typeof tool.execute !== "function") return { ...tool, description: DESCRIPTION };
+  return {
+    ...tool,
+    description: DESCRIPTION,
+    execute: async (...args) => {
+      const result = await tool.execute(...args);
+      const text = readTextContent(result);
+      rememberLaunchedTasks(text, launchMap);
+      return replaceTextContent(result, rewriteExecuteMessage(text));
+    }
+  };
+}
+
+// src/store-scan.ts
+import { existsSync as existsSync2, readFileSync as readFileSync3 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { join as join4, resolve as resolve2 } from "node:path";
+function taskScope(cwd) {
+  try {
+    const path = join4(cwd, ".pi", "tasks-config.json");
+    return JSON.parse(readFileSync3(path, "utf8")).taskScope ?? "session";
+  } catch {
+    return "session";
+  }
+}
+function resolveTaskStorePath(ctx) {
+  const cwd = ctx.cwd ?? process.cwd();
+  const override = process.env.PI_TASKS;
+  if (override === "off") return;
+  if (override?.startsWith("/")) return override;
+  if (override?.startsWith(".")) return resolve2(cwd, override);
+  if (override) return join4(homedir2(), ".pi", "tasks", `${override}.json`);
+  const scope = taskScope(cwd);
+  if (scope === "memory") return;
+  if (scope === "project") return join4(cwd, ".pi", "tasks", "tasks.json");
+  const sessionId = ctx.sessionManager?.getSessionId?.();
+  return sessionId ? join4(cwd, ".pi", "tasks", `tasks-${sessionId}.json`) : void 0;
+}
+function readTaskSnapshots(ctx) {
+  const path = resolveTaskStorePath(ctx);
+  if (!path || !existsSync2(path)) return [];
+  try {
+    const data = JSON.parse(readFileSync3(path, "utf8"));
+    return Array.isArray(data.tasks) ? data.tasks : [];
+  } catch {
+    return [];
+  }
+}
+
+// src/task-ref.ts
+function matches(value, input) {
+  return input.length > 0 && !!value && (value === input || value.startsWith(input));
+}
+function taskIdsOf(input, launchMap, tasks) {
+  const ids = /* @__PURE__ */ new Set();
+  for (const [agentId, taskId] of launchMap) if (matches(agentId, input)) ids.add(taskId);
+  for (const task of tasks) {
+    if (matches(task.metadata?.agentId, input) || matches(task.owner, input)) ids.add(task.id);
+  }
+  return [...ids];
+}
+function looksLikeRuntimeId(input) {
+  return !/^\d+$/.test(input) && (input.includes("-") || /[a-f\d]{8,}/i.test(input));
+}
+function missingTaskIdMessage(input) {
+  return `No task found for runtime agent ID "${input}". Use the stable task_id from TaskExecute (recommended) or a runtime agent_id returned by the same TaskExecute call.`;
+}
+function resolveTaskId(input, launchMap, tasks) {
+  if (/^\d+$/.test(input)) return input;
+  const matches2 = taskIdsOf(input, launchMap, tasks);
+  if (matches2.length === 1) return matches2[0];
+  if (matches2.length > 1) {
+    throw new Error(`Runtime agent ID "${input}" matches multiple tasks: ${matches2.map((id) => `#${id}`).join(", ")}. Use a longer runtime ID or the stable task_id.`);
+  }
+  return input;
+}
+
+// src/wrap-output.ts
+var DESCRIPTION2 = [
+  "Retrieve output from a running or completed task.",
+  "- task_id accepts the stable task_id or a runtime agent_id from TaskExecute.",
+  "- Stable task_id values are recommended because they are the primary task identifier."
+].join("\n");
+function wrapTaskOutput(tool, launchMap) {
+  if (typeof tool.execute !== "function") return { ...tool, description: DESCRIPTION2 };
+  return {
+    ...tool,
+    description: DESCRIPTION2,
+    execute: async (...args) => {
+      const params = args[1] ?? {};
+      const ctx = args[4] ?? {};
+      const input = String(params.task_id ?? "");
+      const task_id = resolveTaskId(input, launchMap, readTaskSnapshots(ctx));
+      try {
+        return await tool.execute(args[0], { ...params, task_id }, args[2], args[3], ctx);
+      } catch (error) {
+        if (task_id === input && looksLikeRuntimeId(input)) throw new Error(missingTaskIdMessage(input));
+        throw error;
+      }
+    }
+  };
+}
+
+// src/wrap.ts
+function wrapTool(tool, launchMap) {
+  if (tool.name === "TaskExecute") return wrapTaskExecute(tool, launchMap);
+  if (tool.name === "TaskOutput") return wrapTaskOutput(tool, launchMap);
+  return tool;
+}
+function wrap_default(pi) {
+  const launchMap = /* @__PURE__ */ new Map();
+  const proxy = Object.create(pi);
+  proxy.registerTool = (tool) => pi.registerTool(wrapTool(tool, launchMap));
+  dist_default(proxy);
+}
 export {
-  dist_default as default
+  wrap_default as default
 };
