@@ -9,7 +9,7 @@ export function renderTopBorder(theme: HeaderTheme, width: number, title: string
 	const titleWidth = Math.max(0, width - visibleWidth(prefix) - visibleWidth(suffix) - 1);
 	const clipped = truncateToWidth(title, titleWidth, "");
 	const fillWidth = Math.max(0, width - visibleWidth(prefix) - visibleWidth(clipped) - visibleWidth(suffix) - 1);
-	return `${theme.fg("borderAccent", prefix)}${theme.fg("accent", clipped)}${theme.fg("borderAccent", ` ${"─".repeat(fillWidth)}${suffix}`)}`;
+	return `${theme.fg("borderAccent", prefix)}${theme.bold(theme.fg("accent", clipped))}${theme.fg("borderAccent", ` ${"─".repeat(fillWidth)}${suffix}`)}`;
 }
 
 export function renderBottomBorder(theme: HeaderTheme, width: number) {
@@ -21,7 +21,8 @@ export function renderFrameLine(theme: HeaderTheme, width: number, content: stri
 	if (width <= 1) return theme.fg("borderAccent", "│");
 	if (width <= 3) return theme.fg("borderAccent", truncateToWidth("│ │", width, ""));
 	const innerWidth = Math.max(0, width - 4);
-	return `${theme.fg("borderAccent", "│")} ${fitText(content, innerWidth, "")} ${theme.fg("borderAccent", "│")}`;
+	const body = theme.bg("selectedBg", ` ${fitText(content, innerWidth, "")} `);
+	return `${theme.fg("borderAccent", "│")}${body}${theme.fg("borderAccent", "│")}`;
 }
 
 export function fitText(text: string, width: number, ellipsis = "…") {

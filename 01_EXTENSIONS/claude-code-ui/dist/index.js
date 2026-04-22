@@ -308,7 +308,7 @@ import { visibleWidth as visibleWidth3 } from "@mariozechner/pi-tui";
 // src/header-mascot.ts
 function getPiMascot(theme) {
   const blue = (text) => theme.fg("accent", text);
-  const white = (text) => text;
+  const white = (text) => theme.fg("text", text);
   const dark = (text) => theme.fg("dim", text);
   const eye = `${white("\u2588")}${dark("\u258C")}`;
   const bar = blue("\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588");
@@ -405,7 +405,7 @@ function renderTopBorder(theme, width, title) {
   const titleWidth = Math.max(0, width - visibleWidth2(prefix) - visibleWidth2(suffix) - 1);
   const clipped = truncateToWidth2(title, titleWidth, "");
   const fillWidth = Math.max(0, width - visibleWidth2(prefix) - visibleWidth2(clipped) - visibleWidth2(suffix) - 1);
-  return `${theme.fg("borderAccent", prefix)}${theme.fg("accent", clipped)}${theme.fg("borderAccent", ` ${"\u2500".repeat(fillWidth)}${suffix}`)}`;
+  return `${theme.fg("borderAccent", prefix)}${theme.bold(theme.fg("accent", clipped))}${theme.fg("borderAccent", ` ${"\u2500".repeat(fillWidth)}${suffix}`)}`;
 }
 function renderBottomBorder(theme, width) {
   if (width <= 1) return theme.fg("borderAccent", "\u256F");
@@ -415,7 +415,8 @@ function renderFrameLine(theme, width, content) {
   if (width <= 1) return theme.fg("borderAccent", "\u2502");
   if (width <= 3) return theme.fg("borderAccent", truncateToWidth2("\u2502 \u2502", width, ""));
   const innerWidth = Math.max(0, width - 4);
-  return `${theme.fg("borderAccent", "\u2502")} ${fitText(content, innerWidth, "")} ${theme.fg("borderAccent", "\u2502")}`;
+  const body = theme.bg("selectedBg", ` ${fitText(content, innerWidth, "")} `);
+  return `${theme.fg("borderAccent", "\u2502")}${body}${theme.fg("borderAccent", "\u2502")}`;
 }
 function fitText(text, width, ellipsis = "\u2026") {
   if (width <= 0) return "";
