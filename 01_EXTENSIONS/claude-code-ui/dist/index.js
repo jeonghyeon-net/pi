@@ -510,7 +510,9 @@ function formatWorkingLine(parts) {
 }
 
 // src/working-line.ts
-var activeCtx;
+var idleCtx = { hasPendingMessages: () => false, ui: { setWorkingMessage() {
+} } };
+var activeCtx = idleCtx;
 var activeTool;
 var hasVisibleOutput = false;
 var startedAt = 0;
@@ -519,39 +521,44 @@ function toolLabel2(toolName) {
   return { bash: "Running bash", read: "Reading file", write: "Writing file", edit: "Editing file" }[toolName] ?? `Running ${toolName}`;
 }
 function renderWorkingLine() {
-  if (activeTool) return activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel2(activeTool), formatElapsed(Date.now() - startedAt)]));
-  if (hasVisibleOutput || !startedAt) return activeCtx?.ui.setWorkingMessage("");
-  activeCtx?.ui.setWorkingMessage(formatWorkingLine(["Working", formatElapsed(Date.now() - startedAt)]));
+  if (activeTool) return activeCtx.ui.setWorkingMessage(formatWorkingLine([toolLabel2(activeTool), formatElapsed(Date.now() - startedAt)]));
+  if (hasVisibleOutput && !activeCtx.hasPendingMessages()) return activeCtx.ui.setWorkingMessage("");
+  activeCtx.ui.setWorkingMessage(formatWorkingLine(["Working", formatElapsed(Date.now() - startedAt)]));
 }
-function resetWorkingLine(ctx) {
+function beginTurn(ctx) {
+  activeCtx = ctx;
+  startedAt = Date.now();
+  hasVisibleOutput = false;
+  activeTool = void 0;
+  renderWorkingLine();
+  if (!timer) timer = setInterval(renderWorkingLine, 1e3);
+}
+function resetWorkingLine(ctx = activeCtx) {
   if (timer) clearInterval(timer);
   timer = void 0;
   startedAt = 0;
   activeTool = void 0;
   hasVisibleOutput = false;
-  (activeCtx ?? ctx)?.ui.setWorkingMessage("");
-  activeCtx = void 0;
+  ctx.ui.setWorkingMessage("");
+  activeCtx = idleCtx;
 }
 function onAgentStart(_event, ctx) {
   if (!ctx.hasUI) return;
   resetWorkingLine();
-  activeCtx = ctx;
-  startedAt = Date.now();
-  renderWorkingLine();
-  timer = setInterval(renderWorkingLine, 1e3);
+  beginTurn(ctx);
+}
+function onTurnStart(_event, ctx) {
+  if (ctx.hasUI) beginTurn(ctx);
 }
 function onToolExecutionStart(event) {
-  if (!activeCtx) return;
   activeTool = event.toolName;
   renderWorkingLine();
 }
 function onToolExecutionEnd(_event) {
-  if (!activeCtx) return;
   activeTool = void 0;
   renderWorkingLine();
 }
 function onMessageUpdate(event) {
-  if (!activeCtx) return;
   if (event.assistantMessageEvent.type.startsWith("text_")) hasVisibleOutput = true;
   renderWorkingLine();
 }
@@ -598,6 +605,7 @@ function index_default(_pi) {
   _pi.registerTool(createClaudeWriteTool(process.cwd()));
   _pi.on("session_start", onSessionStart);
   _pi.on("agent_start", onAgentStart);
+  _pi.on("turn_start", onTurnStart);
   _pi.on("tool_execution_start", onToolExecutionStart);
   _pi.on("tool_execution_end", onToolExecutionEnd);
   _pi.on("message_update", onMessageUpdate);

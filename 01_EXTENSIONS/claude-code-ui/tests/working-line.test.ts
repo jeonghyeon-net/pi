@@ -1,20 +1,22 @@
-import type { AgentEndEvent, AgentStartEvent, ExtensionContext, SessionShutdownEvent } from "@mariozechner/pi-coding-agent";
+import type { AgentEndEvent, AgentStartEvent, ExtensionContext, SessionShutdownEvent, TurnStartEvent } from "@mariozechner/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { onAgentEnd, onAgentStart, onMessageUpdate, onSessionShutdown, onToolExecutionEnd, onToolExecutionStart } from "../src/working-line.ts";
+import { onAgentEnd, onAgentStart, onMessageUpdate, onSessionShutdown, onToolExecutionEnd, onToolExecutionStart, onTurnStart } from "../src/working-line.ts";
 
 const setWorkingMessage = vi.fn();
-const ctx = { hasUI: true, ui: { setWorkingMessage } } as ExtensionContext;
+let pendingMessages = false;
+const ctx = { hasUI: true, hasPendingMessages: () => pendingMessages, ui: { setWorkingMessage } } as ExtensionContext;
 
 describe("working-line handlers", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2024-01-01T00:00:00Z"));
+		pendingMessages = false;
 		setWorkingMessage.mockReset();
 	});
 
 	afterEach(() => { vi.useRealTimers(); });
 
-	it("shows elapsed working status until visible answer text starts", () => {
+	it("keeps the working line alive for queued steering and new turns", () => {
 		onToolExecutionStart({ toolName: "bash" });
 		onToolExecutionEnd({});
 		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
@@ -33,9 +35,15 @@ describe("working-line handlers", () => {
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running mcp");
 		onToolExecutionEnd({});
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Working · 1s");
-		onMessageUpdate({ assistantMessageEvent: { type: "thinking_end" } });
-		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Working · 1s");
 		onMessageUpdate({ assistantMessageEvent: { type: "text_start" } });
+		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
+		pendingMessages = true;
+		vi.advanceTimersByTime(1000);
+		expect(setWorkingMessage.mock.lastCall).toEqual(["Working · 2s"]);
+		onTurnStart({} as TurnStartEvent, ctx);
+		expect(setWorkingMessage.mock.lastCall).toEqual(["Working · 0s"]);
+		pendingMessages = false;
+		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
 		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 		onAgentEnd({} as AgentEndEvent, ctx);
 		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
