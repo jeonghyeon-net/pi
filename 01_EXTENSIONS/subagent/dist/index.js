@@ -1202,6 +1202,7 @@ async function runAgent(ctx, type, prompt, options) {
       extras.memoryBlock = buildReadOnlyMemoryBlock(agentConfig.name, agentConfig.memory, effectiveCwd);
     }
   }
+  const builtinToolNames = new Set(tools.map((t) => t.name));
   let systemPrompt;
   if (agentConfig) {
     systemPrompt = buildAgentPrompt(agentConfig, effectiveCwd, env, parentSystemPrompt, extras);
@@ -1233,10 +1234,11 @@ async function runAgent(ctx, type, prompt, options) {
   const sessionOpts = {
     cwd: effectiveCwd,
     sessionManager: SessionManager.inMemory(effectiveCwd),
-    settingsManager: SettingsManager.create(),
+    // Pass cwd explicitly for compatibility with pi >= 0.68, where SettingsManager.create()
+    // no longer falls back to process.cwd(). This avoids `path` being undefined.
+    settingsManager: SettingsManager.create(effectiveCwd),
     modelRegistry: ctx.modelRegistry,
     model,
-    tools,
     resourceLoader: loader
   };
   if (thinkingLevel) {
@@ -1244,25 +1246,28 @@ async function runAgent(ctx, type, prompt, options) {
   }
   const { session } = await createAgentSession(sessionOpts);
   const disallowedSet = agentConfig?.disallowedTools ? new Set(agentConfig.disallowedTools) : void 0;
+  const desiredActiveTools = [...builtinToolNames].filter((t) => {
+    if (EXCLUDED_TOOL_NAMES.includes(t))
+      return false;
+    if (disallowedSet?.has(t))
+      return false;
+    return true;
+  });
   if (extensions !== false) {
-    const builtinToolNames = new Set(tools.map((t) => t.name));
-    const activeTools = session.getActiveToolNames().filter((t) => {
-      if (EXCLUDED_TOOL_NAMES.includes(t))
-        return false;
-      if (disallowedSet?.has(t))
-        return false;
-      if (builtinToolNames.has(t))
-        return true;
-      if (Array.isArray(extensions)) {
-        return extensions.some((ext) => t.startsWith(ext) || t.includes(ext));
+    for (const toolName of session.getActiveToolNames()) {
+      if (EXCLUDED_TOOL_NAMES.includes(toolName))
+        continue;
+      if (disallowedSet?.has(toolName))
+        continue;
+      if (builtinToolNames.has(toolName))
+        continue;
+      if (Array.isArray(extensions) && !extensions.some((ext) => toolName.startsWith(ext) || toolName.includes(ext))) {
+        continue;
       }
-      return true;
-    });
-    session.setActiveToolsByName(activeTools);
-  } else if (disallowedSet) {
-    const activeTools = session.getActiveToolNames().filter((t) => !disallowedSet.has(t));
-    session.setActiveToolsByName(activeTools);
+      desiredActiveTools.push(toolName);
+    }
   }
+  session.setActiveToolsByName([...new Set(desiredActiveTools)]);
   await session.bindExtensions({
     onError: (err) => {
       options.onToolActivity?.({
@@ -2086,11 +2091,17 @@ ${modelList}`;
 import { appendFileSync, chmodSync, mkdirSync as mkdirSync2, writeFileSync } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
 import { join as join5 } from "node:path";
+function encodeCwd(cwd) {
+  return cwd.replace(/[\\/]/g, "-").replace(/^[A-Za-z]:-/, "").replace(/^-+/, "");
+}
 function createOutputFilePath(cwd, agentId, sessionId) {
-  const encoded = cwd.replace(/\//g, "-").replace(/^-/, "");
+  const encoded = encodeCwd(cwd);
   const root = join5(tmpdir2(), `pi-subagents-${process.getuid?.() ?? 0}`);
   mkdirSync2(root, { recursive: true, mode: 448 });
-  chmodSync(root, 448);
+  try {
+    chmodSync(root, 448);
+  } catch {
+  }
   const dir = join5(root, encoded, sessionId, "tasks");
   mkdirSync2(dir, { recursive: true });
   return join5(dir, `${agentId}.output`);
