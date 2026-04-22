@@ -869,7 +869,7 @@ import { randomUUID as randomUUID2 } from "node:crypto";
 // node_modules/@jeonghyeon.net/pi-subagents/dist/agent-runner.js
 init_agent_types();
 init_context();
-import { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
+import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager, SettingsManager } from "@mariozechner/pi-coding-agent";
 
 // node_modules/@jeonghyeon.net/pi-subagents/dist/env.js
 async function detectEnv(pi, cwd) {
@@ -1220,8 +1220,12 @@ async function runAgent(ctx, type, prompt, options) {
     }, effectiveCwd, env, parentSystemPrompt, extras);
   }
   const noSkills = skills === false || Array.isArray(skills);
+  const agentDir = getAgentDir();
+  const settingsManager = SettingsManager.create(effectiveCwd, agentDir);
   const loader = new DefaultResourceLoader({
     cwd: effectiveCwd,
+    agentDir,
+    settingsManager,
     noExtensions: extensions === false,
     noSkills,
     noPromptTemplates: true,
@@ -1234,9 +1238,7 @@ async function runAgent(ctx, type, prompt, options) {
   const sessionOpts = {
     cwd: effectiveCwd,
     sessionManager: SessionManager.inMemory(effectiveCwd),
-    // Pass cwd explicitly for compatibility with pi >= 0.68, where SettingsManager.create()
-    // no longer falls back to process.cwd(). This avoids `path` being undefined.
-    settingsManager: SettingsManager.create(effectiveCwd),
+    settingsManager,
     modelRegistry: ctx.modelRegistry,
     model,
     resourceLoader: loader

@@ -80,12 +80,19 @@ import { homedir } from "node:os";
 import {
   createAgentSession,
   DefaultResourceLoader,
-  SessionManager
+  getAgentDir,
+  SessionManager,
+  SettingsManager
 } from "@mariozechner/pi-coding-agent";
 async function callModel(ctx, provider, modelId, systemPrompt, userPrompt, signal, onDelta) {
   const model = ctx.modelRegistry.find(provider, modelId);
   if (!model) return null;
+  const agentDir = getAgentDir();
+  const settingsManager = SettingsManager.create(ctx.cwd, agentDir);
   const loader = new DefaultResourceLoader({
+    cwd: ctx.cwd,
+    agentDir,
+    settingsManager,
     noExtensions: true,
     noSkills: true,
     noPromptTemplates: true,
@@ -96,7 +103,9 @@ async function callModel(ctx, provider, modelId, systemPrompt, userPrompt, signa
   let session;
   try {
     const result = await createAgentSession({
-      sessionManager: SessionManager.inMemory(),
+      cwd: ctx.cwd,
+      sessionManager: SessionManager.inMemory(ctx.cwd),
+      settingsManager,
       modelRegistry: ctx.modelRegistry,
       model,
       tools: [],
@@ -378,10 +387,10 @@ function updateUI(ctx, state, action = { type: "watching" }) {
 }
 
 // node_modules/@jeonghyeon.net/pi-supervisor/src/ui/model-picker.ts
-import { ModelSelectorComponent, SettingsManager } from "@mariozechner/pi-coding-agent";
+import { ModelSelectorComponent, SettingsManager as SettingsManager2 } from "@mariozechner/pi-coding-agent";
 async function pickModel(ctx, currentProvider, currentModelId) {
   const currentModel = currentProvider && currentModelId ? ctx.modelRegistry.find(currentProvider, currentModelId) : void 0;
-  const settingsManager = SettingsManager.inMemory();
+  const settingsManager = SettingsManager2.inMemory();
   return ctx.ui.custom((tui, _theme, _kb, done) => {
     const component = new ModelSelectorComponent(
       tui,
@@ -407,7 +416,7 @@ async function pickModel(ctx, currentProvider, currentModelId) {
 
 // node_modules/@jeonghyeon.net/pi-supervisor/src/ui/settings-panel.ts
 import { SettingsList } from "@mariozechner/pi-tui";
-import { ModelSelectorComponent as ModelSelectorComponent2, SettingsManager as SettingsManager2 } from "@mariozechner/pi-coding-agent";
+import { ModelSelectorComponent as ModelSelectorComponent2, SettingsManager as SettingsManager3 } from "@mariozechner/pi-coding-agent";
 var SENSITIVITIES = ["low", "medium", "high"];
 var SENSITIVITY_DESCRIPTIONS = {
   low: "Steer only when seriously off track (end of run only)",
@@ -424,7 +433,7 @@ async function openSettings(ctx, state, defaultProvider, defaultModelId, default
     const makeModelSubmenu = (currentValue, submenuDone) => {
       const [prov, mid] = currentValue.includes("/") ? [currentValue.split("/")[0], currentValue.split("/").slice(1).join("/")] : [currentProvider, currentValue];
       const currentModel = ctx.modelRegistry.find(prov, mid);
-      const settingsManager = SettingsManager2.inMemory();
+      const settingsManager = SettingsManager3.inMemory();
       const component = new ModelSelectorComponent2(
         tui,
         currentModel,
