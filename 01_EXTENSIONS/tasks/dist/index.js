@@ -578,6 +578,8 @@ var TaskWidget = class {
   metrics = /* @__PURE__ */ new Map();
   /** Cached TUI instance for requestRender() calls. */
   tui;
+  /** Whether the foreground pi session is currently working. */
+  foregroundBusy = false;
   /** Whether the widget callback is currently registered. */
   widgetRegistered = false;
   constructor(store) {
@@ -618,6 +620,13 @@ var TaskWidget = class {
       this.widgetInterval = setInterval(() => this.update(), 80);
     }
   }
+  /** Tell the widget whether the main pi session is currently working. */
+  setForegroundBusy(busy) {
+    if (this.foregroundBusy === busy)
+      return;
+    this.foregroundBusy = busy;
+    this.update();
+  }
   /** Build widget lines from current live state. Called from the render callback. */
   renderWidget(tui, theme) {
     const tasks = this.store.list();
@@ -641,14 +650,15 @@ var TaskWidget = class {
     const visible = tasks.slice(0, MAX_VISIBLE_TASKS);
     for (let i = 0; i < visible.length; i++) {
       const task = visible[i];
-      const isActive = this.activeTaskIds.has(task.id) && task.status === "in_progress";
+      const isTrackedActive = this.activeTaskIds.has(task.id) && task.status === "in_progress";
+      const isAnimatedActive = isTrackedActive && this.foregroundBusy;
       let icon;
-      if (isActive) {
+      if (isAnimatedActive) {
         icon = theme.fg("accent", spinnerChar);
       } else if (task.status === "completed") {
         icon = theme.fg("success", "\u2714");
       } else if (task.status === "in_progress") {
-        icon = theme.fg("accent", "\u25FC");
+        icon = theme.fg("accent", "\u25D0");
       } else {
         icon = "\u25FB";
       }
@@ -663,7 +673,7 @@ var TaskWidget = class {
         }
       }
       let text;
-      if (isActive) {
+      if (isTrackedActive) {
         const form = task.activeForm || task.subject;
         const agentId = task.metadata?.agentId;
         const agentLabel = agentId ? ` (agent ${agentId.slice(0, 5)})` : "";
@@ -678,7 +688,8 @@ var TaskWidget = class {
             tokenParts.push(`\u2193 ${formatTokens(m.outputTokens)}`);
           stats = tokenParts.length > 0 ? ` ${theme.fg("dim", `(${elapsed} \xB7 ${tokenParts.join(" ")})`)}` : ` ${theme.fg("dim", `(${elapsed})`)}`;
         }
-        text = `  ${icon} ${theme.fg("dim", "#" + task.id)} ${theme.fg("accent", form + agentLabel + "\u2026")}${stats}`;
+        const label = isAnimatedActive ? form + agentLabel + "\u2026" : form + agentLabel;
+        text = `  ${icon} ${theme.fg("dim", "#" + task.id)} ${theme.fg("accent", label)}${stats}`;
       } else if (task.status === "completed") {
         text = `  ${icon} ${theme.fg("dim", theme.strikethrough("#" + task.id + " " + task.subject))}`;
       } else {
@@ -715,10 +726,10 @@ var TaskWidget = class {
         this.metrics.delete(id);
       }
     }
-    const hasActiveSpinner = tasks.some((t) => this.activeTaskIds.has(t.id) && t.status === "in_progress");
-    if (hasActiveSpinner) {
+    const hasAnimatedSpinner = this.foregroundBusy && tasks.some((t) => this.activeTaskIds.has(t.id) && t.status === "in_progress");
+    if (hasAnimatedSpinner) {
       this.ensureTimer();
-    } else if (!hasActiveSpinner && this.widgetInterval) {
+    } else if (!hasAnimatedSpinner && this.widgetInterval) {
       clearInterval(this.widgetInterval);
       this.widgetInterval = void 0;
     }
@@ -956,6 +967,7 @@ Complete this task fully. Do not attempt to manage tasks yourself.`;
       widget.update();
   });
   pi.on("turn_end", async (event) => {
+    widget.setForegroundBusy(false);
     const msg = event.message;
     if (msg?.role === "assistant" && msg.usage) {
       widget.addTokenUsage(msg.usage.input ?? 0, msg.usage.output ?? 0);
@@ -983,6 +995,7 @@ Complete this task fully. Do not attempt to manage tasks yourself.`;
   pi.on("before_agent_start", async (_event, ctx) => {
     latestCtx = ctx;
     widget.setUICtx(ctx.ui);
+    widget.setForegroundBusy(true);
     upgradeStoreIfNeeded(ctx);
     showPersistedTasks();
     if (pendingWarning) {
@@ -999,6 +1012,7 @@ Complete this task fully. Do not attempt to manage tasks yourself.`;
     currentTurn = 0;
     lastTaskToolUseTurn = 0;
     reminderInjectedThisCycle = false;
+    widget.setForegroundBusy(false);
     autoClear.reset();
     if (!isResume && taskScope === "memory") {
       store.clearAll();
@@ -1589,7 +1603,7 @@ ${results.join("\n")}`);
             case "completed":
               return "\u2714";
             case "in_progress":
-              return "\u25FC";
+              return "\u25D0";
             default:
               return "\u25FB";
           }
