@@ -29,7 +29,10 @@ export function createPiWelcomeHeader(ctx: HeaderContext) {
 
 function renderWideRows(theme: HeaderTheme, innerWidth: number, leftLines: string[], rightLines: string[]) {
 	const divider = ` ${theme.fg("borderMuted", "│")} `;
-	const leftWidth = Math.max(24, Math.min(42, Math.floor((innerWidth - visibleWidth(divider)) * 0.42)));
+	const minRightWidth = 36;
+	const maxLeftWidth = Math.max(24, innerWidth - visibleWidth(divider) - minRightWidth);
+	const desiredLeftWidth = Math.max(24, ...leftLines.map((line) => visibleWidth(line)));
+	const leftWidth = Math.min(maxLeftWidth, desiredLeftWidth);
 	const rightWidth = Math.max(24, innerWidth - visibleWidth(divider) - leftWidth);
 	const totalRows = Math.max(leftLines.length, rightLines.length);
 	const paddedLeft = padLines(leftLines, totalRows);

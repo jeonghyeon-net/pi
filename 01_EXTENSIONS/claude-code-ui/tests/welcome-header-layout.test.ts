@@ -15,8 +15,7 @@ describe("createPiWelcomeHeader layout", () => {
 		expect(plain).toContain("Welcome back JeongHyeon!");
 		expect(plain).toContain("Tips for getting started");
 		expect(plain).toContain("Project   pi");
-		expect(plain).toContain("Project directory ready.");
-		expect(plain).not.toContain("Project directory detected and ready for …");
+		expect(plain).toContain("Project directory detected and ready for work.");
 		expect(plain).toContain("Workspace status");
 	});
 
@@ -29,7 +28,7 @@ describe("createPiWelcomeHeader layout", () => {
 		expect(plain).toContain("██████████████");
 		expect(plain).toContain("Welcome back Pi User!");
 		expect(plain).toContain("No recent activity yet");
-		expect(plain).toContain("Home directory detected. Open a project folder.");
+		expect(plain).toContain("Launched from your home directory. A project folder works best.");
 	});
 
 	it("handles tiny widths and session lookup failures", () => {
