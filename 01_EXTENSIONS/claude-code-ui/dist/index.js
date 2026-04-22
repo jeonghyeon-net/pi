@@ -211,7 +211,7 @@ var ClaudeCodeEditor = class extends CustomEditor {
       for (let i = 1; i < bottomIndex; i++) lines[i] = frameBodyLine(lines[i], width, this.borderColor);
     }
     if (bottomFramed) lines[bottomIndex] = buildPromptFrame(width, "", "\u2514", "\u2518", this.borderColor);
-    return lines;
+    return ["", ...lines];
   }
   isTopRule(line) {
     const raw = stripAnsi(line);
@@ -355,11 +355,15 @@ function toolLabel(toolName) {
 }
 function renderWorkingLine() {
   activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
-  if (!activeTool || hasVisibleOutput) {
+  if (activeTool) {
+    activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel(activeTool), formatElapsed(Date.now() - startedAt)]));
+    return;
+  }
+  if (hasVisibleOutput || !startedAt) {
     activeCtx?.ui.setWorkingMessage("");
     return;
   }
-  activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel(activeTool), formatElapsed(Date.now() - startedAt)]));
+  activeCtx?.ui.setWorkingMessage(formatWorkingLine(["Working", formatElapsed(Date.now() - startedAt)]));
 }
 function resetWorkingLine(ctx) {
   if (timer) clearInterval(timer);
@@ -391,9 +395,7 @@ function onToolExecutionEnd(_event) {
 }
 function onMessageUpdate(event) {
   if (!activeCtx) return;
-  if (event.assistantMessageEvent.type !== "thinking_start" && event.assistantMessageEvent.type !== "thinking_end") {
-    hasVisibleOutput = true;
-  }
+  if (event.assistantMessageEvent.type.startsWith("text_")) hasVisibleOutput = true;
   renderWorkingLine();
 }
 function onAgentEnd(_event, ctx) {

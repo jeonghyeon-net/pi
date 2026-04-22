@@ -17,11 +17,15 @@ function toolLabel(toolName: string) {
 
 function renderWorkingLine() {
 	activeCtx?.ui.setWorkingIndicator(WORKING_INDICATOR);
-	if (!activeTool || hasVisibleOutput) {
+	if (activeTool) {
+		activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel(activeTool), formatElapsed(Date.now() - startedAt)]));
+		return;
+	}
+	if (hasVisibleOutput || !startedAt) {
 		activeCtx?.ui.setWorkingMessage("");
 		return;
 	}
-	activeCtx?.ui.setWorkingMessage(formatWorkingLine([toolLabel(activeTool), formatElapsed(Date.now() - startedAt)]));
+	activeCtx?.ui.setWorkingMessage(formatWorkingLine(["Working", formatElapsed(Date.now() - startedAt)]));
 }
 
 function resetWorkingLine(ctx?: ExtensionContext) {
@@ -58,9 +62,7 @@ export function onToolExecutionEnd(_event: object) {
 
 export function onMessageUpdate(event: MessageEvent) {
 	if (!activeCtx) return;
-	if (event.assistantMessageEvent.type !== "thinking_start" && event.assistantMessageEvent.type !== "thinking_end") {
-		hasVisibleOutput = true;
-	}
+	if (event.assistantMessageEvent.type.startsWith("text_")) hasVisibleOutput = true;
 	renderWorkingLine();
 }
 

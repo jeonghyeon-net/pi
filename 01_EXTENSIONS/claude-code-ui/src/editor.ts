@@ -19,7 +19,7 @@ export class ClaudeCodeEditor extends CustomEditor {
 			for (let i = 1; i < bottomIndex; i++) lines[i] = frameBodyLine(lines[i]!, width, this.borderColor);
 		}
 		if (bottomFramed) lines[bottomIndex] = buildPromptFrame(width, "", "└", "┘", this.borderColor);
-		return lines;
+		return ["", ...lines];
 	}
 
 	private isTopRule(line: string) {

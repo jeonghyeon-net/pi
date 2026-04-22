@@ -24,22 +24,24 @@ describe("ClaudeCodeEditor", () => {
 		) as ClaudeCodeEditor & { lines: string[] };
 	});
 
-	it("decorates the top, body and bottom borders", () => {
+	it("adds a spacer and decorates the top, body and bottom borders", () => {
 		const lines = editor.render(32);
-		expect(lines[0]).toContain("┌");
-		expect(lines[1]).toContain("│");
-		expect(lines[2]).toContain("└");
+		expect(lines[0]).toBe("");
+		expect(lines[1]).toContain("┌");
+		expect(lines[2]).toContain("│");
+		expect(lines[3]).toContain("└");
 	});
 
 	it("keeps unrelated lines untouched and still frames scroll states", () => {
 		editor.lines = ["head", "body", "tail"];
-		expect(editor.render(24)).toEqual(["head", "body", "tail"]);
+		expect(editor.render(24)).toEqual(["", "head", "body", "tail"]);
 		editor.lines = [];
 		expect(editor.render(24)).toEqual([]);
 		editor.lines = ["─── ↑ 2 more ", " body ", "─── ↓ 3 more "];
 		const lines = editor.render(24);
-		expect(lines[0]).toContain("┌");
-		expect(lines[1]).toContain("│");
-		expect(lines[2]).toContain("└");
+		expect(lines[0]).toBe("");
+		expect(lines[1]).toContain("┌");
+		expect(lines[2]).toContain("│");
+		expect(lines[3]).toContain("└");
 	});
 });

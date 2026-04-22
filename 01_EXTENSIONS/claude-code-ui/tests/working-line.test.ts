@@ -19,7 +19,7 @@ describe("working-line handlers", () => {
 		vi.useRealTimers();
 	});
 
-	it("keeps hidden reasoning quiet and only shows active tool progress", () => {
+	it("shows elapsed working status until visible answer text starts", () => {
 		onToolExecutionStart({ toolName: "bash" });
 		onToolExecutionEnd({});
 		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
@@ -27,20 +27,21 @@ describe("working-line handlers", () => {
 		onAgentStart({} as AgentStartEvent, { hasUI: false } as ExtensionContext);
 		expect(setWorkingMessage).not.toHaveBeenCalled();
 		onAgentStart({} as AgentStartEvent, ctx);
-		vi.advanceTimersByTime(1000);
 		expect(setWorkingIndicator.mock.lastCall).toEqual([WORKING_INDICATOR]);
-		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
+		expect(setWorkingMessage.mock.lastCall).toEqual(["Working · 0s"]);
+		vi.advanceTimersByTime(1000);
+		expect(setWorkingMessage.mock.lastCall).toEqual(["Working · 1s"]);
 		onToolExecutionStart({ toolName: "bash" });
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running bash");
 		onToolExecutionStart({ toolName: "mcp" });
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running mcp");
 		onMessageUpdate({ assistantMessageEvent: { type: "thinking_start" } });
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running mcp");
-		onMessageUpdate({ assistantMessageEvent: { type: "thinking_end" } });
-		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running mcp");
-		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
-		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 		onToolExecutionEnd({});
+		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Working · 1s");
+		onMessageUpdate({ assistantMessageEvent: { type: "thinking_end" } });
+		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Working · 1s");
+		onMessageUpdate({ assistantMessageEvent: { type: "text_start" } });
 		expect(setWorkingMessage.mock.lastCall).toEqual([""]);
 		onAgentEnd({} as AgentEndEvent, ctx);
 		expect(setWorkingIndicator.mock.lastCall).toEqual([WORKING_INDICATOR]);
