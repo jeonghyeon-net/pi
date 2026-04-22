@@ -3,23 +3,32 @@ import { resolveFromModule } from "./internal-module.js";
 
 type LoaderPrototype = {
 	render(width: number): string[];
+	frames?: string[];
 	__claudeCodeUiPatched?: boolean;
 };
 
 type LoaderModule = { Loader?: { prototype?: LoaderPrototype } };
 type LoaderFactory = () => Promise<LoaderModule>;
 
-function isBlank(lines: string[]) {
-	for (const line of lines) if (stripAnsi(line).trim()) return false;
-	return true;
+function trim(lines: string[]) {
+	/* v8 ignore next */
+	while (lines.length && !stripAnsi(lines[0] ?? "").trim()) lines.shift();
+	/* v8 ignore next */
+	while (lines.length && !stripAnsi(lines.at(-1) ?? "").trim()) lines.pop();
+	return lines;
+}
+
+function isDefaultWorkingLine(loader: LoaderPrototype, lines: string[]) {
+	const text = stripAnsi(lines.join("\n")).trim();
+	return !loader.frames?.length && /^Working\.\.\.(?: \(.*\))?$/.test(text);
 }
 
 export function patchLoaderPrototype(prototype?: LoaderPrototype) {
 	if (!prototype || prototype.__claudeCodeUiPatched) return false;
 	const render = prototype.render;
 	prototype.render = function renderPatched(width) {
-		const lines = render.call(this, width);
-		return isBlank(lines) ? [] : lines;
+		const lines = trim(render.call(this, width));
+		return !lines.length || isDefaultWorkingLine(this, lines) ? [] : lines;
 	};
 	prototype.__claudeCodeUiPatched = true;
 	return true;

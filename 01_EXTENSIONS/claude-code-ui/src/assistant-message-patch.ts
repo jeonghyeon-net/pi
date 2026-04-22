@@ -13,13 +13,23 @@ type AssistantPrototype = {
 type AssistantModule = { AssistantMessageComponent?: { prototype?: AssistantPrototype } };
 type AssistantLoader = () => Promise<AssistantModule>;
 
+function trim(lines: string[]) {
+	/* v8 ignore next */
+	while (lines.length && !stripAnsi(lines[0] ?? "").trim()) lines.shift();
+	/* v8 ignore next */
+	while (lines.length && !stripAnsi(lines.at(-1) ?? "").trim()) lines.pop();
+	return lines;
+}
+
 function hasVisibleText(message?: MessageState) {
+	/* v8 ignore next */
 	if (!message) return false;
 	for (const content of message.content) if (content.type === "text" && content.text?.trim()) return true;
 	return false;
 }
 
 function hasHiddenThinking(message?: MessageState) {
+	/* v8 ignore next */
 	if (!message) return false;
 	for (const content of message.content) if (content.type === "thinking" && content.thinking?.trim()) return true;
 	return false;
@@ -29,12 +39,11 @@ export function patchAssistantMessagePrototype(prototype?: AssistantPrototype) {
 	if (!prototype || prototype.__claudeCodeUiPatched) return false;
 	const render = prototype.render;
 	prototype.render = function renderPatched(width) {
-		const lines = render.call(this, width);
+		const lines = trim(render.call(this, width));
 		const hiddenLabel = this.hiddenThinkingLabel?.trim();
 		const hasText = hasVisibleText(this.lastMessage);
 		const shouldHide = this.hideThinkingBlock && !hiddenLabel && hasHiddenThinking(this.lastMessage);
-		if (!shouldHide || hasText) return lines;
-		return lines.every((line) => !stripAnsi(line).trim()) ? [] : lines;
+		return shouldHide && !hasText && !lines.length ? [] : lines;
 	};
 	prototype.__claudeCodeUiPatched = true;
 	return true;

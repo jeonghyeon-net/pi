@@ -130,6 +130,11 @@ function resolveFromModule(mainHref, relativePath) {
 }
 
 // src/assistant-message-patch.ts
+function trim(lines) {
+  while (lines.length && !stripAnsi(lines[0] ?? "").trim()) lines.shift();
+  while (lines.length && !stripAnsi(lines.at(-1) ?? "").trim()) lines.pop();
+  return lines;
+}
 function hasVisibleText(message) {
   if (!message) return false;
   for (const content of message.content) if (content.type === "text" && content.text?.trim()) return true;
@@ -144,12 +149,11 @@ function patchAssistantMessagePrototype(prototype) {
   if (!prototype || prototype.__claudeCodeUiPatched) return false;
   const render = prototype.render;
   prototype.render = function renderPatched(width) {
-    const lines = render.call(this, width);
+    const lines = trim(render.call(this, width));
     const hiddenLabel = this.hiddenThinkingLabel?.trim();
     const hasText = hasVisibleText(this.lastMessage);
     const shouldHide = this.hideThinkingBlock && !hiddenLabel && hasHiddenThinking(this.lastMessage);
-    if (!shouldHide || hasText) return lines;
-    return lines.every((line) => !stripAnsi(line).trim()) ? [] : lines;
+    return shouldHide && !hasText && !lines.length ? [] : lines;
   };
   prototype.__claudeCodeUiPatched = true;
   return true;
@@ -229,16 +233,9 @@ function getProjectName(ctx) {
 }
 
 // src/footer.ts
-function getContextTone(percent) {
-  if (percent == null) return "muted";
-  if (percent < 50) return "success";
-  if (percent < 75) return "accent";
-  if (percent < 90) return "warning";
-  return "error";
-}
 function renderContextBadge(theme, percent) {
   const rounded = percent == null ? "--" : `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
-  return theme.bg("selectedBg", theme.fg(getContextTone(percent), ` context ${rounded} `));
+  return theme.bg("selectedBg", theme.fg("muted", ` context ${rounded} `));
 }
 function createClaudeFooter(ctx) {
   const projectName = getProjectName(ctx);
@@ -294,16 +291,21 @@ function applyClaudeChrome(ctx) {
 }
 
 // src/loader-patch.ts
-function isBlank(lines) {
-  for (const line of lines) if (stripAnsi(line).trim()) return false;
-  return true;
+function trim2(lines) {
+  while (lines.length && !stripAnsi(lines[0] ?? "").trim()) lines.shift();
+  while (lines.length && !stripAnsi(lines.at(-1) ?? "").trim()) lines.pop();
+  return lines;
+}
+function isDefaultWorkingLine(loader, lines) {
+  const text = stripAnsi(lines.join("\n")).trim();
+  return !loader.frames?.length && /^Working\.\.\.(?: \(.*\))?$/.test(text);
 }
 function patchLoaderPrototype(prototype) {
   if (!prototype || prototype.__claudeCodeUiPatched) return false;
   const render = prototype.render;
   prototype.render = function renderPatched(width) {
-    const lines = render.call(this, width);
-    return isBlank(lines) ? [] : lines;
+    const lines = trim2(render.call(this, width));
+    return !lines.length || isDefaultWorkingLine(this, lines) ? [] : lines;
   };
   prototype.__claudeCodeUiPatched = true;
   return true;

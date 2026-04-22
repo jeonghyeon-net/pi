@@ -53,12 +53,12 @@ describe("theme, header and footer", () => {
 		expect(text).not.toContain("·····");
 	});
 
-	it("uses different context badge tones as usage increases", () => {
+	it("keeps the context badge neutral across usage levels", () => {
 		const warm = createClaudeFooter(createCtx(74, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
 		const hot = createClaudeFooter(createCtx(80, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
 		const critical = createClaudeFooter(createCtx(91, []))({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
-		expect(render(warm, 220)).toContain("<accent> context 74% </accent>");
-		expect(render(hot, 220)).toContain("<warning> context 80% </warning>");
-		expect(render(critical, 220)).toContain("<error> context 91% </error>");
+		expect(render(warm, 220)).toContain("<muted> context 74% </muted>");
+		expect(render(hot, 220)).toContain("<muted> context 80% </muted>");
+		expect(render(critical, 220)).toContain("<muted> context 91% </muted>");
 	});
 });

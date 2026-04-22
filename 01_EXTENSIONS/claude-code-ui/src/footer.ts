@@ -2,17 +2,9 @@ import type { ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { getProjectName } from "./header.js";
 
-function getContextTone(percent: number | null | undefined) {
-	if (percent == null) return "muted";
-	if (percent < 50) return "success";
-	if (percent < 75) return "accent";
-	if (percent < 90) return "warning";
-	return "error";
-}
-
 function renderContextBadge(theme: Theme, percent: number | null | undefined) {
 	const rounded = percent == null ? "--" : `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
-	return theme.bg("selectedBg", theme.fg(getContextTone(percent), ` context ${rounded} `));
+	return theme.bg("selectedBg", theme.fg("muted", ` context ${rounded} `));
 }
 
 export function createClaudeFooter(ctx: ExtensionContext) {

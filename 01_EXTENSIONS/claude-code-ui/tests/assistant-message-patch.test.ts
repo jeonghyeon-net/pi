@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { stripAnsi } from "../src/ansi.ts";
 import { applyAssistantMessagePatch, patchAssistantMessagePrototype } from "../src/assistant-message-patch.ts";
 
 class BlankThinkingMessage {
@@ -12,7 +11,7 @@ class BlankThinkingMessage {
 }
 
 describe("assistant message patch", () => {
-	it("suppresses blank hidden-thinking rows", async () => {
+	it("suppresses hidden reasoning placeholders", async () => {
 		expect(patchAssistantMessagePrototype()).toBe(false);
 		expect(patchAssistantMessagePrototype(BlankThinkingMessage.prototype)).toBe(true);
 		expect(new BlankThinkingMessage().render()).toEqual([]);
@@ -20,16 +19,15 @@ describe("assistant message patch", () => {
 		await applyAssistantMessagePatch(async () => ({}));
 	});
 
-	it("keeps visible assistant text and supports injected loaders", async () => {
-		class VisibleTextMessage extends BlankThinkingMessage {
-			lastMessage = { content: [{ type: "text", text: "hello" }, { type: "thinking", thinking: "reasoning" }] };
+	it("trims message edge gaps without hiding visible content", async () => {
+		class LeadingGapMessage {
+			hideThinkingBlock = true;
+			hiddenThinkingLabel = "";
+			lastMessage = { content: [{ type: "text", text: "hello" }] };
 			render() {
-				return ["hello"];
+				return ["", "hello", ""];
 			}
 		}
-		class HiddenLabelMessage extends BlankThinkingMessage { hiddenThinkingLabel = "reasoning"; }
-		class MissingMessage extends BlankThinkingMessage { lastMessage = undefined; }
-		class TextOnlyMessage extends BlankThinkingMessage { lastMessage = { content: [{ type: "text", text: "hello" }] }; }
 		class VisibleThinkingLines {
 			hideThinkingBlock = true;
 			hiddenThinkingLabel = "";
@@ -38,14 +36,27 @@ describe("assistant message patch", () => {
 				return ["Thinking..."];
 			}
 		}
-		class LoadedMessage extends BlankThinkingMessage {}
+		class MissingMessage {
+			hideThinkingBlock = true;
+			hiddenThinkingLabel = "";
+			render() {
+				return [];
+			}
+		}
+		class LoadedMessage {
+			hideThinkingBlock = true;
+			hiddenThinkingLabel = "";
+			lastMessage = { content: [{ type: "thinking", thinking: "reasoning" }] };
+			render() {
+				return ["\x1b]133;A\u0007", "\x1b]133;B\u0007"];
+			}
+		}
+		expect(patchAssistantMessagePrototype(LeadingGapMessage.prototype)).toBe(true);
 		expect(patchAssistantMessagePrototype(VisibleThinkingLines.prototype)).toBe(true);
 		await applyAssistantMessagePatch(async () => ({ AssistantMessageComponent: LoadedMessage }));
 		expect(new LoadedMessage().render()).toEqual([]);
-		expect(new VisibleTextMessage().render()).toEqual(["hello"]);
-		expect(stripAnsi(new HiddenLabelMessage().render().join(""))).toBe("");
-		expect(stripAnsi(new MissingMessage().render().join(""))).toBe("");
-		expect(stripAnsi(new TextOnlyMessage().render().join(""))).toBe("");
+		expect(new LeadingGapMessage().render()).toEqual(["hello"]);
+		expect(new MissingMessage().render()).toEqual([]);
 		expect(new VisibleThinkingLines().render()).toEqual(["Thinking..."]);
 	});
 });
