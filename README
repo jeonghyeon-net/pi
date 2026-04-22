@@ -13,9 +13,9 @@
 
   EXTENSIONS
     mcp … MCP 서버 통합 (proxy tool, lazy connection, metadata caching)
-    subagent … `@tintinweb/pi-subagents` 래퍼, npm install + 단일 번들 노출
-    supervisor … `pi-supervisor` 래퍼, npm install + 단일 번들 노출
-    tasks … `@tintinweb/pi-tasks` 래퍼, npm install + 단일 번들 노출
+    subagent … Claude Code 스타일 subagent 실행/관리
+    supervisor … 목표 달성까지 대화를 감시하고 steer
+    tasks … 작업 목록, 의존성, 진행 상태 추적
 
   SKILLS
     (none)

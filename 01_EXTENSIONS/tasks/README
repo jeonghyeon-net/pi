@@ -1,13 +1,15 @@
-tasks … `@tintinweb/pi-tasks`를 단일 번들로 감싼 래퍼
+tasks … 작업 목록, 의존성, 진행 상태 추적
 
 목적
-  upstream 패키지를 이 저장소의 extension 규칙에 맞게 dist/index.js 단일 파일로 배포한다.
+  복잡한 작업을 task 단위로 쪼개고 상태를 추적하면서, 여러 단계의 일을 놓치지 않게 한다.
 
-upstream
-  npm   @tintinweb/pi-tasks@0.4.2
-  git   https://github.com/tintinweb/pi-tasks
+주요 기능
+  task 생성, 조회, 수정, 완료 처리
+  task 간 blocks / blockedBy 의존성 관리
+  위젯으로 현재 진행 상태를 계속 표시
+  여러 세션이 같은 task 목록을 공유 가능
+  subagent extension과 함께 쓰면 TaskExecute로 task 자동 실행 가능
 
-동작
-  build 시 upstream dist/index.js를 esbuild로 번들링한다.
-  런타임에는 이 저장소의 dist/index.js만 로드한다.
-  TaskExecute의 subagent 연동은 별도 subagent extension이 함께 있어야 동작한다.
+사용 예
+  큰 리팩터링을 단계별 task로 관리할 때
+  여러 agent나 세션이 같은 TODO를 공유할 때
