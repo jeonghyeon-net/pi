@@ -2111,6 +2111,12 @@ Available models:
 ${modelList}`;
 }
 
+// node_modules/@jeonghyeon.net/pi-subagents/dist/notification-delivery.js
+var SUBAGENT_NOTIFICATION_OPTIONS = {
+  deliverAs: "followUp",
+  triggerTurn: false
+};
+
 // node_modules/@jeonghyeon.net/pi-subagents/dist/output-file.js
 import { appendFileSync, chmodSync, mkdirSync as mkdirSync2, writeFileSync } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
@@ -2377,7 +2383,7 @@ Full transcript available at: ${record.outputFile}` : "";
       content: notification + footer,
       display: true,
       details: buildNotificationDetails(record, 500, agentActivity.get(record.id))
-    }, { deliverAs: "followUp", triggerTurn: true });
+    }, SUBAGENT_NOTIFICATION_OPTIONS);
   }
   function sendIndividualNudge(record) {
     agentActivity.delete(record.id);
@@ -2413,7 +2419,7 @@ ${notifications}
 Use get_subagent_result for full output.`,
         display: true,
         details
-      }, { deliverAs: "followUp", triggerTurn: true });
+      }, SUBAGENT_NOTIFICATION_OPTIONS);
     });
     widget.update();
   }, 3e4);
