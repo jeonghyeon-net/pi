@@ -16,7 +16,7 @@ export class ClaudeCodeEditor extends CustomEditor {
 		const bottomFramed = bottomIndex >= 0 && this.isBottomRule(lines[bottomIndex]!);
 		if (topFramed) lines[0] = buildPromptFrame(width, "", "┌", "┐", this.borderColor);
 		if (topFramed && bottomFramed) {
-			for (let i = 1; i < bottomIndex; i++) lines[i] = frameBodyLine(lines[i]!, this.borderColor);
+			for (let i = 1; i < bottomIndex; i++) lines[i] = frameBodyLine(lines[i]!, width, this.borderColor);
 		}
 		if (bottomFramed) lines[bottomIndex] = buildPromptFrame(width, "", "└", "┘", this.borderColor);
 		return lines;

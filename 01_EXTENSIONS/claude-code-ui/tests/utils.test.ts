@@ -1,3 +1,4 @@
+import { visibleWidth } from "@mariozechner/pi-tui";
 import { describe, expect, it } from "vitest";
 import { colorizeRgb, stripAnsi } from "../src/ansi.ts";
 import { WORKING_INDICATOR } from "../src/indicator.ts";
@@ -18,8 +19,12 @@ describe("claude-code-ui utils", () => {
 		expect(stripAnsi(rule)).toContain(" prompt ");
 		expect(stripAnsi(buildPromptFrame(24, "message", "╭", "╮", (text) => text))).toContain("╭─ message ");
 		expect(stripAnsi(buildPromptFrame(1, "", "╭", "╮", (text) => text))).toContain("╭");
-		expect(frameBodyLine(" body ", (text) => text)).toBe("│body│");
-		expect(frameBodyLine("x", (text) => text)).toBe("││");
+		const basic = frameBodyLine(" body ", 6, (text) => text);
+		expect(stripAnsi(basic)).toContain("│");
+		expect(visibleWidth(basic)).toBe(6);
+		expect(frameBodyLine("x", 2, (text) => text)).toBe("││");
+		const framed = frameBodyLine("_pi:c\u0007\u001b[7m \u001b[0m", 20, (text) => text);
+		expect(visibleWidth(framed)).toBe(20);
 		expect(findBottomRuleIndex(["a", "─── ↓ 3 more ", "b"])).toBe(1);
 		expect(findBottomRuleIndex(["a", "b"])).toBe(-1);
 	});

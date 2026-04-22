@@ -117,9 +117,11 @@ function buildPromptFrame(width, label, leftCorner, rightCorner, borderColor) {
   const fillWidth = Math.max(0, insideWidth - visibleWidth(lead) - visibleWidth(labelPart));
   return truncateToWidth(left + lead + labelPart + borderColor("\u2500".repeat(fillWidth)) + right, width, "");
 }
-function frameBodyLine(line, borderColor) {
-  if (line.length < 2) return borderColor("\u2502") + borderColor("\u2502");
-  return borderColor("\u2502") + line.slice(1, -1) + borderColor("\u2502");
+function frameBodyLine(line, width, borderColor) {
+  const innerWidth = Math.max(0, width - 2);
+  const content = truncateToWidth(line, innerWidth, "");
+  const padding = " ".repeat(Math.max(0, innerWidth - visibleWidth(content)));
+  return borderColor("\u2502") + content + padding + borderColor("\u2502");
 }
 function findBottomRuleIndex(lines) {
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -142,7 +144,7 @@ var ClaudeCodeEditor = class extends CustomEditor {
     const bottomFramed = bottomIndex >= 0 && this.isBottomRule(lines[bottomIndex]);
     if (topFramed) lines[0] = buildPromptFrame(width, "", "\u250C", "\u2510", this.borderColor);
     if (topFramed && bottomFramed) {
-      for (let i = 1; i < bottomIndex; i++) lines[i] = frameBodyLine(lines[i], this.borderColor);
+      for (let i = 1; i < bottomIndex; i++) lines[i] = frameBodyLine(lines[i], width, this.borderColor);
     }
     if (bottomFramed) lines[bottomIndex] = buildPromptFrame(width, "", "\u2514", "\u2518", this.borderColor);
     return lines;

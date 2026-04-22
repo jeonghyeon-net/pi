@@ -24,9 +24,11 @@ export function buildPromptFrame(
 	return truncateToWidth(left + lead + labelPart + borderColor("─".repeat(fillWidth)) + right, width, "");
 }
 
-export function frameBodyLine(line: string, borderColor: (text: string) => string) {
-	if (line.length < 2) return borderColor("│") + borderColor("│");
-	return borderColor("│") + line.slice(1, -1) + borderColor("│");
+export function frameBodyLine(line: string, width: number, borderColor: (text: string) => string) {
+	const innerWidth = Math.max(0, width - 2);
+	const content = truncateToWidth(line, innerWidth, "");
+	const padding = " ".repeat(Math.max(0, innerWidth - visibleWidth(content)));
+	return borderColor("│") + content + padding + borderColor("│");
 }
 
 export function findBottomRuleIndex(lines: string[]) {
