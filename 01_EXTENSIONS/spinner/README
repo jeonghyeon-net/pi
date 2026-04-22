@@ -1,10 +1,11 @@
-spinner … `@ryan_nookpi/pi-extension-claude-spinner` 기반 Claude spinner
+spinner … Claude Code source 기반 working spinner
 
 목적
   claude-code-ui에서 spinner 설정을 분리하고,
-  npm 패키지 원본 구현 그대로 working indicator를 적용한다.
+  실제 Claude Code source의 터미널별 spinner 프레임 로직을 반영한다.
 
 주요 기능
   session_start 시 Claude spinner 프레임 적용
-  프레임 `· ✻ ✽ ✶ ✳ ✢`
+  기본 프레임 `· ✢ ✳ ✶ ✻ ✽` + 역순 왕복 애니메이션
+  Ghostty에서는 offset 문제를 피하려고 `✽` 대신 `*` 사용
   간격 120ms
