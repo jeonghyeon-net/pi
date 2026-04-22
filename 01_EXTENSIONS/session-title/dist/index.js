@@ -11,6 +11,8 @@ var MAX_TERMINAL_TITLE_CHARS = 60;
 var TITLE_SYSTEM_PROMPT = [
   "You write short, explicit session titles for a coding task.",
   "Preserve the user's language.",
+  "Rewrite the request as an organized summary title instead of copying the request verbatim.",
+  "Keep the core task, but drop URLs, politeness, commit/push/test instructions, and placement logistics unless they are central.",
   "Make the title concrete and action-oriented.",
   "Include the action and the main object or scope when possible.",
   "Avoid vague titles like 'extension', 'bug', 'question', or 'help'.",
@@ -42,6 +44,11 @@ function normalizeTitle(rawTitle) {
   }
   return clip(normalized.replace(/\s+/gu, " ").replace(/[.。!！?？:：;；,，\-–—\s]+$/gu, "").trim(), MAX_TITLE_CHARS);
 }
+var REQUEST_NOISE_RE = /(please|can you|could you|would you|help me|i need you to|이거|참고해서|좀|혹시|작업해줘|구현해줘|만들어줘|해줘|해주세요|commit|push|커밋|푸시)/iu;
+function isClearSummaryTitle(title) {
+  const normalized = normalizeTitle(title);
+  return normalized.length > 0 && !REQUEST_NOISE_RE.test(normalized) && !/[?？]/u.test(normalized);
+}
 function formatStatusTitle(title) {
   return clip(title.replace(/\s+/gu, " ").trim(), MAX_STATUS_CHARS);
 }
@@ -58,10 +65,34 @@ function sanitizeRequestText(text) {
 function stripRequestFraming(text) {
   return text.replace(/^(docs|documentation|readme)\s+/iu, "").replace(/^(please|can you|could you|would you|help me|i need you to)\s+/iu, "").replace(/^(이거\s*참고해서|이거|좀|혹시)\s+/u, "").replace(/\s*(작업해줘|구현해줘|만들어줘|해주세요|해줘|부탁해|부탁합니다)$/u, "").trim();
 }
+function stripLogistics(text) {
+  return text.replace(/(?:^|\s)(다 만들고\s*)?(커밋|푸시|commit|push|typecheck|test|build).*/iu, "").replace(/(?:^|\s)(extensions?에 만들면 됨|extensions?에 넣어줘).*/iu, "").trim();
+}
+function summarizeKnownTask(text) {
+  const korean = /[가-힣]/u.test(text);
+  const suffix = /\bextensions?\b/iu.test(text) || /extensions?에/u.test(text) ? " extension" : "";
+  const hasSessionTitle = /(session (name|title)|세션 (이름|제목))/iu.test(text);
+  const hasTerminalTitle = /(terminal title|터미널 제목)/iu.test(text);
+  if (hasSessionTitle && hasTerminalTitle) {
+    if (korean) return `\uC138\uC158/\uD130\uBBF8\uB110 \uC81C\uBAA9 \uC790\uB3D9 \uC124\uC815${suffix}`;
+    return `session/terminal title auto sync${suffix}`;
+  }
+  if (hasSessionTitle) {
+    if (korean) return `\uC138\uC158 \uC81C\uBAA9 \uC790\uB3D9 \uC124\uC815${suffix}`;
+    return `session title auto naming${suffix}`;
+  }
+  if (hasTerminalTitle) {
+    if (korean) return `\uD130\uBBF8\uB110 \uC81C\uBAA9 \uC790\uB3D9 \uC124\uC815${suffix}`;
+    return `terminal title sync${suffix}`;
+  }
+  return "";
+}
 function buildFallbackTitle(userPrompt) {
-  const cleaned = sanitizeRequestText(userPrompt);
+  const cleaned = stripLogistics(sanitizeRequestText(userPrompt));
   if (!cleaned) return "";
-  const parts = cleaned.split(/[\n\r]+|(?<=[.!?。！？])\s+/u).map((part) => stripRequestFraming(part));
+  const summarized = summarizeKnownTask(cleaned);
+  if (summarized) return normalizeTitle(summarized);
+  const parts = cleaned.split(/[\n\r]+|(?<=[.!?。！？])\s+/u).map((part) => stripRequestFraming(part)).filter(Boolean);
   const candidate = parts.find((part) => part.length >= 4) ?? stripRequestFraming(cleaned);
   return normalizeTitle(candidate);
 }
@@ -82,7 +113,7 @@ async function generateSessionTitle(ctx, userPrompt) {
   clearTimeout(timeoutId);
   if (!result || result.stopReason !== "stop") return fallbackTitle;
   const generatedTitle = normalizeTitle(extractTextContent(result.content));
-  return generatedTitle || fallbackTitle;
+  return isClearSummaryTitle(generatedTitle) ? generatedTitle : fallbackTitle;
 }
 
 // src/session-path.ts
