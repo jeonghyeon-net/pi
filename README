@@ -14,7 +14,7 @@
   EXTENSIONS
     claude-code-ui … Claude Code dark 기본 UI chrome + 도구 렌더링
     mcp … MCP 서버 통합 (proxy tool, lazy connection, metadata caching)
-    spinner … `@ryan_nookpi/pi-extension-claude-spinner` 기반 Claude spinner
+    spinner … Claude Code source 기반 working spinner
     subagent … `@jeonghyeon.net/pi-subagents` 기반 subagent 실행/관리
     supervisor … `@jeonghyeon.net/pi-supervisor` 기반 목표 감시/steer
     tasks … `@jeonghyeon.net/pi-tasks` 기반 작업 추적

@@ -11,7 +11,6 @@
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "*",
-    "@ryan_nookpi/pi-extension-claude-spinner": "0.1.0",
     "@vitest/coverage-v8": "^3.1.0",
     "esbuild": "^0.28.0",
     "typescript": "^5.8.0",
