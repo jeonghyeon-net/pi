@@ -548,7 +548,24 @@ async function openSettingsMenu(ui, cfg, onBack, clearDelayTurns) {
 
 // node_modules/@jeonghyeon.net/pi-tasks/dist/ui/task-widget.js
 import { truncateToWidth } from "@mariozechner/pi-tui";
-var SPINNER = ["\u2733", "\u2734", "\u2735", "\u2736", "\u2737", "\u2738", "\u2739", "\u273A", "\u273B", "\u273C", "\u273D"];
+
+// node_modules/@jeonghyeon.net/pi-tasks/dist/ui/spinner.js
+var DARWIN_CHARS = ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "\u273D"];
+var GHOSTTY_CHARS = ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "*"];
+var OTHER_CHARS = ["\xB7", "\u2722", "*", "\u2736", "\u273B", "\u273D"];
+var SPINNER_INTERVAL_MS = 120;
+function getClaudeSpinnerChars(term = process.env.TERM, platform = process.platform) {
+  if (term === "xterm-ghostty")
+    return GHOSTTY_CHARS;
+  return platform === "darwin" ? DARWIN_CHARS : OTHER_CHARS;
+}
+function getClaudeSpinnerFrames(term = process.env.TERM, platform = process.platform) {
+  const chars = getClaudeSpinnerChars(term, platform);
+  return [...chars, ...[...chars].reverse()];
+}
+var SPINNER = getClaudeSpinnerFrames();
+
+// node_modules/@jeonghyeon.net/pi-tasks/dist/ui/task-widget.js
 var MAX_VISIBLE_TASKS = 10;
 function formatDuration(ms) {
   const totalSec = Math.floor(ms / 1e3);
@@ -617,7 +634,7 @@ var TaskWidget = class {
   /** Ensure the widget update timer is running. */
   ensureTimer() {
     if (!this.widgetInterval) {
-      this.widgetInterval = setInterval(() => this.update(), 80);
+      this.widgetInterval = setInterval(() => this.update(), SPINNER_INTERVAL_MS);
     }
   }
   /** Tell the widget whether the main pi session is currently working. */

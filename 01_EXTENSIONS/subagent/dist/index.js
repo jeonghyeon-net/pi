@@ -286,17 +286,38 @@ var init_context = __esm({
   }
 });
 
+// node_modules/@jeonghyeon.net/pi-subagents/dist/ui/spinner.js
+function getClaudeSpinnerChars(term = process.env.TERM, platform = process.platform) {
+  if (term === "xterm-ghostty")
+    return GHOSTTY_CHARS;
+  return platform === "darwin" ? DARWIN_CHARS : OTHER_CHARS;
+}
+function getClaudeSpinnerFrames(term = process.env.TERM, platform = process.platform) {
+  const chars = getClaudeSpinnerChars(term, platform);
+  return [...chars, ...[...chars].reverse()];
+}
+var DARWIN_CHARS, GHOSTTY_CHARS, OTHER_CHARS, SPINNER_INTERVAL_MS, SPINNER;
+var init_spinner = __esm({
+  "node_modules/@jeonghyeon.net/pi-subagents/dist/ui/spinner.js"() {
+    DARWIN_CHARS = ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "\u273D"];
+    GHOSTTY_CHARS = ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "*"];
+    OTHER_CHARS = ["\xB7", "\u2722", "*", "\u2736", "\u273B", "\u273D"];
+    SPINNER_INTERVAL_MS = 120;
+    SPINNER = getClaudeSpinnerFrames();
+  }
+});
+
 // node_modules/@jeonghyeon.net/pi-subagents/dist/ui/agent-widget.js
 import { truncateToWidth } from "@mariozechner/pi-tui";
 function formatTokens(count) {
   if (count >= 1e6)
-    return `${(count / 1e6).toFixed(1)}M token`;
+    return `${(count / 1e6).toFixed(1)}M tokens`;
   if (count >= 1e3)
-    return `${(count / 1e3).toFixed(1)}k token`;
-  return `${count} token`;
+    return `${(count / 1e3).toFixed(1)}k tokens`;
+  return `${count} token${count === 1 ? "" : "s"}`;
 }
 function formatTurns(turnCount, maxTurns) {
-  return maxTurns != null ? `\u27F3${turnCount}\u2264${maxTurns}` : `\u27F3${turnCount}`;
+  return maxTurns != null ? `turn ${turnCount}/${maxTurns}` : `turn ${turnCount}`;
 }
 function formatMs(ms) {
   return `${(ms / 1e3).toFixed(1)}s`;
@@ -341,12 +362,13 @@ function describeActivity(activeTools, responseText) {
   }
   return "thinking\u2026";
 }
-var MAX_WIDGET_LINES, SPINNER, ERROR_STATUSES, TOOL_DISPLAY, AgentWidget;
+var MAX_WIDGET_LINES, ERROR_STATUSES, TOOL_DISPLAY, AgentWidget;
 var init_agent_widget = __esm({
   "node_modules/@jeonghyeon.net/pi-subagents/dist/ui/agent-widget.js"() {
     init_agent_types();
+    init_spinner();
+    init_spinner();
     MAX_WIDGET_LINES = 12;
-    SPINNER = ["\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F"];
     ERROR_STATUSES = /* @__PURE__ */ new Set(["error", "aborted", "steered", "stopped"]);
     TOOL_DISPLAY = {
       read: "reading",
@@ -399,7 +421,7 @@ var init_agent_widget = __esm({
       /** Ensure the widget update timer is running. */
       ensureTimer() {
         if (!this.widgetInterval) {
-          this.widgetInterval = setInterval(() => this.update(), 80);
+          this.widgetInterval = setInterval(() => this.update(), SPINNER_INTERVAL_MS);
         }
       }
       /** Check if a finished agent should still be shown in the widget. */
@@ -2853,7 +2875,7 @@ Do not duplicate this agent's work.`, { ...detailBase, toolUses: 0, tokens: "", 
       const spinnerInterval = setInterval(() => {
         spinnerFrame++;
         streamUpdate();
-      }, 80);
+      }, SPINNER_INTERVAL_MS);
       streamUpdate();
       const record = await manager.spawnAndWait(pi, ctx, subagentType, params.prompt, {
         description: params.description,
