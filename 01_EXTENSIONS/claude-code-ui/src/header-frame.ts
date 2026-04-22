@@ -21,8 +21,7 @@ export function renderFrameLine(theme: HeaderTheme, width: number, content: stri
 	if (width <= 1) return theme.fg("borderAccent", "│");
 	if (width <= 3) return theme.fg("borderAccent", truncateToWidth("│ │", width, ""));
 	const innerWidth = Math.max(0, width - 4);
-	const body = theme.bg("selectedBg", ` ${fitText(content, innerWidth, "")} `);
-	return `${theme.fg("borderAccent", "│")}${body}${theme.fg("borderAccent", "│")}`;
+	return `${theme.fg("borderAccent", "│")} ${fitText(content, innerWidth, "")} ${theme.fg("borderAccent", "│")}`;
 }
 
 export function fitText(text: string, width: number, ellipsis = "…") {
