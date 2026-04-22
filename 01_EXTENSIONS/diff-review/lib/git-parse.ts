@@ -1,8 +1,11 @@
-import type { ChangeStatus, ReviewFile } from "../src/types.js";
+import { isReviewablePath } from "./git-filter.js";
+import type { ChangeStatus, ReviewFileComparison } from "../src/types.js";
 
-function isReviewablePath(path: string): boolean {
-	const lower = path.toLowerCase();
-	return !lower.endsWith(".min.js") && !lower.endsWith(".min.css");
+export interface ChangedPath {
+	status: ChangeStatus;
+	oldPath: string | null;
+	newPath: string | null;
+	displayPath: string;
 }
 
 function toStatus(code: string): ChangeStatus | null {
@@ -13,24 +16,19 @@ function toStatus(code: string): ChangeStatus | null {
 	return null;
 }
 
-export function parseNameStatus(output: string): ReviewFile[] {
-	return output
-		.split(/\r?\n/u)
-		.map((line) => line.trim())
-		.filter(Boolean)
-		.flatMap((line) => {
-			const [rawCode, first, second] = line.split("\t");
-			const status = toStatus((rawCode ?? "")[0] ?? "");
-			const path = status === "renamed" ? second ?? "" : first ?? "";
-			if (!status || !path || !isReviewablePath(path)) return [];
-			return [{
-				id: `${status}:${first ?? ""}:${second ?? ""}`,
-				path,
-				status,
-				oldPath: status === "added" ? null : first ?? null,
-				newPath: status === "deleted" ? null : status === "renamed" ? second ?? null : first ?? null,
-				present: status !== "deleted",
-			} satisfies ReviewFile];
-		})
-		.sort((a, b) => a.path.localeCompare(b.path));
+export function parseChangedPaths(output: string): ChangedPath[] {
+	return output.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean).flatMap((line) => {
+		const [rawCode, first, second] = line.split("\t");
+		const status = toStatus((rawCode ?? "")[0] ?? "");
+		const oldPath = status === "added" ? null : first ?? null;
+		const newPath = status === "deleted" ? null : status === "renamed" ? second ?? null : first ?? null;
+		const path = newPath ?? oldPath ?? "";
+		if (!status || !path || !isReviewablePath(path)) return [];
+		const displayPath = status === "renamed" ? `${oldPath ?? ""} -> ${newPath ?? ""}` : path;
+		return [{ status, oldPath, newPath, displayPath } satisfies ChangedPath];
+	}).sort((a, b) => a.displayPath.localeCompare(b.displayPath));
+}
+
+export function toComparison(change: ChangedPath): ReviewFileComparison {
+	return { ...change, hasOriginal: change.oldPath != null, hasModified: change.newPath != null };
 }

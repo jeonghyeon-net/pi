@@ -1,12 +1,16 @@
-diff-review … 현재 git 저장소의 변경사항을 네이티브 리뷰 창으로 검토하는 extension
+diff-review … 현재 git 저장소 변경사항을 원본에 더 가깝게 검토하는 native review extension
 
 목적
-  참고한 diff-review extension처럼 branch diff, commit diff, 현재 파일 내용을 한 번에 훑고
-  코멘트를 모아서 pi editor로 다시 붙여넣는다.
+  branch diff / commit diff / files view를 나눠서 보고
+  side-by-side 내용 비교 + 파일/라인 코멘트를 남긴 뒤
+  리뷰 메모를 pi editor follow-up prompt로 다시 붙여넣는다.
 
 주요 기능
   `/diff-review` 명령 등록
-  glimpseui 기반 네이티브 리뷰 창 열기
-  branch / commits / files 탭 제공
-  항목별 코멘트와 전체 리뷰 메모 수집
-  제출 시 editor에 follow-up 리뷰 프롬프트 추가
+  glimpseui 기반 native review window
+  branch / commits / files 탭
+  commit별 파일 lazy load
+  file contents lazy load
+  refresh로 working tree 재수집
+  파일 코멘트 + 라인 코멘트 수집
+  submit 시 위치 정보가 포함된 리뷰 프롬프트 append

@@ -10,10 +10,10 @@ var __export = (target, all) => {
 
 // node_modules/glimpseui/src/follow-cursor-support.mjs
 import { existsSync } from "node:fs";
-import { dirname as dirname2, join as join3 } from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { dirname, join as join2 } from "node:path";
+import { fileURLToPath } from "node:url";
 function nativeBinaryExists() {
-  return existsSync(join3(__dirname, "glimpse"));
+  return existsSync(join2(__dirname, "glimpse"));
 }
 function env(name) {
   return (process.env[name] || "").toLowerCase();
@@ -23,12 +23,12 @@ function hyprlandSocketExists() {
   if (!signature) return false;
   const candidates = [];
   if (process.env.XDG_RUNTIME_DIR) {
-    candidates.push(join3(process.env.XDG_RUNTIME_DIR, "hypr", signature, ".socket.sock"));
+    candidates.push(join2(process.env.XDG_RUNTIME_DIR, "hypr", signature, ".socket.sock"));
   }
   if (process.env.UID) {
-    candidates.push(join3("/run/user", process.env.UID, "hypr", signature, ".socket.sock"));
+    candidates.push(join2("/run/user", process.env.UID, "hypr", signature, ".socket.sock"));
   }
-  candidates.push(join3("/tmp", "hypr", signature, ".socket.sock"));
+  candidates.push(join2("/tmp", "hypr", signature, ".socket.sock"));
   return candidates.some((path) => existsSync(path));
 }
 function detect() {
@@ -71,7 +71,7 @@ function supportsFollowCursor() {
 var __dirname, cached;
 var init_follow_cursor_support = __esm({
   "node_modules/glimpseui/src/follow-cursor-support.mjs"() {
-    __dirname = dirname2(fileURLToPath2(import.meta.url));
+    __dirname = dirname(fileURLToPath(import.meta.url));
     cached = null;
   }
 });
@@ -89,13 +89,13 @@ __export(glimpse_exports, {
 import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { existsSync as existsSync2, readFileSync as readFileSync2 } from "node:fs";
-import { dirname as dirname3, isAbsolute, join as join4, normalize, resolve } from "node:path";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
+import { existsSync as existsSync2, readFileSync } from "node:fs";
+import { dirname as dirname2, isAbsolute, join as join3, normalize, resolve } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 function resolveChromiumBackend() {
   return {
     path: process.execPath,
-    extraArgs: [join4(__dirname2, "chromium-backend.mjs")],
+    extraArgs: [join3(__dirname2, "chromium-backend.mjs")],
     platform: "linux-chromium",
     buildHint: "Using system Chromium via CDP (no native binary needed)"
   };
@@ -112,14 +112,14 @@ function resolveNativeHost() {
   switch (process.platform) {
     case "darwin":
       return {
-        path: join4(__dirname2, "glimpse"),
+        path: join3(__dirname2, "glimpse"),
         platform: "darwin",
         buildHint: "Run 'npm run build:macos' or 'swiftc -O src/glimpse.swift -o src/glimpse'"
       };
     case "linux": {
       const backend = process.env.GLIMPSE_BACKEND;
       if (backend === "chromium") return resolveChromiumBackend();
-      const nativePath = join4(__dirname2, "glimpse");
+      const nativePath = join3(__dirname2, "glimpse");
       if (backend === "native" || existsSync2(nativePath)) {
         return {
           path: nativePath,
@@ -131,7 +131,7 @@ function resolveNativeHost() {
     }
     case "win32":
       return {
-        path: normalize(join4(__dirname2, "..", "native", "windows", "bin", "glimpse.exe")),
+        path: normalize(join3(__dirname2, "..", "native", "windows", "bin", "glimpse.exe")),
         platform: "win32",
         buildHint: "Run 'npm run build:windows' (requires .NET 8 SDK and WebView2 Runtime)"
       };
@@ -146,8 +146,8 @@ function ensureBinary() {
   const host = resolveNativeHost();
   if (host.platform === "linux-chromium") return host;
   if (!existsSync2(host.path)) {
-    const skippedBuildPath = join4(__dirname2, "..", ".glimpse-build-skipped");
-    const skippedReason = existsSync2(skippedBuildPath) ? readFileSync2(skippedBuildPath, "utf8").trim() : null;
+    const skippedBuildPath = join3(__dirname2, "..", ".glimpse-build-skipped");
+    const skippedReason = existsSync2(skippedBuildPath) ? readFileSync(skippedBuildPath, "utf8").trim() : null;
     throw new Error(
       skippedReason ? `Glimpse host not found at '${host.path}'. ${skippedReason}` : `Glimpse host not found at '${host.path}'. ${host.buildHint}`
     );
@@ -239,7 +239,7 @@ var __dirname2, GlimpseWindow, GlimpseStatusItem;
 var init_glimpse = __esm({
   "node_modules/glimpseui/src/glimpse.mjs"() {
     init_follow_cursor_support();
-    __dirname2 = dirname3(fileURLToPath3(import.meta.url));
+    __dirname2 = dirname2(fileURLToPath2(import.meta.url));
     GlimpseWindow = class extends EventEmitter {
       #proc;
       #closed = false;
@@ -354,13 +354,28 @@ var init_glimpse = __esm({
   }
 });
 
-// lib/git-base.ts
+// lib/git-read.ts
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 async function runGitAllowFailure(pi, cwd, args) {
   const result = await pi.exec("git", args, { cwd });
-  return result.code === 0 ? result.stdout.trim() : "";
+  return result.code === 0 ? result.stdout : "";
 }
+async function runBashAllowFailure(pi, cwd, script) {
+  const result = await pi.exec("bash", ["-lc", script], { cwd });
+  return result.code === 0 ? result.stdout : "";
+}
+async function readWorkingTree(repoRoot, path) {
+  if (!path) return "";
+  return readFile(join(repoRoot, path), "utf8").catch(() => "");
+}
+async function readRevision(pi, repoRoot, revision, path) {
+  return revision && path ? runGitAllowFailure(pi, repoRoot, ["show", `${revision}:${path}`]) : "";
+}
+
+// lib/git-base.ts
 async function currentBranch(pi, cwd) {
-  return await runGitAllowFailure(pi, cwd, ["branch", "--show-current"]) || "HEAD";
+  return (await runGitAllowFailure(pi, cwd, ["branch", "--show-current"])).trim() || "HEAD";
 }
 async function getRepoRoot(pi, cwd) {
   const result = await pi.exec("git", ["rev-parse", "--show-toplevel"], { cwd });
@@ -370,14 +385,16 @@ async function getRepoRoot(pi, cwd) {
 async function hasHead(pi, cwd) {
   return (await pi.exec("git", ["rev-parse", "--verify", "HEAD"], { cwd })).code === 0;
 }
+async function getCommitParent(pi, cwd, sha) {
+  return (await runGitAllowFailure(pi, cwd, ["rev-parse", `${sha}^`])).trim() || null;
+}
 async function findReviewBase(pi, cwd) {
   const branch = await currentBranch(pi, cwd);
-  const upstream = await runGitAllowFailure(pi, cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]);
-  const originHead = await runGitAllowFailure(pi, cwd, ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"]);
-  const candidates = [upstream, originHead, "origin/main", "origin/master", "origin/develop", "main", "master", "develop"];
-  for (const candidate of new Set(candidates.filter(Boolean))) {
+  const upstream = (await runGitAllowFailure(pi, cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])).trim();
+  const originHead = (await runGitAllowFailure(pi, cwd, ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"])).trim();
+  for (const candidate of new Set([upstream, originHead, "origin/main", "origin/master", "origin/develop", "main", "master", "develop"].filter(Boolean))) {
     if (candidate === branch || candidate.endsWith(`/${branch}`)) continue;
-    const mergeBase = await runGitAllowFailure(pi, cwd, ["merge-base", "HEAD", candidate]);
+    const mergeBase = (await runGitAllowFailure(pi, cwd, ["merge-base", "HEAD", candidate])).trim();
     if (mergeBase) return { baseRef: candidate, mergeBase };
   }
   return null;
@@ -386,11 +403,25 @@ async function listCommits(pi, cwd, range) {
   return runGitAllowFailure(pi, cwd, ["log", "-100", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%aI", range]);
 }
 
-// lib/git-parse.ts
+// lib/git-kinds.ts
+import { extname } from "node:path";
+var imageTypes = new Map(Object.entries({ ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp", ".ico": "image/x-icon" }));
+var binaryExts = /* @__PURE__ */ new Set([".pdf", ".zip", ".gz", ".tar", ".7z", ".bin", ".exe", ".dll", ".so"]);
+function detectFileKind(path) {
+  const ext = extname(path).toLowerCase();
+  const image = imageTypes.get(ext);
+  if (image) return { kind: "image", mimeType: image };
+  if (binaryExts.has(ext)) return { kind: "binary", mimeType: null };
+  return { kind: "text", mimeType: null };
+}
+
+// lib/git-filter.ts
 function isReviewablePath(path) {
   const lower = path.toLowerCase();
   return !lower.endsWith(".min.js") && !lower.endsWith(".min.css");
 }
+
+// lib/git-parse.ts
 function toStatus(code) {
   if (code === "M") return "modified";
   if (code === "A") return "added";
@@ -398,151 +429,167 @@ function toStatus(code) {
   if (code === "R") return "renamed";
   return null;
 }
-function parseNameStatus(output) {
+function parseChangedPaths(output) {
   return output.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean).flatMap((line) => {
     const [rawCode, first, second] = line.split("	");
     const status = toStatus((rawCode ?? "")[0] ?? "");
-    const path = status === "renamed" ? second ?? "" : first ?? "";
+    const oldPath = status === "added" ? null : first ?? null;
+    const newPath = status === "deleted" ? null : status === "renamed" ? second ?? null : first ?? null;
+    const path = newPath ?? oldPath ?? "";
     if (!status || !path || !isReviewablePath(path)) return [];
-    return [{
-      id: `${status}:${first ?? ""}:${second ?? ""}`,
-      path,
-      status,
-      oldPath: status === "added" ? null : first ?? null,
-      newPath: status === "deleted" ? null : status === "renamed" ? second ?? null : first ?? null,
-      present: status !== "deleted"
-    }];
-  }).sort((a, b) => a.path.localeCompare(b.path));
+    const displayPath = status === "renamed" ? `${oldPath ?? ""} -> ${newPath ?? ""}` : path;
+    return [{ status, oldPath, newPath, displayPath }];
+  }).sort((a, b) => a.displayPath.localeCompare(b.displayPath));
+}
+function toComparison(change) {
+  return { ...change, hasOriginal: change.oldPath != null, hasModified: change.newPath != null };
 }
 
-// lib/git-review-data.ts
-var WORKING_TREE_SHA = "__pi_working_tree__";
-async function runBashAllowFailure(pi, cwd, script) {
-  const result = await pi.exec("bash", ["-lc", script], { cwd });
-  return result.code === 0 ? result.stdout : "";
+// lib/git-scripts.ts
+function shellQuote(value) {
+  return `'${value.replace(/'/gu, `'\\''`)}'`;
 }
-async function workingTreeStatus(pi, cwd) {
-  return (await pi.exec("git", ["status", "--porcelain=1", "--untracked-files=all"], { cwd })).stdout.trim().length > 0;
-}
-function parseCommits(output) {
-  return output.split(/\r?\n/u).filter(Boolean).map((line) => {
-    const [sha, shortSha, subject, author, date] = line.split("");
-    return { sha, shortSha, subject, author, date, kind: "commit" };
-  });
-}
-function snapshotScript(base) {
+function snapshotNameStatusScript(base) {
   return [
     "set -euo pipefail",
     'tmp=$(mktemp "/tmp/pi-diff-review-index.XXXXXX")',
     `trap 'rm -f "$tmp"' EXIT`,
     'export GIT_INDEX_FILE="$tmp"',
-    ...base ? [`git read-tree '${base}'`] : ['rm -f "$tmp"'],
+    ...base ? [`git read-tree ${shellQuote(base)}`] : ['rm -f "$tmp"'],
     "git add -A -- .",
-    base ? `git diff --cached --find-renames -M --name-status '${base}' --` : "git diff --cached --find-renames -M --name-status --root --"
+    base ? `git diff --cached --find-renames -M --name-status ${shellQuote(base)} --` : "git diff --cached --find-renames -M --name-status --root --"
   ].join("\n");
+}
+
+// lib/git-working-tree.ts
+var WORKING_TREE_SHA = "__pi_working_tree__";
+function isWorkingTreeCommitSha(sha) {
+  return sha === WORKING_TREE_SHA;
+}
+function createWorkingTreeCommit() {
+  return { sha: WORKING_TREE_SHA, shortSha: "WT", subject: "Uncommitted changes", authorName: "", authorDate: "", kind: "working-tree" };
+}
+
+// lib/git-commit-files.ts
+function toCommitFile(sha, change) {
+  const path = change.newPath ?? change.oldPath ?? change.displayPath;
+  return { id: `commit::${sha}::${change.displayPath}`, path, worktreeStatus: null, hasWorkingTreeFile: change.newPath != null, inGitDiff: true, gitDiff: toComparison(change), ...detectFileKind(path) };
+}
+async function getCommitFiles(pi, cwd, sha) {
+  const repoRoot = await getRepoRoot(pi, cwd);
+  const output = isWorkingTreeCommitSha(sha) ? await runBashAllowFailure(pi, repoRoot, snapshotNameStatusScript("HEAD")) : await runBashAllowFailure(pi, repoRoot, `git show --format= --find-renames -M --name-status ${JSON.stringify(sha)} --`);
+  return parseChangedPaths(output).map((change) => toCommitFile(sha, change));
+}
+
+// lib/git-file-contents.ts
+function blank(file, originalExists, modifiedExists, originalContent, modifiedContent) {
+  return { kind: file.kind, mimeType: file.mimeType, originalExists, modifiedExists, originalContent, modifiedContent, originalPreviewUrl: null, modifiedPreviewUrl: null };
+}
+async function loadBranch(repoRoot, file, mergeBase, pi) {
+  const diff = file.gitDiff;
+  const originalContent = await readRevision(pi, repoRoot, mergeBase, diff?.oldPath ?? null);
+  const modifiedContent = file.hasWorkingTreeFile ? await readWorkingTree(repoRoot, diff?.newPath ?? file.path) : "";
+  return blank(file, diff?.hasOriginal ?? false, file.hasWorkingTreeFile, originalContent, modifiedContent);
+}
+async function loadCommit(repoRoot, file, sha, pi) {
+  if (isWorkingTreeCommitSha(sha ?? "")) return blank(file, !!file.gitDiff?.oldPath, file.hasWorkingTreeFile, await readRevision(pi, repoRoot, "HEAD", file.gitDiff?.oldPath ?? null), await readWorkingTree(repoRoot, file.gitDiff?.newPath ?? file.path));
+  const parent = sha ? await getCommitParent(pi, repoRoot, sha) : null;
+  const originalContent = await readRevision(pi, repoRoot, parent, file.gitDiff?.oldPath ?? null);
+  const modifiedContent = await readRevision(pi, repoRoot, sha, file.gitDiff?.newPath ?? null);
+  return blank(file, file.gitDiff?.hasOriginal ?? false, file.gitDiff?.hasModified ?? false, originalContent, modifiedContent);
+}
+async function loadAll(repoRoot, file) {
+  const modifiedContent = file.hasWorkingTreeFile ? await readWorkingTree(repoRoot, file.gitDiff?.newPath ?? file.path) : "";
+  return blank(file, false, file.hasWorkingTreeFile, "", modifiedContent);
+}
+async function loadReviewFileContents(pi, repoRoot, file, scope, commitSha, branchMergeBaseSha) {
+  if (scope === "branch") return loadBranch(repoRoot, file, branchMergeBaseSha, pi);
+  if (scope === "commits") return loadCommit(repoRoot, file, commitSha, pi);
+  return loadAll(repoRoot, file);
+}
+
+// lib/git-review-data.ts
+function parseCommits(output) {
+  return output.split(/\r?\n/u).filter(Boolean).map((line) => {
+    const [sha, shortSha, subject, authorName, authorDate] = line.split("");
+    return { sha, shortSha, subject, authorName, authorDate, kind: "commit" };
+  });
+}
+function toBranchFile(change) {
+  const path = change.newPath ?? change.oldPath ?? change.displayPath;
+  return { id: `branch::${change.displayPath}`, path, worktreeStatus: change.status, hasWorkingTreeFile: change.newPath != null, inGitDiff: true, gitDiff: toComparison(change), ...detectFileKind(path) };
+}
+async function hasWorkingTreeChanges(pi, cwd) {
+  const result = await pi.exec("git", ["status", "--porcelain=1", "--untracked-files=all"], { cwd });
+  return result.stdout.trim().length > 0;
 }
 async function getReviewData(pi, cwd) {
   const repoRoot = await getRepoRoot(pi, cwd);
-  const repoHasHead = await hasHead(pi, repoRoot);
-  const reviewBase = repoHasHead ? await findReviewBase(pi, repoRoot) : null;
-  const mergeBase = reviewBase?.mergeBase ?? (repoHasHead ? "HEAD" : null);
-  const files = parseNameStatus(await runBashAllowFailure(pi, repoRoot, snapshotScript(mergeBase)));
-  const range = reviewBase ? `${reviewBase.mergeBase}..HEAD` : repoHasHead ? "HEAD" : "";
+  const repositoryHasHead = await hasHead(pi, repoRoot);
+  const base = repositoryHasHead ? await findReviewBase(pi, repoRoot) : null;
+  const branchMergeBaseSha = base?.mergeBase ?? (repositoryHasHead ? "HEAD" : null);
+  const files = parseChangedPaths(await runBashAllowFailure(pi, repoRoot, snapshotNameStatusScript(branchMergeBaseSha))).map(toBranchFile);
+  const range = base ? `${base.mergeBase}..HEAD` : repositoryHasHead ? "HEAD" : "";
   const commits = range ? parseCommits(await listCommits(pi, repoRoot, range)) : [];
-  const workingCommit = await workingTreeStatus(pi, repoRoot);
-  return {
-    repoRoot,
-    baseRef: reviewBase?.baseRef ?? null,
-    mergeBase,
-    hasHead: repoHasHead,
-    files,
-    commits: workingCommit ? [{ sha: WORKING_TREE_SHA, shortSha: "WT", subject: "Uncommitted changes", author: "", date: "", kind: "working-tree" }, ...commits] : commits
-  };
+  return { repoRoot, files, branchBaseRef: base?.baseRef ?? null, branchMergeBaseSha, repositoryHasHead, commits: await hasWorkingTreeChanges(pi, repoRoot) ? [createWorkingTreeCommit(), ...commits] : commits };
 }
 
-// lib/git-detail.ts
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-
-// src/truncate.ts
-function truncateText(text, maxLines = 400, maxChars = 6e4) {
-  const clippedChars = text.length > maxChars ? `${text.slice(0, maxChars)}
-
-[truncated by characters]` : text;
-  const lines = clippedChars.split(/\r?\n/u);
-  if (lines.length <= maxLines) return clippedChars;
-  return `${lines.slice(0, maxLines).join("\n")}
-
-[truncated by lines]`;
+// lib/message-guards.ts
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+function hasType(value, type) {
+  return isRecord(value) && value.type === type;
+}
+function isRequestCommit(value) {
+  return hasType(value, "request-commit") && typeof value.requestId === "string" && typeof value.sha === "string";
+}
+function isRequestFile(value) {
+  return hasType(value, "request-file") && typeof value.requestId === "string" && typeof value.fileId === "string" && (value.scope === "branch" || value.scope === "commits" || value.scope === "all");
+}
+function isRequestReviewData(value) {
+  return hasType(value, "request-review-data") && typeof value.requestId === "string";
+}
+function isCancel(value) {
+  return hasType(value, "cancel");
+}
+function isSubmit(value) {
+  return hasType(value, "submit") && typeof value.overallComment === "string" && Array.isArray(value.comments);
 }
 
-// lib/git-detail.ts
-async function runBashAllowFailure2(pi, cwd, script) {
-  const result = await pi.exec("bash", ["-lc", script], { cwd });
-  return result.code === 0 ? result.stdout : "";
+// lib/prompt-location.ts
+function scopeLabel(comment) {
+  if (comment.scope === "branch") return "branch diff";
+  if (comment.scope === "all") return "all files";
+  if (comment.commitKind === "working-tree") return "working tree changes";
+  return comment.commitShort ? `commit ${comment.commitShort}` : "commit";
 }
-function snapshotDiffScript(base, path) {
-  const target = path ? ` -- '${path.replace(/'/gu, `'\\''`)}'` : " --";
-  const header = ["set -euo pipefail", 'tmp=$(mktemp "/tmp/pi-diff-review-index.XXXXXX")', `trap 'rm -f "$tmp"' EXIT`, 'export GIT_INDEX_FILE="$tmp"'];
-  const readTree = base ? [`git read-tree '${base}'`] : ['rm -f "$tmp"'];
-  const diff = base ? `git diff --cached --find-renames -M '${base}'${target}` : `git diff --cached --find-renames -M --root${target}`;
-  return [...header, ...readTree, "git add -A -- .", diff].join("\n");
+function pathLabel(file) {
+  return file?.gitDiff?.displayPath ?? file?.path ?? "(unknown file)";
 }
-async function loadCurrentFile(repoRoot, file, data, pi) {
-  const livePath = file.newPath ?? file.oldPath;
-  if (livePath && file.present) return readFile(join(repoRoot, livePath), "utf8").catch(() => "");
-  if (data.hasHead && file.oldPath) return runBashAllowFailure2(pi, repoRoot, `git show HEAD:'${file.oldPath.replace(/'/gu, `'\\''`)}'`);
-  if (data.mergeBase && file.oldPath) return runBashAllowFailure2(pi, repoRoot, `git show '${data.mergeBase}:${file.oldPath.replace(/'/gu, `'\\''`)}'`);
-  return "File is not present in the current working tree.";
-}
-async function loadReviewDetail(pi, data, tab, id) {
-  if (tab === "commits") {
-    const commit = data.commits.find((item) => item.sha === id);
-    if (!commit) throw new Error("Unknown commit requested.");
-    const content2 = commit.kind === "working-tree" ? await runBashAllowFailure2(pi, data.repoRoot, snapshotDiffScript(data.hasHead ? "HEAD" : null, null)) : await runBashAllowFailure2(pi, data.repoRoot, `git show --stat --patch --find-renames -M '${id}'`);
-    return { title: `[commit] ${commit.shortSha} ${commit.subject}`.trim(), content: truncateText(content2 || "No diff available.") };
-  }
-  const file = data.files.find((item) => item.id === id);
-  if (!file) throw new Error("Unknown file requested.");
-  const title = `${tab === "branch" ? "[branch diff]" : "[current file]"} ${file.path}`;
-  const content = tab === "branch" ? await runBashAllowFailure2(pi, data.repoRoot, snapshotDiffScript(data.mergeBase, file.path)) : await loadCurrentFile(data.repoRoot, file, data, pi);
-  return { title, content: truncateText(content || "No content available.") };
+function formatCommentLocation(comment, file) {
+  const prefix = `[${scopeLabel(comment)}] ${pathLabel(file)}`;
+  if (comment.side === "file" || comment.startLine == null) return prefix;
+  const range = comment.endLine && comment.endLine !== comment.startLine ? `${comment.startLine}-${comment.endLine}` : String(comment.startLine);
+  const suffix = comment.scope === "all" ? "" : comment.side === "original" ? " (old)" : " (new)";
+  return `${prefix}:${range}${suffix}`;
 }
 
-// src/prompt.ts
-function formatLabel(comment) {
-  if (comment.tab === "branch") return `[branch diff] ${comment.label}`;
-  if (comment.tab === "commits") return `[commit] ${comment.label}`;
-  return `[current file] ${comment.label}`;
-}
+// lib/prompt.ts
 function hasReviewFeedback(payload) {
   return payload.overallComment.trim().length > 0 || payload.comments.some((comment) => comment.body.trim().length > 0);
 }
-function composeReviewPrompt(payload) {
-  const lines = ["Please address the following diff review feedback", ""];
+function composeReviewPrompt(files, payload) {
+  const fileMap = new Map(files.map((file) => [file.id, file]));
+  const lines = ["Please address the following feedback", ""];
   const overall = payload.overallComment.trim();
   if (overall) lines.push(overall, "");
-  payload.comments.filter((comment) => comment.body.trim()).forEach((comment, index) => {
-    lines.push(`${index + 1}. ${formatLabel(comment)}`);
+  payload.comments.forEach((comment, index) => {
+    lines.push(`${index + 1}. ${formatCommentLocation(comment, fileMap.get(comment.fileId))}`);
     lines.push(`   ${comment.body.trim()}`);
     lines.push("");
   });
   return lines.join("\n").trim();
-}
-
-// src/ui.ts
-import { readFileSync } from "node:fs";
-import { dirname, join as join2 } from "node:path";
-import { fileURLToPath } from "node:url";
-var here = dirname(fileURLToPath(import.meta.url));
-var webDir = join2(here, "..", "web");
-function escapeInline(value) {
-  return value.replace(/</gu, "\\u003c").replace(/>/gu, "\\u003e").replace(/&/gu, "\\u0026");
-}
-function buildReviewHtml(data) {
-  const html = readFileSync(join2(webDir, "index.html"), "utf8");
-  const js = readFileSync(join2(webDir, "app.js"), "utf8");
-  return html.replace('"__INLINE_DATA__"', escapeInline(JSON.stringify(data))).replace("__INLINE_JS__", js);
 }
 
 // lib/glimpse-window.ts
@@ -598,49 +645,89 @@ async function openQuietGlimpse(html, options = {}) {
   return new QuietWindow(spawn2(host.path, [...host.extraArgs ?? [], ...args], { stdio: ["pipe", "pipe", "pipe"], windowsHide: process.platform === "win32", env: { ...process.env, OS_ACTIVITY_MODE: process.env.OS_ACTIVITY_MODE ?? "disable" } }), html);
 }
 
-// lib/diff-review-core.ts
-function isReviewWindowMessage(message) {
-  return !!message && typeof message === "object" && "type" in message;
+// lib/window-send.ts
+function sendWindowMessage(window, message) {
+  const payload = JSON.stringify(message).replace(/</gu, "\\u003c").replace(/>/gu, "\\u003e").replace(/&/gu, "\\u0026");
+  window.send(`window.__reviewReceive(${payload});`);
 }
+
+// src/ui.ts
+import { readFileSync as readFileSync2 } from "node:fs";
+import { dirname as dirname3, join as join4 } from "node:path";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
+var here = dirname3(fileURLToPath3(import.meta.url));
+var webDir = join4(here, "..", "web");
+var scripts = ["state.js", "helpers.js", "protocol.js", "render.js", "app.js"];
+function escapeInline(value) {
+  return value.replace(/</gu, "\\u003c").replace(/>/gu, "\\u003e").replace(/&/gu, "\\u0026");
+}
+function buildReviewHtml(data) {
+  const html = readFileSync2(join4(webDir, "index.html"), "utf8");
+  const css = readFileSync2(join4(webDir, "style.css"), "utf8");
+  const js = scripts.map((file) => readFileSync2(join4(webDir, file), "utf8")).join("\n");
+  return html.replace("__INLINE_STYLE__", css).replace('"__INLINE_DATA__"', escapeInline(JSON.stringify(data))).replace("__INLINE_JS__", js);
+}
+
+// lib/diff-review-core.ts
 function appendPrompt(ctx, prompt2) {
   ctx.ui.pasteToEditor(`${ctx.ui.getEditorText().trim() ? "\n\n" : ""}${prompt2}`);
 }
-function send(window, message) {
-  const payload = JSON.stringify(message).replace(/</gu, "\\u003c").replace(/>/gu, "\\u003e").replace(/&/gu, "\\u0026");
-  window.send(`window.__diffReviewReceive(${payload});`);
+function replaceFiles(target, files) {
+  for (const [id, file] of [...target.entries()]) if (!id.startsWith("commit::")) target.delete(id);
+  for (const file of files) target.set(file.id, file);
 }
 function registerDiffReview(_pi) {
   let activeWindow = null;
   const ignored = /* @__PURE__ */ new WeakSet();
   const closeWindow = (suppress = false) => {
-    if (!activeWindow) return;
-    const window = activeWindow;
-    activeWindow = null;
-    if (suppress) ignored.add(window);
-    window.close();
+    if (activeWindow) {
+      const window = activeWindow;
+      activeWindow = null;
+      if (suppress) ignored.add(window);
+      window.close();
+    }
   };
   const handleCommand = async (_args, ctx) => {
     if (activeWindow) return void ctx.ui.notify("A diff review window is already open.", "warning");
     try {
-      const data = await getReviewData(_pi, ctx.cwd);
+      let data = await getReviewData(_pi, ctx.cwd);
       if (data.files.length === 0 && data.commits.length === 0) return void ctx.ui.notify("No reviewable changes found.", "info");
-      const window = await openQuietGlimpse(buildReviewHtml(data), { width: 1500, height: 960, title: "pi diff review" });
+      const fileMap = new Map(data.files.map((file) => [file.id, file]));
+      const commitCache = /* @__PURE__ */ new Map();
+      const contentCache = /* @__PURE__ */ new Map();
+      const window = await openQuietGlimpse(buildReviewHtml(data), { width: 1680, height: 1020, title: "pi diff review" });
       activeWindow = window;
       window.on("message", async (message) => {
-        if (!isReviewWindowMessage(message)) return;
-        if (message.type === "detail") {
-          try {
-            const detail = await loadReviewDetail(_pi, data, message.tab, message.id);
-            send(window, { type: "detail-data", requestId: message.requestId, tab: message.tab, id: message.id, ...detail });
-          } catch (error) {
-            send(window, { type: "detail-error", requestId: message.requestId, tab: message.tab, id: message.id, message: error instanceof Error ? error.message : String(error) });
-          }
-          return;
+        if (isRequestCommit(message)) try {
+          const files = await (commitCache.get(message.sha) ?? getCommitFiles(_pi, data.repoRoot, message.sha));
+          commitCache.set(message.sha, Promise.resolve(files));
+          files.forEach((file) => fileMap.set(file.id, file));
+          sendWindowMessage(window, { type: "commit-data", requestId: message.requestId, sha: message.sha, files });
+        } catch (error) {
+          sendWindowMessage(window, { type: "commit-error", requestId: message.requestId, sha: message.sha, message: error instanceof Error ? error.message : String(error) });
         }
-        if (message.type === "cancel") return void ctx.ui.notify("Diff review cancelled.", "info");
-        if (!hasReviewFeedback(message)) return;
-        appendPrompt(ctx, composeReviewPrompt(message));
-        ctx.ui.notify("Appended diff review feedback to the editor.", "info");
+        if (isRequestFile(message)) try {
+          const file = fileMap.get(message.fileId);
+          if (!file) throw new Error("Unknown file requested.");
+          const key = `${message.scope}:${message.commitSha ?? ""}:${message.fileId}`;
+          const contents = await (contentCache.get(key) ?? loadReviewFileContents(_pi, data.repoRoot, file, message.scope, message.commitSha ?? null, data.branchMergeBaseSha));
+          contentCache.set(key, Promise.resolve(contents));
+          sendWindowMessage(window, { type: "file-data", requestId: message.requestId, fileId: message.fileId, scope: message.scope, commitSha: message.commitSha ?? null, ...contents });
+        } catch (error) {
+          sendWindowMessage(window, { type: "file-error", requestId: message.requestId, fileId: message.fileId, scope: message.scope, commitSha: message.commitSha ?? null, message: error instanceof Error ? error.message : String(error) });
+        }
+        if (isRequestReviewData(message)) {
+          commitCache.clear();
+          contentCache.clear();
+          data = await getReviewData(_pi, data.repoRoot);
+          replaceFiles(fileMap, data.files);
+          sendWindowMessage(window, { type: "review-data", requestId: message.requestId, files: data.files, commits: data.commits, branchBaseRef: data.branchBaseRef, branchMergeBaseSha: data.branchMergeBaseSha, repositoryHasHead: data.repositoryHasHead });
+        }
+        if (isCancel(message)) ctx.ui.notify("Diff review cancelled.", "info");
+        if (isSubmit(message) && hasReviewFeedback(message)) {
+          appendPrompt(ctx, composeReviewPrompt([...fileMap.values()], message));
+          ctx.ui.notify("Appended diff review feedback to the editor.", "info");
+        }
       });
       window.on("closed", () => {
         if (activeWindow === window) activeWindow = null;

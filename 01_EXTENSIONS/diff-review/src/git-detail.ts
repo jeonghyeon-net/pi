@@ -1,1 +1,1 @@
-export { loadReviewDetail } from "../lib/git-detail.js";
+export { loadReviewFileContents } from "../lib/git-detail.js";

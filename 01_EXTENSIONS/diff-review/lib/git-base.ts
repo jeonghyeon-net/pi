@@ -1,12 +1,8 @@
+import { runGitAllowFailure } from "./git-read.js";
 import type { ReviewCommandApi } from "../src/types.js";
 
-async function runGitAllowFailure(pi: Pick<ReviewCommandApi, "exec">, cwd: string, args: string[]): Promise<string> {
-	const result = await pi.exec("git", args, { cwd });
-	return result.code === 0 ? result.stdout.trim() : "";
-}
-
 async function currentBranch(pi: Pick<ReviewCommandApi, "exec">, cwd: string): Promise<string> {
-	return (await runGitAllowFailure(pi, cwd, ["branch", "--show-current"])) || "HEAD";
+	return (await runGitAllowFailure(pi, cwd, ["branch", "--show-current"])).trim() || "HEAD";
 }
 
 export async function getRepoRoot(pi: Pick<ReviewCommandApi, "exec">, cwd: string): Promise<string> {
@@ -19,14 +15,17 @@ export async function hasHead(pi: Pick<ReviewCommandApi, "exec">, cwd: string): 
 	return (await pi.exec("git", ["rev-parse", "--verify", "HEAD"], { cwd })).code === 0;
 }
 
+export async function getCommitParent(pi: Pick<ReviewCommandApi, "exec">, cwd: string, sha: string): Promise<string | null> {
+	return (await runGitAllowFailure(pi, cwd, ["rev-parse", `${sha}^`])).trim() || null;
+}
+
 export async function findReviewBase(pi: Pick<ReviewCommandApi, "exec">, cwd: string): Promise<{ baseRef: string; mergeBase: string } | null> {
 	const branch = await currentBranch(pi, cwd);
-	const upstream = await runGitAllowFailure(pi, cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]);
-	const originHead = await runGitAllowFailure(pi, cwd, ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"]);
-	const candidates = [upstream, originHead, "origin/main", "origin/master", "origin/develop", "main", "master", "develop"];
-	for (const candidate of new Set(candidates.filter(Boolean))) {
+	const upstream = (await runGitAllowFailure(pi, cwd, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])).trim();
+	const originHead = (await runGitAllowFailure(pi, cwd, ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"])).trim();
+	for (const candidate of new Set([upstream, originHead, "origin/main", "origin/master", "origin/develop", "main", "master", "develop"].filter(Boolean))) {
 		if (candidate === branch || candidate.endsWith(`/${branch}`)) continue;
-		const mergeBase = await runGitAllowFailure(pi, cwd, ["merge-base", "HEAD", candidate]);
+		const mergeBase = (await runGitAllowFailure(pi, cwd, ["merge-base", "HEAD", candidate])).trim();
 		if (mergeBase) return { baseRef: candidate, mergeBase };
 	}
 	return null;

@@ -1,19 +1,17 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>pi diff review</title>
-<style>
-:root{color-scheme:dark;font:14px/1.4 ui-sans-serif,system-ui,sans-serif}body{margin:0;background:#0d1117;color:#e6edf3}button,textarea{font:inherit}#app{display:grid;grid-template-rows:auto 1fr auto;height:100vh}header{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #30363d}nav{display:flex;gap:8px}.tab{border:1px solid #30363d;background:#161b22;color:#c9d1d9;padding:6px 10px;border-radius:8px;cursor:pointer}.tab.active{background:#1f6feb;border-color:#1f6feb;color:#fff}main{display:grid;grid-template-columns:320px 1fr;min-height:0}aside{border-right:1px solid #30363d;overflow:auto}#items button{display:block;width:100%;padding:10px 12px;text-align:left;border:0;border-bottom:1px solid #21262d;background:#0d1117;color:#c9d1d9;cursor:pointer}#items button.active{background:#161b22}#detail{padding:16px;overflow:auto;white-space:pre-wrap;font:12px/1.5 ui-monospace,SFMono-Regular,monospace}.item-note{display:flex;flex-direction:column;gap:8px;padding:12px;border-top:1px solid #30363d}textarea{width:100%;min-height:96px;padding:10px;border-radius:8px;border:1px solid #30363d;background:#010409;color:#e6edf3}footer{display:grid;grid-template-columns:1fr auto;gap:12px;padding:12px 16px;border-top:1px solid #30363d}.actions{display:flex;gap:8px;align-items:flex-end}.action{border:1px solid #30363d;background:#21262d;color:#e6edf3;padding:10px 14px;border-radius:8px;cursor:pointer}.action.primary{background:#238636;border-color:#238636}.meta{color:#8b949e;font-size:12px}</style>
+<style>__INLINE_STYLE__</style>
 </head>
 <body>
-<div id="app">
-<header><div><strong>Diff review</strong><div id="meta" class="meta"></div></div><nav><button class="tab" data-tab="branch">Branch</button><button class="tab" data-tab="commits">Commits</button><button class="tab" data-tab="files">Files</button></nav></header>
-<main><aside id="items"></aside><section><div id="detail"></div><div class="item-note"><div id="item-label" class="meta">No selection</div><textarea id="item-comment" placeholder="Leave feedback for the selected item"></textarea></div></section></main>
-<footer><label><div class="meta">Overall review note</div><textarea id="overall-comment" placeholder="High-level review summary"></textarea></label><div class="actions"><button id="cancel" class="action">Cancel</button><button id="submit" class="action primary">Submit review</button></div></footer>
-</div>
-<script id="review-data" type="application/json">"__INLINE_DATA__"</script>
+<header><strong id="title">Diff review</strong><span id="meta"></span><button id="refresh">Refresh</button></header>
+<nav><button data-scope="branch">Branch</button><button data-scope="commits">Commits</button><button data-scope="all">Files</button></nav>
+<div class="shell"><aside><select id="commit-select"></select><input id="filter" placeholder="Filter files" /><div id="items"></div></aside><main><h2 id="file-label">Select a file</h2><p id="hint"></p><div id="diff"></div><section><h3>Comments</h3><div id="comment-draft"></div><div id="comment-list"></div></section></main></div>
+<footer><textarea id="overall" placeholder="Overall review comment"></textarea><button id="cancel">Cancel</button><button id="submit">Submit</button></footer>
+<script id="diff-review-data" type="application/json">"__INLINE_DATA__"</script>
 <script>__INLINE_JS__</script>
 </body>
 </html>

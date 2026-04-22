@@ -1,0 +1,7 @@
+const H=window.DiffReview;
+H.splitLines=(text)=>String(text||"").replace(/\r/g,"").split("\n");
+H.contentKey=(scope,sha,id)=>`${scope}\u0000${sha||""}\u0000${id}`;
+H.activeContent=()=>H.state.fileContents[H.contentKey(H.state.scope,H.state.scope==="commits"?H.state.selectedCommitSha:null,H.state.activeFileId||"")]||null;
+H.scopeLabel=(comment)=>comment.scope==="branch"?"branch diff":comment.scope==="all"?"all files":comment.commitKind==="working-tree"?"working tree changes":comment.commitShort?`commit ${comment.commitShort}`:"commit";
+H.commentLabel=(comment)=>{const file=H.findFile(comment.fileId);const path=file?.gitDiff?.displayPath||file?.path||"(unknown file)";if(comment.side==="file"||comment.startLine==null)return `[${H.scopeLabel(comment)}] ${path}`;const range=comment.endLine&&comment.endLine!==comment.startLine?`${comment.startLine}-${comment.endLine}`:String(comment.startLine);const suffix=comment.scope==="all"?"":comment.side==="original"?" (old)":" (new)";return `[${H.scopeLabel(comment)}] ${path}:${range}${suffix}`;};
+H.rows=(contents)=>{const left=H.splitLines(contents?.originalContent||"");const right=H.splitLines(contents?.modifiedContent||"");const size=Math.max(left.length,right.length,1);return Array.from({length:size},(_,i)=>({left:left[i]??"",right:right[i]??"",leftNo:i<left.length?i+1:null,rightNo:i<right.length?i+1:null,cls:left[i]===right[i]?"":!left[i]?"add":!right[i]?"del":"mute"}));};

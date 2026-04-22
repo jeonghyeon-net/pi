@@ -1,1 +1,1 @@
-export { findReviewBase, getRepoRoot, hasHead, listCommits } from "../lib/git-base.js";
+export { findReviewBase, getCommitParent, getRepoRoot, hasHead, listCommits } from "../lib/git-base.js";

@@ -1,1 +1,1 @@
-export { parseNameStatus } from "../lib/git-parse.js";
+export { parseChangedPaths, toComparison } from "../lib/git-parse.js";
