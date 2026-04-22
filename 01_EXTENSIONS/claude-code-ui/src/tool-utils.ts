@@ -4,12 +4,13 @@ export function toolPrefix(theme: Theme, label: string) {
 	return `${theme.fg("accent", "⏺")} ${theme.fg("toolTitle", theme.bold(label))}`;
 }
 
-export function toolResult(theme: Theme, text: string) {
-	return `${theme.fg("dim", "  ↳ ")}${text}`;
+export function inlineSuffix(theme: Theme, text?: string) {
+	return text ? `${theme.fg("dim", " · ")}${text}` : "";
 }
 
-export function indentBlock(text: string, prefix = "    ") {
-	return text.split("\n").map((line) => `${prefix}${line}`).join("\n");
+export function branchBlock(theme: Theme, text: string) {
+	const [first = "", ...rest] = text.split("\n");
+	return [`${theme.fg("dim", "  └ ")}${first}`, ...rest.map((line) => `${theme.fg("dim", "    ")}${line}`)].join("\n");
 }
 
 export function summarizeTextPreview(theme: Theme, text: string, maxLines: number) {

@@ -1,9 +1,16 @@
 import { defineTool, createEditToolDefinition, type AgentToolResult, type EditToolDetails, type EditToolInput, type Theme } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
-import { indentBlock, toolPrefix, toolResult } from "./tool-utils.js";
+import { Container, Text } from "@mariozechner/pi-tui";
+import { branchBlock, inlineSuffix, toolPrefix } from "./tool-utils.js";
 
 type EditResult = AgentToolResult<EditToolDetails | undefined>;
 type RenderOptions = { expanded: boolean; isPartial: boolean };
+type RenderState = { summary?: string };
+
+function setSummary(context: { state: RenderState; invalidate: () => void }, summary: string) {
+	if (context.state.summary === summary) return;
+	context.state.summary = summary;
+	context.invalidate();
+}
 
 export function renderDiffLine(theme: Theme, line: string) {
 	if (line.startsWith("+") && !line.startsWith("+++")) return theme.fg("toolDiffAdded", line);
@@ -16,22 +23,22 @@ export function createClaudeEditTool(cwd: string) {
 	return defineTool({
 		...base,
 		renderShell: "self",
-		renderCall(args: EditToolInput, theme: Theme) {
-			return new Text(`${toolPrefix(theme, "Edit")} ${theme.fg("muted", args.path)}`, 0, 0);
+		renderCall(args: EditToolInput, theme: Theme, context) {
+			const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
+			text.setText(`${toolPrefix(theme, "Edit")} ${theme.fg("muted", args.path)}${inlineSuffix(theme, context.state.summary)}`);
+			return text;
 		},
-		renderResult(result: EditResult, { expanded, isPartial }: RenderOptions, theme: Theme) {
-			if (isPartial) return new Text(toolResult(theme, theme.fg("warning", "editing…")), 0, 0);
+		renderResult(result: EditResult, { expanded, isPartial }: RenderOptions, theme: Theme, context) {
 			const content = result.content[0];
-			if (content?.type === "text" && content.text.startsWith("Error")) return new Text(toolResult(theme, theme.fg("error", content.text.split("\n")[0])), 0, 0);
-			if (!result.details?.diff) return new Text(toolResult(theme, theme.fg("success", "applied")), 0, 0);
-			const diffLines = result.details.diff.split("\n");
+			const diffLines = result.details?.diff?.split("\n") ?? [];
 			const additions = diffLines.filter((line) => line.startsWith("+") && !line.startsWith("+++")).length;
 			const removals = diffLines.filter((line) => line.startsWith("-") && !line.startsWith("---")).length;
-			const summary = `${theme.fg("success", `+${additions}`)}${theme.fg("dim", " · ")}${theme.fg("error", `-${removals}`)}`;
-			if (!expanded) return new Text(toolResult(theme, summary), 0, 0);
+			const summary = isPartial ? theme.fg("warning", "editing…") : content?.type === "text" && content.text.startsWith("Error") ? theme.fg("error", content.text.split("\n")[0]) : result.details?.diff ? `${theme.fg("success", `+${additions}`)}${theme.fg("dim", " · ")}${theme.fg("error", `-${removals}`)}` : theme.fg("success", "applied");
+			setSummary(context, summary);
+			if (!expanded || !result.details?.diff) return context.lastComponent instanceof Container ? context.lastComponent : new Container();
 			const preview = diffLines.slice(0, 24).map((line) => renderDiffLine(theme, line));
 			if (diffLines.length > 24) preview.push(theme.fg("dim", `… ${diffLines.length - 24} more diff lines`));
-			return new Text(`${toolResult(theme, summary)}\n${indentBlock(preview.join("\n"))}`, 0, 0);
+			return new Text(branchBlock(theme, preview.join("\n")), 0, 0);
 		},
 	});
 }

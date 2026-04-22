@@ -1,32 +1,31 @@
 import type { AgentEndEvent, AgentStartEvent, ExtensionContext, SessionShutdownEvent } from "@mariozechner/pi-coding-agent";
-import { formatElapsed, formatWorkingLine, pickWorkingPhrase } from "./working-line-format.js";
+import { formatElapsed, formatWorkingLine } from "./working-line-format.js";
 
 let activeCtx: ExtensionContext | undefined;
+let activeTool: string | undefined;
+let hasVisibleOutput = false;
 let startedAt = 0;
-let suffix: string | undefined;
 let timer: ReturnType<typeof setInterval> | undefined;
 
 type ToolEvent = { toolName: string };
-
 type MessageEvent = { assistantMessageEvent: { type: string } };
 
 function toolLabel(toolName: string) {
 	return { bash: "Running bash", read: "Reading file", write: "Writing file", edit: "Editing file" }[toolName] ?? `Running ${toolName}`;
 }
 
-function currentLabel() {
-	return suffix ?? pickWorkingPhrase(() => 0);
-}
-
 function renderWorkingLine() {
-	activeCtx?.ui.setWorkingMessage(formatWorkingLine([currentLabel(), formatElapsed(Date.now() - startedAt)]));
+	const label = activeTool ? toolLabel(activeTool) : "Thinking...";
+	const message = !activeTool && hasVisibleOutput ? undefined : formatWorkingLine([label, formatElapsed(Date.now() - startedAt)]);
+	activeCtx?.ui.setWorkingMessage(message);
 }
 
 function resetWorkingLine(ctx?: ExtensionContext) {
 	if (timer) clearInterval(timer);
 	timer = undefined;
 	startedAt = 0;
-	suffix = undefined;
+	activeTool = undefined;
+	hasVisibleOutput = false;
 	(activeCtx ?? ctx)?.ui.setWorkingMessage();
 	activeCtx = undefined;
 }
@@ -42,18 +41,21 @@ export function onAgentStart(_event: AgentStartEvent, ctx: ExtensionContext) {
 
 export function onToolExecutionStart(event: ToolEvent) {
 	if (!activeCtx) return;
-	suffix = toolLabel(event.toolName);
+	activeTool = event.toolName;
 	renderWorkingLine();
 }
 
 export function onToolExecutionEnd(_event: object) {
 	if (!activeCtx) return;
-	suffix = undefined;
+	activeTool = undefined;
 	renderWorkingLine();
 }
 
-export function onMessageUpdate(_event: MessageEvent) {
+export function onMessageUpdate(event: MessageEvent) {
 	if (!activeCtx) return;
+	if (event.assistantMessageEvent.type !== "thinking_start" && event.assistantMessageEvent.type !== "thinking_end") {
+		hasVisibleOutput = true;
+	}
 	renderWorkingLine();
 }
 

@@ -12,7 +12,7 @@ export function applyClaudeChrome(ctx: ExtensionContext) {
 	ctx.ui.setWidget("claude-code-ui-prompt", undefined);
 	ctx.ui.setEditorComponent((tui, theme, keybindings) => new ClaudeCodeEditor(tui, theme, keybindings));
 	ctx.ui.setWorkingIndicator(WORKING_INDICATOR);
-	ctx.ui.setHiddenThinkingLabel("reasoning");
+	ctx.ui.setHiddenThinkingLabel("…");
 	ctx.ui.setTitle(`Claude Code · ${getProjectName(ctx)}`);
 	if (!themeResult.success) {
 		ctx.ui.notify(

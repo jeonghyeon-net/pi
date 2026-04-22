@@ -2,36 +2,52 @@ import type { AgentToolResult, BashToolDetails, EditToolDetails } from "@marioze
 import { describe, expect, it } from "vitest";
 import { createClaudeBashTool } from "../src/bash-tool.ts";
 import { createClaudeEditTool, renderDiffLine } from "../src/edit-tool.ts";
-import { render, theme } from "./helpers.ts";
+import { emptyComponent, render, theme, toolContext } from "./helpers.ts";
 
 describe("bash and edit tool renderers", () => {
-	it("renders bash calls and output states", () => {
+	it("renders bash tool inline and only expands previews on demand", () => {
 		const bash = createClaudeBashTool(process.cwd());
+		const args = { command: "echo hi", timeout: 1 };
+		const state = {};
 		expect(bash.renderShell).toBe("self");
-		expect(render(bash.renderCall?.({ command: "echo hi", timeout: 1 }, theme)!)).toContain("⏺");
-		expect(render(bash.renderCall?.({ command: "echo hi", timeout: 1 }, theme)!)).toContain("echo hi");
-		expect(render(bash.renderCall?.({ command: "x".repeat(100), timeout: 1 }, theme)!)).toContain("…");
-		expect(render(bash.renderResult?.({ content: [] } as AgentToolResult<BashToolDetails | undefined>, { expanded: false, isPartial: true, showImages: false, isError: false }, theme)!)).toContain("running…");
+		const call = bash.renderCall?.(args, theme, toolContext(args, state))!;
+		expect(render(call)).toContain("echo hi");
+		expect(render(bash.renderCall?.({ command: "x".repeat(100), timeout: 1 }, theme, toolContext(args, state))!)).toContain("…");
+		expect(bash.renderCall?.(args, theme, toolContext(args, state, false, call))).toBe(call);
+		render(bash.renderResult?.({ content: [] } as AgentToolResult<BashToolDetails | undefined>, { expanded: false, isPartial: true, showImages: false, isError: false }, theme, toolContext(args, state, false, emptyComponent()))!);
+		expect(render(bash.renderCall?.(args, theme, toolContext(args, state))!)).toContain("running…");
 		const ok = { content: [{ type: "text", text: "ok\nexit code: 0" }], details: { truncation: { truncated: true } } } as AgentToolResult<BashToolDetails | undefined>;
-		expect(render(bash.renderResult?.(ok, { expanded: true, isPartial: false, showImages: false, isError: false }, theme)!)).toContain("truncated");
+		render(bash.renderResult?.(ok, { expanded: false, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state))!);
+		render(bash.renderResult?.(ok, { expanded: false, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state))!);
+		expect(render(bash.renderCall?.(args, theme, toolContext(args, state))!)).toContain("truncated");
+		expect(render(bash.renderResult?.(ok, { expanded: true, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state, true))!)).toContain("└");
 		const fail = { content: [{ type: "text", text: "bad\nexit code: 2" }], details: undefined } as AgentToolResult<BashToolDetails | undefined>;
-		expect(render(bash.renderResult?.(fail, { expanded: false, isPartial: false, showImages: false, isError: true }, theme)!)).toContain("exit 2");
-		expect(render(bash.renderResult?.({ content: [{ type: "image" }], details: undefined } as AgentToolResult<BashToolDetails | undefined>, { expanded: true, isPartial: false, showImages: false, isError: false }, theme)!)).toContain("done");
+		render(bash.renderResult?.(fail, { expanded: false, isPartial: false, showImages: false, isError: true }, theme, toolContext(args, state))!);
+		expect(render(bash.renderCall?.(args, theme, toolContext(args, state))!)).toContain("exit 2");
+		expect(render(bash.renderResult?.({ content: [{ type: "image" }], details: undefined } as AgentToolResult<BashToolDetails | undefined>, { expanded: true, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state, true, emptyComponent()))!)).toBe("");
 	});
 
-	it("renders edit calls and diff states", () => {
+	it("renders edit tool summaries inline and keeps diff previews expandable", () => {
 		const edit = createClaudeEditTool(process.cwd());
+		const args = { path: "a.ts", edits: [] };
+		const state = {};
 		expect(edit.renderShell).toBe("self");
+		const call = edit.renderCall?.(args, theme, toolContext(args, state))!;
+		expect(edit.renderCall?.(args, theme, toolContext(args, state, false, call))).toBe(call);
 		expect(renderDiffLine(theme, "+new")).toContain("toolDiffAdded");
 		expect(renderDiffLine(theme, "-old")).toContain("toolDiffRemoved");
 		expect(renderDiffLine(theme, " context")).toContain("toolDiffContext");
-		expect(render(edit.renderCall?.({ path: "a.ts", edits: [] }, theme)!)).toContain("a.ts");
-		expect(render(edit.renderResult?.({ content: [] } as AgentToolResult<EditToolDetails | undefined>, { expanded: false, isPartial: true, showImages: false, isError: false }, theme)!)).toContain("editing…");
+		render(edit.renderResult?.({ content: [] } as AgentToolResult<EditToolDetails | undefined>, { expanded: false, isPartial: true, showImages: false, isError: false }, theme, toolContext(args, state, false, emptyComponent()))!);
+		expect(render(edit.renderCall?.(args, theme, toolContext(args, state))!)).toContain("editing…");
 		const error = { content: [{ type: "text", text: "Error: nope" }], details: undefined } as AgentToolResult<EditToolDetails | undefined>;
-		expect(render(edit.renderResult?.(error, { expanded: false, isPartial: false, showImages: false, isError: true }, theme)!)).toContain("Error: nope");
-		expect(render(edit.renderResult?.({ content: [], details: undefined } as AgentToolResult<EditToolDetails | undefined>, { expanded: false, isPartial: false, showImages: false, isError: false }, theme)!)).toContain("applied");
+		render(edit.renderResult?.(error, { expanded: false, isPartial: false, showImages: false, isError: true }, theme, toolContext(args, state))!);
+		expect(render(edit.renderCall?.(args, theme, toolContext(args, state))!)).toContain("Error:");
+		render(edit.renderResult?.({ content: [], details: undefined } as AgentToolResult<EditToolDetails | undefined>, { expanded: false, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state, false, emptyComponent()))!);
+		expect(render(edit.renderCall?.(args, theme, toolContext(args, state))!)).toContain("applied");
 		const diff = { content: [{ type: "text", text: "note" }], details: { diff: `--- a\n+++ b\n context\n${"+x\n".repeat(25)}-old` } } as AgentToolResult<EditToolDetails | undefined>;
-		expect(render(edit.renderResult?.(diff, { expanded: false, isPartial: false, showImages: false, isError: false }, theme)!)).toContain("+25");
-		expect(render(edit.renderResult?.(diff, { expanded: true, isPartial: false, showImages: false, isError: false }, theme)!)).toContain("more diff lines");
+		render(edit.renderResult?.(diff, { expanded: false, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state))!);
+		render(edit.renderResult?.(diff, { expanded: false, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state))!);
+		expect(render(edit.renderCall?.(args, theme, toolContext(args, state))!)).toContain("+25");
+		expect(render(edit.renderResult?.(diff, { expanded: true, isPartial: false, showImages: false, isError: false }, theme, toolContext(args, state, true))!)).toContain("└");
 	});
 });

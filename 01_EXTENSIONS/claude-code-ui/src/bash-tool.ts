@@ -1,29 +1,36 @@
 import { defineTool, createBashToolDefinition, type AgentToolResult, type BashToolDetails, type BashToolInput, type Theme } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
-import { indentBlock, summarizeTextPreview, toolPrefix, toolResult } from "./tool-utils.js";
+import { Container, Text } from "@mariozechner/pi-tui";
+import { branchBlock, inlineSuffix, summarizeTextPreview, toolPrefix } from "./tool-utils.js";
 
 type BashResult = AgentToolResult<BashToolDetails | undefined>;
 type RenderOptions = { expanded: boolean; isPartial: boolean };
+type RenderState = { summary?: string };
+
+function setSummary(context: { state: RenderState; invalidate: () => void }, summary: string) {
+	if (context.state.summary === summary) return;
+	context.state.summary = summary;
+	context.invalidate();
+}
 
 export function createClaudeBashTool(cwd: string) {
 	const base = createBashToolDefinition(cwd);
 	return defineTool({
 		...base,
 		renderShell: "self",
-		renderCall(args: BashToolInput, theme: Theme) {
+		renderCall(args: BashToolInput, theme: Theme, context) {
 			const command = args.command.length > 88 ? `${args.command.slice(0, 85)}…` : args.command;
-			return new Text(`${toolPrefix(theme, "Bash")} ${theme.fg("muted", command)}`, 0, 0);
+			const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
+			text.setText(`${toolPrefix(theme, "Bash")} ${theme.fg("muted", command)}${inlineSuffix(theme, context.state.summary)}`);
+			return text;
 		},
-		renderResult(result: BashResult, { expanded, isPartial }: RenderOptions, theme: Theme) {
-			if (isPartial) return new Text(toolResult(theme, theme.fg("warning", "running…")), 0, 0);
-			const first = result.content[0];
-			const output = first?.type === "text" ? first.text : "";
+		renderResult(result: BashResult, { expanded, isPartial }: RenderOptions, theme: Theme, context) {
+			const output = result.content[0]?.type === "text" ? result.content[0].text : "";
 			const exitCode = output.match(/exit code: (\d+)/)?.[1];
-			let text = exitCode && exitCode !== "0" ? theme.fg("error", `exit ${exitCode}`) : theme.fg("success", "done");
-			text = toolResult(theme, text + theme.fg("dim", ` · ${output.split("\n").filter((line) => line.trim()).length} lines`));
-			if (result.details?.truncation?.truncated) text += theme.fg("dim", " · truncated");
-			if (expanded && output.trim()) text += `\n${indentBlock(summarizeTextPreview(theme, output, 18))}`;
-			return new Text(text, 0, 0);
+			const status = isPartial ? theme.fg("warning", "running…") : exitCode && exitCode !== "0" ? theme.fg("error", `exit ${exitCode}`) : theme.fg("success", "done");
+			const summary = `${status}${theme.fg("dim", ` · ${output.split("\n").filter((line) => line.trim()).length} lines`)}${result.details?.truncation?.truncated ? theme.fg("dim", " · truncated") : ""}`;
+			setSummary(context, summary);
+			if (!expanded || !output.trim()) return context.lastComponent instanceof Container ? context.lastComponent : new Container();
+			return new Text(branchBlock(theme, summarizeTextPreview(theme, output, 18)), 0, 0);
 		},
 	});
 }

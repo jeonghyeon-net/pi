@@ -16,7 +16,7 @@ describe("working-line handlers", () => {
 		vi.useRealTimers();
 	});
 
-	it("renders Claude-style working lines through the turn lifecycle", () => {
+	it("hides idle thinking once visible output has started", () => {
 		onToolExecutionStart({ toolName: "bash" });
 		onToolExecutionEnd({});
 		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
@@ -25,22 +25,16 @@ describe("working-line handlers", () => {
 		expect(setWorkingMessage).not.toHaveBeenCalled();
 		onAgentStart({} as AgentStartEvent, ctx);
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Thinking...");
-		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("0s");
-		vi.advanceTimersByTime(1000);
-		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("1s");
 		onToolExecutionStart({ toolName: "bash" });
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running bash");
 		onMessageUpdate({ assistantMessageEvent: { type: "text_delta" } });
-		onMessageUpdate({ assistantMessageEvent: { type: "thinking_start" } });
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running bash");
-		vi.advanceTimersByTime(1000);
-		onMessageUpdate({ assistantMessageEvent: { type: "thinking_end" } });
-		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running bash");
+		onToolExecutionEnd({});
+		expect(setWorkingMessage.mock.lastCall).toEqual([undefined]);
 		onToolExecutionStart({ toolName: "mcp" });
 		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Running mcp");
 		onToolExecutionEnd({});
-		expect(setWorkingMessage.mock.lastCall?.[0]).toContain("Thinking...");
-		expect(setWorkingMessage.mock.lastCall?.[0]).not.toContain("Running mcp");
+		expect(setWorkingMessage.mock.lastCall).toEqual([undefined]);
 		onAgentEnd({} as AgentEndEvent, ctx);
 		expect(setWorkingMessage.mock.lastCall).toEqual([]);
 	});
