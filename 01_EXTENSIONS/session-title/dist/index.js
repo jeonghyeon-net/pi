@@ -1,3 +1,54 @@
+// src/title-context.ts
+var MAX_CONTEXT_TEXT_CHARS = 280;
+var MAX_RECENT_USER_PROMPTS = 3;
+function clipContextText(text) {
+  if (text.length <= MAX_CONTEXT_TEXT_CHARS) return text;
+  return `${text.slice(0, MAX_CONTEXT_TEXT_CHARS - 1).trimEnd()}\u2026`;
+}
+function normalizeContextText(text) {
+  return clipContextText(text.replace(/[\r\n\t]+/gu, " ").replace(/\s+/gu, " ").trim());
+}
+function extractMessageText(message) {
+  if (!message) return "";
+  if (typeof message.content === "string") return normalizeContextText(message.content);
+  if (!Array.isArray(message.content)) return "";
+  return normalizeContextText(
+    message.content.filter((part) => !!part && typeof part === "object").map((part) => part.type === "text" && typeof part.text === "string" ? part.text : "").join(" ")
+  );
+}
+function getSessionEntries(sessionManager) {
+  if (typeof sessionManager.getBranch === "function") return sessionManager.getBranch();
+  if (typeof sessionManager.getEntries === "function") return sessionManager.getEntries();
+  return [];
+}
+function pushUniqueText(items, value) {
+  if (!value) return;
+  if (items.includes(value)) return;
+  items.push(value);
+}
+function extractSessionTitleContext(sessionManager, currentTitle, pendingUserPrompt) {
+  const userPrompts = [];
+  let latestAssistantText = "";
+  for (const entry of getSessionEntries(sessionManager)) {
+    if (entry?.type !== "message") continue;
+    const role = entry.message?.role;
+    const text = extractMessageText(entry.message);
+    if (!text) continue;
+    if (role === "user") pushUniqueText(userPrompts, text);
+    if (role === "assistant") latestAssistantText = text;
+  }
+  pushUniqueText(userPrompts, normalizeContextText(pendingUserPrompt ?? ""));
+  return {
+    currentTitle: currentTitle?.trim() || void 0,
+    firstUserPrompt: userPrompts[0] ?? "",
+    recentUserPrompts: userPrompts.slice(-MAX_RECENT_USER_PROMPTS),
+    latestAssistantText
+  };
+}
+function buildFallbackSourceFromContext(context) {
+  return [context.recentUserPrompts.at(-1), context.firstUserPrompt, context.latestAssistantText].filter((value) => !!value).join("\n");
+}
+
 // src/title-generator.ts
 import { completeSimple } from "@mariozechner/pi-ai";
 
@@ -24,14 +75,25 @@ function clip(text, maxChars) {
   return `${text.slice(0, maxChars - 1).trimEnd()}\u2026`;
 }
 function stripWrappingPair(text, open, close) {
-  if (text.startsWith(open) && text.endsWith(close) && text.length > open.length + close.length) {
-    return text.slice(open.length, text.length - close.length).trim();
-  }
-  return text;
+  return text.startsWith(open) && text.endsWith(close) && text.length > open.length + close.length ? text.slice(open.length, text.length - close.length).trim() : text;
 }
 function buildTitlePrompt(userPrompt) {
   return `User request:
 ${userPrompt.slice(0, MAX_PROMPT_CHARS)}`;
+}
+function buildContextTitlePrompt(context) {
+  const sections = [
+    context.currentTitle ? `Current session title:
+${context.currentTitle.slice(0, MAX_PROMPT_CHARS)}` : "",
+    context.firstUserPrompt ? `Initial user request:
+${context.firstUserPrompt.slice(0, MAX_PROMPT_CHARS)}` : "",
+    context.recentUserPrompts.length > 0 ? `Recent user follow-ups:
+${context.recentUserPrompts.map((prompt) => `- ${prompt.slice(0, MAX_PROMPT_CHARS)}`).join("\n")}` : "",
+    context.latestAssistantText ? `Latest assistant progress:
+${context.latestAssistantText.slice(0, MAX_PROMPT_CHARS)}` : ""
+  ].filter(Boolean).join("\n\n");
+  return sections ? `Session context:
+${sections}` : "Session context:";
 }
 function extractTextContent(content) {
   return content.filter((part) => part.type === "text" && typeof part.text === "string").map((part) => part.text).join("").trim();
@@ -173,8 +235,18 @@ function buildFallbackTitle(userPrompt) {
 }
 
 // src/title-generator.ts
-async function generateSessionTitle(ctx, userPrompt) {
-  const fallbackTitle = buildFallbackTitle(userPrompt);
+function buildFallbackTitleFromInput(input) {
+  return buildFallbackTitle(typeof input === "string" ? input : buildFallbackSourceFromContext(input));
+}
+function buildModelPrompt(input) {
+  return typeof input === "string" ? buildTitlePrompt(input) : buildContextTitlePrompt(input);
+}
+function looksLikeInputCopy(title, input) {
+  if (typeof input === "string") return looksLikePromptCopy(title, input);
+  return [input.firstUserPrompt, ...input.recentUserPrompts].filter(Boolean).some((prompt) => looksLikePromptCopy(title, prompt));
+}
+async function generateSessionTitle(ctx, input) {
+  const fallbackTitle = buildFallbackTitleFromInput(input);
   if (!ctx.model || !ctx.modelRegistry) return fallbackTitle;
   const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model).catch(() => void 0);
   if (!auth?.ok) return fallbackTitle;
@@ -182,13 +254,13 @@ async function generateSessionTitle(ctx, userPrompt) {
   const timeoutId = setTimeout(() => controller.abort(), 1e4);
   const result = await completeSimple(
     ctx.model,
-    { systemPrompt: TITLE_SYSTEM_PROMPT, messages: [{ role: "user", content: [{ type: "text", text: buildTitlePrompt(userPrompt) }], timestamp: Date.now() }] },
+    { systemPrompt: TITLE_SYSTEM_PROMPT, messages: [{ role: "user", content: [{ type: "text", text: buildModelPrompt(input) }], timestamp: Date.now() }] },
     { apiKey: auth.apiKey, headers: auth.headers, signal: controller.signal, reasoning: "minimal", maxTokens: 80 }
   ).catch(() => void 0);
   clearTimeout(timeoutId);
   if (!result || result.stopReason !== "stop") return fallbackTitle;
   const generatedTitle = normalizeTitle(extractTextContent(result.content));
-  return isClearSummaryTitle(generatedTitle) && !looksLikePromptCopy(generatedTitle, userPrompt) ? generatedTitle : fallbackTitle;
+  return isClearSummaryTitle(generatedTitle) && !looksLikeInputCopy(generatedTitle, input) ? generatedTitle : fallbackTitle;
 }
 
 // src/session-path.ts
@@ -250,32 +322,60 @@ function clearSessionTitleUi(ctx) {
 }
 
 // src/session-title.ts
+function getSessionKey(ctx) {
+  try {
+    return ctx.sessionManager.getSessionFile() ?? ctx.cwd;
+  } catch {
+    return ctx.cwd;
+  }
+}
 function registerSessionTitle(_pi) {
   let namingInFlight = false;
-  const maybeAutoName = async (userPrompt, ctx) => {
-    if (!shouldAutoNameSession(_pi, ctx, userPrompt, namingInFlight)) {
+  const autoTitleBySession = /* @__PURE__ */ new Map();
+  const maybeUpdateTitle = async (ctx, input, shouldRun, shouldApply) => {
+    if (!shouldRun) {
       syncSessionTitleUi(_pi, ctx);
       return;
     }
     namingInFlight = true;
     try {
-      const sessionTitle = await generateSessionTitle(ctx, userPrompt);
-      if (sessionTitle && shouldReplaceSessionTitle(getSessionTitle(_pi, ctx), userPrompt)) {
+      const sessionTitle = await generateSessionTitle(ctx, input);
+      const currentTitle = getSessionTitle(_pi, ctx);
+      if (sessionTitle && sessionTitle !== currentTitle && shouldApply(currentTitle)) {
         _pi.setSessionName(sessionTitle);
+        autoTitleBySession.set(getSessionKey(ctx), sessionTitle);
       }
     } finally {
       namingInFlight = false;
       syncSessionTitleUi(_pi, ctx);
     }
   };
+  const maybeAutoNameFromPrompt = async (userPrompt, ctx) => {
+    if (!shouldAutoNameSession(_pi, ctx, userPrompt, namingInFlight)) {
+      syncSessionTitleUi(_pi, ctx);
+      return;
+    }
+    const context = extractSessionTitleContext(ctx.sessionManager, getSessionTitle(_pi, ctx), userPrompt);
+    await maybeUpdateTitle(ctx, context, true, (currentTitle) => shouldReplaceSessionTitle(currentTitle, userPrompt));
+  };
+  const maybeRefreshTitleFromContext = async (ctx) => {
+    const currentTitle = getSessionTitle(_pi, ctx);
+    const context = extractSessionTitleContext(ctx.sessionManager, currentTitle);
+    const sessionKey = getSessionKey(ctx);
+    const latestAutoTitle = autoTitleBySession.get(sessionKey);
+    const promptForReplacement = context.recentUserPrompts.at(-1) ?? "";
+    const canRefresh = (title) => !!latestAutoTitle && latestAutoTitle === title || shouldReplaceSessionTitle(title, promptForReplacement);
+    const shouldRun = !namingInFlight && canRefresh(currentTitle);
+    await maybeUpdateTitle(ctx, context, shouldRun, canRefresh);
+  };
   _pi.on("session_start", (_event, ctx) => syncSessionTitleUi(_pi, ctx));
-  _pi.on("before_agent_start", (event, ctx) => {
-    syncSessionTitleUi(_pi, ctx);
-    void maybeAutoName(event.prompt, ctx);
-  });
+  _pi.on("before_agent_start", (event, ctx) => maybeAutoNameFromPrompt(event.prompt, ctx));
   _pi.on("session_tree", (_event, ctx) => syncSessionTitleUi(_pi, ctx));
-  _pi.on("agent_end", (_event, ctx) => syncSessionTitleUi(_pi, ctx));
-  _pi.on("session_shutdown", (_event, ctx) => clearSessionTitleUi(ctx));
+  _pi.on("agent_end", (_event, ctx) => maybeRefreshTitleFromContext(ctx));
+  _pi.on("session_shutdown", (_event, ctx) => {
+    autoTitleBySession.delete(getSessionKey(ctx));
+    clearSessionTitleUi(ctx);
+  });
 }
 export {
   registerSessionTitle as default

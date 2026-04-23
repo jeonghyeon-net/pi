@@ -14,7 +14,6 @@ describe("session-title behavior", () => {
 		if (!beforeAgentStart) throw new Error("missing before_agent_start handler");
 		const { ctx, setStatus, setTitle } = createContext({});
 		await beforeAgentStart({ prompt: "Please add terminal title sync." }, ctx);
-		await Promise.resolve();
 		expect(api.getSessionName()).toBe("Add session title extension");
 		expect(setStatus).toHaveBeenCalledWith("session-title", "Add session title extension");
 		expect(setTitle).toHaveBeenLastCalledWith("π - Add session title extension - pi-project");
@@ -29,7 +28,6 @@ describe("session-title behavior", () => {
 		if (!beforeAgentStart) throw new Error("missing before_agent_start handler");
 		const { ctx, setStatus, setTitle } = createContext({});
 		await beforeAgentStart({ prompt }, ctx);
-		await Promise.resolve();
 		expect(api.getSessionName()).toBe("Ollama GLM-5.1 사용 방법");
 		expect(setStatus).toHaveBeenCalledWith("session-title", "Ollama GLM-5.1 사용 방법");
 		expect(setTitle).toHaveBeenLastCalledWith("π - Ollama GLM-5.1 사용 방법 - pi-project");
@@ -45,26 +43,25 @@ describe("session-title behavior", () => {
 		api.setSessionName("");
 		await beforeAgentStart({ prompt: "   " }, createContext({}).ctx);
 		await beforeAgentStart({ prompt: "Please add terminal title sync." }, createContext({ sessionFile: "/Users/me/.pi/agent/sessions/subagents/child/a.jsonl" }).ctx);
-		await Promise.resolve();
 		expect(spy).not.toHaveBeenCalled();
 	});
 
-	it("does not overwrite a name restored during generation", async () => {
+	it("waits for async naming before the turn starts", async () => {
 		const gate = Promise.withResolvers<string>();
 		vi.spyOn(generator, "generateSessionTitle").mockReturnValue(gate.promise);
 		const api = createApiMock();
 		extension(api.api);
 		const beforeAgentStart = api.getHandler("before_agent_start");
 		if (!beforeAgentStart) throw new Error("missing before_agent_start handler");
-		let restoredName = "";
-		const { ctx } = createContext({ sessionName: "" });
-		ctx.sessionManager.getSessionName = () => restoredName;
-		const pending = beforeAgentStart({ prompt: "Please add terminal title sync." }, ctx);
-		restoredName = "Restored later";
+		const pending = beforeAgentStart({ prompt: "Please add terminal title sync." }, createContext({}).ctx);
+		let settled = false;
+		void pending.then(() => {
+			settled = true;
+		});
+		await Promise.resolve();
+		expect(settled).toBe(false);
 		gate.resolve("Generated title");
 		await pending;
-		await Promise.resolve();
-		expect(api.getSessionName()).toBe("");
-		expect(ctx.sessionManager.getSessionName()).toBe("Restored later");
+		expect(api.getSessionName()).toBe("Generated title");
 	});
 });

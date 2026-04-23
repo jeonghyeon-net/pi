@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import type { SessionTitleContext } from "./title-context.js";
 
 export const TITLE_STATUS_KEY = "session-title";
 export const MAX_PROMPT_CHARS = 800;
@@ -23,30 +24,32 @@ function clip(text: string, maxChars: number): string {
 }
 
 function stripWrappingPair(text: string, open: string, close: string): string {
-	if (text.startsWith(open) && text.endsWith(close) && text.length > open.length + close.length) {
-		return text.slice(open.length, text.length - close.length).trim();
-	}
-	return text;
+	return text.startsWith(open) && text.endsWith(close) && text.length > open.length + close.length
+		? text.slice(open.length, text.length - close.length).trim()
+		: text;
 }
 
 export function buildTitlePrompt(userPrompt: string): string {
 	return `User request:\n${userPrompt.slice(0, MAX_PROMPT_CHARS)}`;
 }
 
+export function buildContextTitlePrompt(context: SessionTitleContext): string {
+	const sections = [
+		context.currentTitle ? `Current session title:\n${context.currentTitle.slice(0, MAX_PROMPT_CHARS)}` : "",
+		context.firstUserPrompt ? `Initial user request:\n${context.firstUserPrompt.slice(0, MAX_PROMPT_CHARS)}` : "",
+		context.recentUserPrompts.length > 0 ? `Recent user follow-ups:\n${context.recentUserPrompts.map((prompt) => `- ${prompt.slice(0, MAX_PROMPT_CHARS)}`).join("\n")}` : "",
+		context.latestAssistantText ? `Latest assistant progress:\n${context.latestAssistantText.slice(0, MAX_PROMPT_CHARS)}` : "",
+	].filter(Boolean).join("\n\n");
+	return sections ? `Session context:\n${sections}` : "Session context:";
+}
+
 export function extractTextContent(content: ReadonlyArray<{ type: string; text?: string }>): string {
-	return content
-		.filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string")
-		.map((part) => part.text)
-		.join("")
-		.trim();
+	return content.filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string").map((part) => part.text).join("").trim();
 }
 
 export function normalizeTitle(rawTitle: string): string {
 	const firstLine = rawTitle.split(/\r?\n/gu).map((line) => line.trim()).find(Boolean) ?? "";
-	let normalized = firstLine
-		.replace(/^[-*•]\s*/u, "")
-		.replace(/^(title|session title|session name|name|제목|세션 제목|세션 이름)\s*[:：-]\s*/iu, "")
-		.trim();
+	let normalized = firstLine.replace(/^[-*•]\s*/u, "").replace(/^(title|session title|session name|name|제목|세션 제목|세션 이름)\s*[:：-]\s*/iu, "").trim();
 	for (const [open, close] of [["\"", "\""], ["'", "'"], ["`", "`"], ["(", ")"], ["[", "]"], ["“", "”"], ["‘", "’"]]) {
 		normalized = stripWrappingPair(normalized, open, close);
 	}

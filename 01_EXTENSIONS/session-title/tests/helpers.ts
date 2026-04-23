@@ -37,6 +37,8 @@ export function createContext(options: {
 	sessionFile?: string;
 	sessionName?: string;
 	throwOnGetSessionName?: boolean;
+	branchEntries?: object[];
+	entries?: object[];
 }) {
 	const setStatus = vi.fn();
 	const setTitle = vi.fn();
@@ -50,6 +52,8 @@ export function createContext(options: {
 				if (options.throwOnGetSessionName) throw new Error("boom");
 				return options.sessionName ?? "";
 			},
+			getBranch: () => options.branchEntries ?? options.entries ?? [],
+			getEntries: () => options.entries ?? options.branchEntries ?? [],
 		},
 	} as ExtensionContext;
 	return { ctx, setStatus, setTitle };

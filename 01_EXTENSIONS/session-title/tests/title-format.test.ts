@@ -4,6 +4,7 @@ import {
 	MAX_STATUS_CHARS,
 	MAX_TERMINAL_TITLE_CHARS,
 	MAX_TITLE_CHARS,
+	buildContextTitlePrompt,
 	buildTitlePrompt,
 	extractTextContent,
 	formatStatusTitle,
@@ -17,6 +18,17 @@ describe("title format helpers", () => {
 	it("builds prompts and extracts text content", () => {
 		const longPrompt = "a".repeat(MAX_PROMPT_CHARS + 10);
 		expect(buildTitlePrompt(longPrompt)).toBe(`User request:\n${"a".repeat(MAX_PROMPT_CHARS)}`);
+		expect(
+			buildContextTitlePrompt({
+				currentTitle: "Current title",
+				firstUserPrompt: "Initial request",
+				recentUserPrompts: ["Initial request", "Add async updates"],
+				latestAssistantText: "Implemented the first pass",
+			}),
+		).toContain("Recent user follow-ups:");
+		expect(
+			buildContextTitlePrompt({ currentTitle: undefined, firstUserPrompt: "", recentUserPrompts: [], latestAssistantText: "" }),
+		).toBe("Session context:");
 		expect(extractTextContent([{ type: "text", text: "Add " }, { type: "image" }, { type: "text", text: "title" }])).toBe("Add title");
 	});
 

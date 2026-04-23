@@ -551,14 +551,13 @@ function createClaudeFooter(ctx) {
   const modelId = getModelId(ctx);
   const thinkingLevel = getThinkingLevel(ctx);
   const usagePercent = getUsagePercent(ctx);
-  return (tui, theme, footerData) => ({
-    dispose: footerData.onBranchChange(() => tui.requestRender()),
+  return (_tui, theme, _footerData) => ({
+    dispose() {
+    },
     invalidate() {
     },
     render(width) {
-      const branch = footerData.getGitBranch();
-      const leftParts = [theme.fg("text", projectName), branch ? theme.fg("dim", branch) : ""];
-      const left = leftParts.filter(Boolean).join(theme.fg("dim", " \xB7 "));
+      const left = theme.fg("text", projectName);
       const model = theme.fg("muted", getModelId(ctx, modelId));
       const effortLevel = getThinkingLevel(ctx, thinkingLevel);
       const modelParts = [model, effortLevel ? theme.fg("dim", effortLevel) : ""];

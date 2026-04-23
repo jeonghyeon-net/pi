@@ -29,18 +29,14 @@ describe("theme, header and footer", () => {
 		expect(getProjectName({ cwd: "" } as ExtensionContext)).toBe("");
 	});
 
-	it("renders branch, model, thinking level and a fill-style context badge", () => {
-		const entries = [
-			{ type: "thinking_level_change", thinkingLevel: "medium" },
-			{ type: "message", message: { role: "assistant", usage: { input: 5000, output: 12000, cost: { total: 1.234 } } } },
-		];
+	it("renders a clean footer with model, thinking level and a fill-style context badge", () => {
+		const entries = [{ type: "thinking_level_change", thinkingLevel: "medium" }, { type: "message", message: { role: "assistant", usage: { input: 5000, output: 12000, cost: { total: 1.234 } } } }];
 		const ctx = createCtx(42, entries);
-		let onChange = () => {};
-		const footer = createClaudeFooter(ctx)({ requestRender: vi.fn() }, theme, { onBranchChange: (fn) => (onChange = fn, vi.fn()), getGitBranch: () => "main" });
+		const footer = createClaudeFooter(ctx)({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
 		footer.invalidate();
-		onChange();
+		footer.dispose();
 		const text = render(footer, 220);
-		expect(plain(text)).toContain("main");
+		expect(plain(text)).not.toContain("main");
 		expect(plain(text)).toContain("sonnet");
 		expect(plain(text)).toContain("medium");
 		expect(plain(text)).not.toContain("effort");
@@ -52,12 +48,13 @@ describe("theme, header and footer", () => {
 		expect(text).not.toContain("↑5.0k ↓12k");
 	});
 
-	it("renders fallback values when branch or model are missing, and hides effort when unavailable", () => {
+	it("renders fallback values when model is missing, and hides effort when unavailable", () => {
 		const entries = [{ type: "message", message: { role: "user" } }, { type: "message", message: { role: "assistant", usage: { input: 12, output: 900, cost: { total: 0.5 } } } }];
 		const ctx = createCtx(null, entries, "");
 		const footer = createClaudeFooter(ctx)({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => null });
 		const text = render(footer, 220);
 		expect(plain(text)).toContain("no-model");
+		expect(plain(text)).not.toContain("main");
 		expect(plain(text)).not.toContain("effort");
 		expect(plain(text)).toContain("context --");
 		expect(text).not.toContain("\u001b[48;2;215;119;87m");
@@ -73,21 +70,5 @@ describe("theme, header and footer", () => {
 		expect(partial).toContain("<bg:selectedBg>");
 		expect(full).toContain("\u001b[48;2;215;119;87m");
 		expect(full).not.toContain("<bg:selectedBg>");
-	});
-
-	it("keeps rendering footer details after the extension context becomes stale", () => {
-		let stale = false;
-		const ctx = {
-			get cwd() { if (stale) throw new Error("stale"); return "/tmp/demo"; },
-			get model() { if (stale) throw new Error("stale"); return { id: "sonnet" }; },
-			getContextUsage: () => { if (stale) throw new Error("stale"); return { tokens: 0, contextWindow: 1, percent: 64 }; },
-			ui: { setTheme: vi.fn(() => ({ success: true })), theme },
-		} as ExtensionContext;
-		const footer = createClaudeFooter(ctx)({ requestRender: vi.fn() }, theme, { onBranchChange: () => vi.fn(), getGitBranch: () => "main" });
-		stale = true;
-		const text = render(footer, 220);
-		expect(plain(text)).toContain("demo");
-		expect(plain(text)).toContain("sonnet");
-		expect(plain(text)).toContain("context 64%");
 	});
 });

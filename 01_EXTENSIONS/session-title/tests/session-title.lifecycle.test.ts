@@ -17,4 +17,30 @@ describe("session-title lifecycle", () => {
 		expect(setStatus).toHaveBeenCalledWith("session-title", "Release prep");
 		expect(setTitle).toHaveBeenLastCalledWith("π - pi-project");
 	});
+
+	it("clears cleanly even when the session file lookup fails", async () => {
+		const api = createApiMock("Release prep");
+		extension(api.api);
+		const sessionShutdown = api.getHandler("session_shutdown");
+		if (!sessionShutdown) throw new Error("missing session_shutdown handler");
+		const { ctx, setStatus, setTitle } = createContext({});
+		ctx.sessionManager.getSessionFile = () => {
+			throw new Error("boom");
+		};
+		await sessionShutdown({}, ctx);
+		expect(setStatus).toHaveBeenCalledWith("session-title", undefined);
+		expect(setTitle).toHaveBeenCalledWith("π - pi-project");
+	});
+
+	it("also clears cleanly when no session file is available", async () => {
+		const api = createApiMock("Release prep");
+		extension(api.api);
+		const sessionShutdown = api.getHandler("session_shutdown");
+		if (!sessionShutdown) throw new Error("missing session_shutdown handler");
+		const { ctx, setStatus, setTitle } = createContext({});
+		ctx.sessionManager.getSessionFile = () => undefined;
+		await sessionShutdown({}, ctx);
+		expect(setStatus).toHaveBeenCalledWith("session-title", undefined);
+		expect(setTitle).toHaveBeenCalledWith("π - pi-project");
+	});
 });
