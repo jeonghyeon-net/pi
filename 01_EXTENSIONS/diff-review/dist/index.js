@@ -1019,9 +1019,9 @@ function composeReviewPrompt(files, payload) {
 }
 
 // node_modules/@ryan_nookpi/pi-extension-diff-review/quiet-glimpse.ts
-import { spawn as spawn2 } from "node:child_process";
+import { spawn as spawn2, spawnSync as spawnSync2 } from "node:child_process";
 import { EventEmitter as EventEmitter2 } from "node:events";
-import { existsSync as existsSync3 } from "node:fs";
+import { chmodSync as chmodSync2, existsSync as existsSync3 } from "node:fs";
 import { createInterface as createInterface2 } from "node:readline";
 var QuietGlimpseWindowImpl = class extends EventEmitter2 {
   #proc;
@@ -1096,9 +1096,26 @@ async function getNativeHostInfo2() {
   const glimpseModule = await Promise.resolve().then(() => (init_glimpse(), glimpse_exports));
   return glimpseModule.getNativeHostInfo();
 }
+function tryBuildMacHost2(sourcePath, targetPath) {
+  if (process.platform !== "darwin" || !existsSync3(sourcePath)) return false;
+  const result = spawnSync2("swiftc", ["-O", sourcePath, "-o", targetPath], { stdio: "ignore" });
+  if (result.status !== 0 || !existsSync3(targetPath)) return false;
+  chmodSync2(targetPath, 493);
+  return true;
+}
+function resolveFallbackHost2(host) {
+  if (existsSync3(host.path) || host.extraArgs?.length) return host;
+  const here = dirname(fileURLToPath(import.meta.url));
+  const fileName = process.platform === "win32" ? "glimpse.exe" : "glimpse";
+  const packageDir = join2(here, "..", "node_modules", "glimpseui", "src");
+  const packageHost = join2(packageDir, fileName);
+  const packageSource = join2(packageDir, "glimpse.swift");
+  if ((existsSync3(packageHost) || tryBuildMacHost2(packageSource, packageHost)) && process.platform !== "win32") chmodSync2(packageHost, 493);
+  return existsSync3(packageHost) ? { ...host, path: packageHost } : host;
+}
 async function openQuietGlimpse(html, options = {}) {
-  const host = await getNativeHostInfo2();
-  if (!existsSync3(host.path)) {
+  const host = resolveFallbackHost2(await getNativeHostInfo2());
+  if (!existsSync3(host.path) && !host.extraArgs?.length) {
     const hint = host.buildHint ? ` ${host.buildHint}` : "";
     throw new Error(`Glimpse host not found at '${host.path}'.${hint}`);
   }
