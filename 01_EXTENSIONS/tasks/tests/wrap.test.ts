@@ -14,7 +14,7 @@ describe("tasks extension wrapper", () => {
   it("wraps task tools while leaving other tools untouched", async () => {
     const { default: extension } = await import("../src/wrap.ts");
     const tools: ToolLike[] = [];
-    extension(makePi(tools));
+    await extension(makePi(tools));
     expect(tools.map((tool) => tool.name)).toEqual(["TaskExecute", "TaskOutput", "OtherTool"]);
     const executed = await tools[0]?.execute?.("x", {}, undefined, undefined, {});
     const output = await tools[1]?.execute?.("x", { task_id: "22f074fe" }, undefined, undefined, {});

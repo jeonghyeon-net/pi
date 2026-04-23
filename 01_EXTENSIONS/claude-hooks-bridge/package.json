@@ -1,6 +1,8 @@
 {
   "pi": {
-    "extensions": ["dist/index.js"]
+    "extensions": [
+      "dist/index.js"
+    ]
   },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --format=esm --outfile=dist/index.js --external:@mariozechner/* --external:@sinclair/*",
@@ -8,7 +10,7 @@
     "test": "vitest run --coverage"
   },
   "devDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-coding-agent": "^0.69.0",
     "@vitest/coverage-v8": "^3.1.0",
     "esbuild": "^0.28.0",
     "typescript": "^5.8.0",

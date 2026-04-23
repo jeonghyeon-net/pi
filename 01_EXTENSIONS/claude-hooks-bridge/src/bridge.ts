@@ -5,7 +5,7 @@ import { notifyOnceForParseError, notifySessionStartHookResult } from "./notific
 import { createTranscriptFile, getLastAssistantMessage } from "./transcript.js";
 import { extractDecision, toBlockReason } from "./text.js";
 import { getHookSessionId, getStopHookActive, resetSessionState, setSessionStartState, setStopHookActive } from "./session-state.js";
-import type { PiApiLike, RuntimeContextLike, ToolCallEventLike, ToolResultEventLike } from "./types.js";
+import type { JsonRecord, PiApiLike, RuntimeContextLike, ToolCallEventLike, ToolResultEventLike } from "./types.js";
 
 async function handleSessionStart(event: { reason?: string }, ctx: RuntimeContextLike): Promise<void> {
   const sessionId = setSessionStartState(ctx);
@@ -48,7 +48,7 @@ export default function (pi: PiApiLike) {
     const loaded = loadSettings(ctx.cwd);
     notifyOnceForParseError(ctx, loaded);
     const sessionId = getHookSessionId(ctx);
-    const payload = { ...makeBasePayload("Stop", ctx), stop_hook_active: getStopHookActive(sessionId) };
+    const payload: JsonRecord = { ...makeBasePayload("Stop", ctx), stop_hook_active: getStopHookActive(sessionId) };
     const transcriptPath = createTranscriptFile(ctx, sessionId);
     const lastAssistantMessage = getLastAssistantMessage(ctx);
     if (transcriptPath) payload.transcript_path = transcriptPath;

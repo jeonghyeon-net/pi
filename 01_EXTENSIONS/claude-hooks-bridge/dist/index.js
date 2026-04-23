@@ -283,10 +283,15 @@ function getLastAssistantMessage(ctx) {
   }
 }
 function mapAssistant(content) {
-  return content.flatMap((block) => block.type === "text" ? [{ type: "text", text: block.text }] : block.type === "toolCall" ? [{ type: "tool_use", id: block.id, name: block.name, input: block.arguments }] : []);
+  return content.flatMap((block) => {
+    if (block.type === "text") return [{ type: "text", text: block.text }];
+    if (block.type === "toolCall") return [{ type: "tool_use", id: block.id, name: block.name, input: block.arguments }];
+    return [];
+  });
 }
 function mapUser(content) {
-  return Array.isArray(content) ? content.flatMap((block) => block?.type === "text" ? [{ type: "text", text: block.text }] : []) : [];
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block) => block?.type === "text" ? [{ type: "text", text: block.text }] : []);
 }
 function mapTranscriptLine(entry) {
   const message = entry.message;

@@ -15,10 +15,15 @@ export function getLastAssistantMessage(ctx: RuntimeContextLike): string | undef
   }
 }
 function mapAssistant(content: Array<JsonRecord>): JsonRecord[] {
-  return content.flatMap((block) => block.type === "text" ? [{ type: "text", text: block.text }] : block.type === "toolCall" ? [{ type: "tool_use", id: block.id, name: block.name, input: block.arguments }] : []);
+  return content.flatMap((block): JsonRecord[] => {
+    if (block.type === "text") return [{ type: "text", text: block.text }];
+    if (block.type === "toolCall") return [{ type: "tool_use", id: block.id, name: block.name, input: block.arguments }];
+    return [];
+  });
 }
 function mapUser(content: unknown): JsonRecord[] {
-  return Array.isArray(content) ? content.flatMap((block) => block?.type === "text" ? [{ type: "text", text: block.text }] : []) : [];
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block): JsonRecord[] => block?.type === "text" ? [{ type: "text", text: block.text }] : []);
 }
 function mapTranscriptLine(entry: SessionEntryLike): string | null {
   const message = entry.message;
