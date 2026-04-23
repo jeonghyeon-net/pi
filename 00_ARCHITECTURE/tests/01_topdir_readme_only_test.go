@@ -3,6 +3,7 @@ package tests
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,6 +23,9 @@ func TestTopdir_ReadmeOnly(t *testing.T) {
 			}
 			for _, c := range children {
 				if e.Name() == "04_THEMES" && !c.IsDir() && filepath.Ext(c.Name()) == ".json" {
+					continue
+				}
+				if e.Name() == "03_PROMPTS" && !c.IsDir() && strings.HasSuffix(c.Name(), ".md") {
 					continue
 				}
 				if !c.IsDir() && c.Name() != "README" {

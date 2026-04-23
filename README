@@ -47,7 +47,7 @@
     using-agent-skills … 에이전트 스킬을 찾고 활용합니다
 
   PROMPTS
-    (none)
+    fix-bug … 버그를 재현·분석·수정하고 검증까지 주도
 
   THEMES
     claude-code-dark … Claude Code dark theme token 매핑
