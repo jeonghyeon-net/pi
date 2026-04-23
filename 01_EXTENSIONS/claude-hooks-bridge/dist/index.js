@@ -263,10 +263,8 @@ function notifySessionStartHookResult(ctx, result) {
   if (!ctx.hasUI) return;
   const out = result.stdout.trim();
   const err = result.stderr.trim();
-  if (out) ctx.ui.notify(`[claude-hooks-bridge:SessionStart]
-${trimHookOutput(out)}`, "info");
-  if (err) ctx.ui.notify(`[claude-hooks-bridge:SessionStart stderr]
-${trimHookOutput(err)}`, "warning");
+  if (out) ctx.ui.notify(trimHookOutput(out), "info");
+  if (err) ctx.ui.notify(trimHookOutput(err), "warning");
 }
 
 // src/transcript.ts

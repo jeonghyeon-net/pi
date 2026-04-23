@@ -10,6 +10,6 @@ export function notifySessionStartHookResult(ctx: RuntimeContextLike, result: Ho
   if (!ctx.hasUI) return;
   const out = result.stdout.trim();
   const err = result.stderr.trim();
-  if (out) ctx.ui.notify(`[claude-hooks-bridge:SessionStart]\n${trimHookOutput(out)}`, "info");
-  if (err) ctx.ui.notify(`[claude-hooks-bridge:SessionStart stderr]\n${trimHookOutput(err)}`, "warning");
+  if (out) ctx.ui.notify(trimHookOutput(out), "info");
+  if (err) ctx.ui.notify(trimHookOutput(err), "warning");
 }
