@@ -4,6 +4,7 @@
   시작 시 자동 로드되며, default export 함수가 pi 런타임에 의해 호출된다.
 
   포함된 extension
+    claude-code-ui
     claude-hooks-bridge
     diff-review
     mcp

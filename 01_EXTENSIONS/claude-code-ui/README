@@ -1,0 +1,11 @@
+claude-code-ui … Claude Code 스타일 UI chrome과 dark 테마를 기본 적용
+
+목적
+  프로젝트에 들어오면 Claude Code에 더 가까운 dark 기본 UI로 시작하게 한다.
+
+주요 기능
+  `session_start` 시 `claude-code-dark` 자동 적용
+  Claude Code 첫 화면을 닮은 pi 전용 welcome banner 적용
+  사각형 prompt 입력창과 Claude 스타일 working line 적용
+  spinner는 별도 `spinner` extension 패키지에 위임
+  read / bash / edit / write 도구 렌더링을 compact하게 재구성
