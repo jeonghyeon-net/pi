@@ -12,12 +12,15 @@ import {
 	isClearSummaryTitle,
 	looksLikePromptCopy,
 	normalizeTitle,
+	prefersKoreanTitle,
+	titleMatchesPreferredLanguage,
 } from "../src/title-format.ts";
 
 describe("title format helpers", () => {
 	it("builds prompts and extracts text content", () => {
 		const longPrompt = "a".repeat(MAX_PROMPT_CHARS + 10);
-		expect(buildTitlePrompt(longPrompt)).toBe(`User request:\n${"a".repeat(MAX_PROMPT_CHARS)}`);
+		expect(buildTitlePrompt(longPrompt)).toBe(`Title language: Preserve the user's language.\n\nUser request:\n${"a".repeat(MAX_PROMPT_CHARS)}`);
+		expect(buildTitlePrompt("세션 제목 한국어로 해줘")).toContain("Title language: Korean.");
 		expect(
 			buildContextTitlePrompt({
 				currentTitle: "Current title",
@@ -28,7 +31,7 @@ describe("title format helpers", () => {
 		).toContain("Recent user follow-ups:");
 		expect(
 			buildContextTitlePrompt({ currentTitle: undefined, firstUserPrompt: "", recentUserPrompts: [], latestAssistantText: "" }),
-		).toBe("Session context:");
+		).toBe("Title language: Preserve the user's language.\n\nSession context:");
 		expect(extractTextContent([{ type: "text", text: "Add " }, { type: "image" }, { type: "text", text: "title" }])).toBe("Add title");
 	});
 
@@ -40,7 +43,12 @@ describe("title format helpers", () => {
 	});
 
 	it("formats status and terminal titles", () => {
-		expect(isClearSummaryTitle("세션/터미널 제목 자동 설정 extension")).toBe(true);
+		expect(prefersKoreanTitle("세션 제목 한국어로 해줘")).toBe(true);
+		expect(prefersKoreanTitle("write session titles in English")).toBe(false);
+		expect(titleMatchesPreferredLanguage("세션 제목 한국어화", "세션 제목 한국어로 해줘")).toBe(true);
+		expect(titleMatchesPreferredLanguage("Make session titles Korean", "세션 제목 한국어로 해줘")).toBe(false);
+		expect(titleMatchesPreferredLanguage("Make session titles Korean", "write session titles in English")).toBe(true);
+		expect(isClearSummaryTitle("세션/터미널 제목 자동 설정 확장")).toBe(true);
 		expect(isClearSummaryTitle("이거 참고해서 세션 이름 만들어줘")).toBe(false);
 		expect(looksLikePromptCopy("", "Please fix API timeout handling in diff-review command.")).toBe(false);
 		expect(looksLikePromptCopy("Fix API timeout handling in diff-review command", "Fix API timeout handling in diff-review command")).toBe(true);

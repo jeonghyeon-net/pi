@@ -22,6 +22,7 @@ describe("title generator fallbacks", () => {
 				latestAssistantText: "Implemented the first pass.",
 			}),
 		).resolves.toBe("session title auto naming extension");
+		await expect(generateSessionTitle({}, "세션 제목 extension 만들어줘")).resolves.toBe("세션 제목 자동 설정 확장");
 	});
 
 	it("falls back when auth lookup fails or the model call fails", async () => {

@@ -59,7 +59,7 @@ var MAX_TITLE_CHARS = 48;
 var MAX_TERMINAL_TITLE_CHARS = 60;
 var TITLE_SYSTEM_PROMPT = [
   "You write short, explicit session titles for a coding task.",
-  "Preserve the user's language.",
+  "Preserve the user's language. If the request contains Korean, write the title in Korean.",
   "Rewrite the request as an organized summary title instead of copying the request verbatim.",
   "Keep the core task, but drop URLs, politeness, commit/push/test instructions, and placement logistics unless they are central.",
   "Make the title concrete and action-oriented.",
@@ -75,11 +75,23 @@ function clip(text, maxChars) {
 function stripWrappingPair(text, open, close) {
   return text.startsWith(open) && text.endsWith(close) && text.length > open.length + close.length ? text.slice(open.length, text.length - close.length).trim() : text;
 }
+function prefersKoreanTitle(text) {
+  return /[가-힣]/u.test(text);
+}
+function titleMatchesPreferredLanguage(title, sourceText) {
+  return !prefersKoreanTitle(sourceText) || prefersKoreanTitle(title);
+}
+function buildTitleLanguageInstruction(sourceText) {
+  return prefersKoreanTitle(sourceText) ? "Title language: Korean. Write the summary in Korean; keep product names, model names, and code identifiers as-is." : "Title language: Preserve the user's language.";
+}
 function buildTitlePrompt(userPrompt) {
-  return `User request:
+  return `${buildTitleLanguageInstruction(userPrompt)}
+
+User request:
 ${userPrompt.slice(0, MAX_PROMPT_CHARS)}`;
 }
 function buildContextTitlePrompt(context) {
+  const languageInstruction = buildTitleLanguageInstruction([context.firstUserPrompt, ...context.recentUserPrompts].filter(Boolean).join("\n"));
   const sections = [
     context.currentTitle ? `Current session title:
 ${context.currentTitle.slice(0, MAX_PROMPT_CHARS)}` : "",
@@ -90,8 +102,12 @@ ${context.recentUserPrompts.map((prompt) => `- ${prompt.slice(0, MAX_PROMPT_CHAR
     context.latestAssistantText ? `Latest assistant progress:
 ${context.latestAssistantText.slice(0, MAX_PROMPT_CHARS)}` : ""
   ].filter(Boolean).join("\n\n");
-  return sections ? `Session context:
-${sections}` : "Session context:";
+  return sections ? `${languageInstruction}
+
+Session context:
+${sections}` : `${languageInstruction}
+
+Session context:`;
 }
 function extractTextContent(content) {
   return content.filter((part) => part.type === "text" && typeof part.text === "string").map((part) => part.text).join("").trim();
@@ -197,7 +213,7 @@ function buildNonCopyTitle(text) {
 }
 function summarizeKnownTask(text) {
   const korean = /[가-힣]/u.test(text);
-  const suffix = /\bextensions?\b/iu.test(text) || /extensions?에/u.test(text) ? " extension" : "";
+  const suffix = /\bextensions?\b/iu.test(text) || /extensions?에/u.test(text) ? korean ? " \uD655\uC7A5" : " extension" : "";
   const hasSessionTitle = /(session (name|title)|세션 (이름|제목))/iu.test(text);
   const hasTerminalTitle = /(terminal title|터미널 제목)/iu.test(text);
   if (hasSessionTitle && hasTerminalTitle) {
@@ -236,6 +252,9 @@ function buildFallbackTitleFromInput(input) {
 function buildModelPrompt(input) {
   return typeof input === "string" ? buildTitlePrompt(input) : buildContextTitlePrompt(input);
 }
+function buildLanguageSourceFromInput(input) {
+  return typeof input === "string" ? input : [input.firstUserPrompt, ...input.recentUserPrompts].filter(Boolean).join("\n");
+}
 function looksLikeInputCopy(title, input) {
   if (typeof input === "string") return looksLikePromptCopy(title, input);
   return [input.firstUserPrompt, ...input.recentUserPrompts].filter(Boolean).some((prompt) => looksLikePromptCopy(title, prompt));
@@ -255,7 +274,7 @@ async function generateSessionTitle(ctx, input) {
   clearTimeout(timeoutId);
   if (!result || result.stopReason !== "stop") return fallbackTitle;
   const generatedTitle = normalizeTitle(extractTextContent(result.content));
-  return isClearSummaryTitle(generatedTitle) && !looksLikeInputCopy(generatedTitle, input) ? generatedTitle : fallbackTitle;
+  return isClearSummaryTitle(generatedTitle) && titleMatchesPreferredLanguage(generatedTitle, buildLanguageSourceFromInput(input)) && !looksLikeInputCopy(generatedTitle, input) ? generatedTitle : fallbackTitle;
 }
 
 // src/session-path.ts

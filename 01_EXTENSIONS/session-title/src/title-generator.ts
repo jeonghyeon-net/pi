@@ -9,6 +9,7 @@ import {
 	isClearSummaryTitle,
 	looksLikePromptCopy,
 	normalizeTitle,
+	titleMatchesPreferredLanguage,
 } from "./title-format.js";
 
 type TitleModel = Parameters<typeof completeSimple>[0];
@@ -26,6 +27,10 @@ function buildFallbackTitleFromInput(input: TitleGenerationInput): string {
 
 function buildModelPrompt(input: TitleGenerationInput): string {
 	return typeof input === "string" ? buildTitlePrompt(input) : buildContextTitlePrompt(input);
+}
+
+function buildLanguageSourceFromInput(input: TitleGenerationInput): string {
+	return typeof input === "string" ? input : [input.firstUserPrompt, ...input.recentUserPrompts].filter(Boolean).join("\n");
 }
 
 function looksLikeInputCopy(title: string, input: TitleGenerationInput): boolean {
@@ -48,5 +53,5 @@ export async function generateSessionTitle(ctx: TitleGeneratorContext, input: Ti
 	clearTimeout(timeoutId);
 	if (!result || result.stopReason !== "stop") return fallbackTitle;
 	const generatedTitle = normalizeTitle(extractTextContent(result.content));
-	return isClearSummaryTitle(generatedTitle) && !looksLikeInputCopy(generatedTitle, input) ? generatedTitle : fallbackTitle;
+	return isClearSummaryTitle(generatedTitle) && titleMatchesPreferredLanguage(generatedTitle, buildLanguageSourceFromInput(input)) && !looksLikeInputCopy(generatedTitle, input) ? generatedTitle : fallbackTitle;
 }

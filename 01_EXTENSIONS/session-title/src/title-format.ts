@@ -8,7 +8,7 @@ export const MAX_STATUS_CHARS = 72;
 export const MAX_TERMINAL_TITLE_CHARS = 60;
 export const TITLE_SYSTEM_PROMPT = [
 	"You write short, explicit session titles for a coding task.",
-	"Preserve the user's language.",
+	"Preserve the user's language. If the request contains Korean, write the title in Korean.",
 	"Rewrite the request as an organized summary title instead of copying the request verbatim.",
 	"Keep the core task, but drop URLs, politeness, commit/push/test instructions, and placement logistics unless they are central.",
 	"Make the title concrete and action-oriented.",
@@ -29,18 +29,27 @@ function stripWrappingPair(text: string, open: string, close: string): string {
 		: text;
 }
 
+export function prefersKoreanTitle(text: string): boolean { return /[가-힣]/u.test(text); }
+
+export function titleMatchesPreferredLanguage(title: string, sourceText: string): boolean { return !prefersKoreanTitle(sourceText) || prefersKoreanTitle(title); }
+
+function buildTitleLanguageInstruction(sourceText: string): string {
+	return prefersKoreanTitle(sourceText) ? "Title language: Korean. Write the summary in Korean; keep product names, model names, and code identifiers as-is." : "Title language: Preserve the user's language.";
+}
+
 export function buildTitlePrompt(userPrompt: string): string {
-	return `User request:\n${userPrompt.slice(0, MAX_PROMPT_CHARS)}`;
+	return `${buildTitleLanguageInstruction(userPrompt)}\n\nUser request:\n${userPrompt.slice(0, MAX_PROMPT_CHARS)}`;
 }
 
 export function buildContextTitlePrompt(context: SessionTitleContext): string {
+	const languageInstruction = buildTitleLanguageInstruction([context.firstUserPrompt, ...context.recentUserPrompts].filter(Boolean).join("\n"));
 	const sections = [
 		context.currentTitle ? `Current session title:\n${context.currentTitle.slice(0, MAX_PROMPT_CHARS)}` : "",
 		context.firstUserPrompt ? `Initial user request:\n${context.firstUserPrompt.slice(0, MAX_PROMPT_CHARS)}` : "",
 		context.recentUserPrompts.length > 0 ? `Recent user follow-ups:\n${context.recentUserPrompts.map((prompt) => `- ${prompt.slice(0, MAX_PROMPT_CHARS)}`).join("\n")}` : "",
 		context.latestAssistantText ? `Latest assistant progress:\n${context.latestAssistantText.slice(0, MAX_PROMPT_CHARS)}` : "",
 	].filter(Boolean).join("\n\n");
-	return sections ? `Session context:\n${sections}` : "Session context:";
+	return sections ? `${languageInstruction}\n\nSession context:\n${sections}` : `${languageInstruction}\n\nSession context:`;
 }
 
 export function extractTextContent(content: ReadonlyArray<{ type: string; text?: string }>): string {

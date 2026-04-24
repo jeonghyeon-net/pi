@@ -26,6 +26,14 @@ describe("title generator model path", () => {
 		expect(completeSimple.mock.calls[1]?.[1]?.messages?.[0]?.content?.[0]?.text).toContain("Recent user follow-ups");
 	});
 
+	it("preserves Korean for Korean requests", async () => {
+		completeSimple.mockResolvedValueOnce({ stopReason: "stop", content: [{ type: "text", text: "Use Ollama GLM-5.1 in pi" }] });
+		await expect(generateSessionTitle(ctx, "pi에서 ollama glm-5.1 쓰려면 어떻게 해야함")).resolves.toBe("pi에서 ollama glm-5.1 사용 방법");
+		expect(completeSimple.mock.calls[0]?.[1]?.messages?.[0]?.content?.[0]?.text).toContain("Title language: Korean.");
+		completeSimple.mockResolvedValueOnce({ stopReason: "stop", content: [{ type: "text", text: "Ollama GLM-5.1 사용 방법" }] });
+		await expect(generateSessionTitle(ctx, "pi에서 ollama glm-5.1 쓰려면 어떻게 해야함")).resolves.toBe("Ollama GLM-5.1 사용 방법");
+	});
+
 	it("falls back when the model stops early, returns an empty title, or mirrors the request", async () => {
 		completeSimple.mockResolvedValueOnce({ stopReason: "length", content: [{ type: "text", text: "Truncated" }] });
 		completeSimple.mockResolvedValueOnce({ stopReason: "stop", content: [{ type: "text", text: "" }] });

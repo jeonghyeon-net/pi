@@ -63,7 +63,7 @@ function buildNonCopyTitle(text: string): string {
 
 function summarizeKnownTask(text: string): string {
 	const korean = /[가-힣]/u.test(text);
-	const suffix = /\bextensions?\b/iu.test(text) || /extensions?에/u.test(text) ? " extension" : "";
+	const suffix = /\bextensions?\b/iu.test(text) || /extensions?에/u.test(text) ? (korean ? " 확장" : " extension") : "";
 	const hasSessionTitle = /(session (name|title)|세션 (이름|제목))/iu.test(text);
 	const hasTerminalTitle = /(terminal title|터미널 제목)/iu.test(text);
 	if (hasSessionTitle && hasTerminalTitle) {
