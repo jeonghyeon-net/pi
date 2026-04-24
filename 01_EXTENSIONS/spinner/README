@@ -1,7 +1,6 @@
 spinner … Claude Code source 기반 working spinner
 
 목적
-  claude-code-ui에서 spinner 설정을 분리하고,
   실제 Claude Code source의 터미널별 spinner 프레임 로직을 반영한다.
 
 주요 기능

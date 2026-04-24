@@ -22,9 +22,6 @@ func TestTopdir_ReadmeOnly(t *testing.T) {
 				t.Fatalf("디렉터리 읽기 실패: %v", err)
 			}
 			for _, c := range children {
-				if e.Name() == "04_THEMES" && !c.IsDir() && filepath.Ext(c.Name()) == ".json" {
-					continue
-				}
 				if e.Name() == "03_PROMPTS" && !c.IsDir() && strings.HasSuffix(c.Name(), ".md") {
 					continue
 				}

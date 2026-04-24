@@ -2,8 +2,7 @@
   "pi": {
     "extensions": ["01_EXTENSIONS"],
     "skills": ["02_SKILLS"],
-    "prompts": ["03_PROMPTS"],
-    "themes": ["04_THEMES"]
+    "prompts": ["03_PROMPTS"]
   },
   "scripts": {
     "setup": "command -v brew >/dev/null || /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\" && command -v mise >/dev/null || brew install mise && mise trust && mise install",

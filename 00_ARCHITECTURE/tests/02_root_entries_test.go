@@ -6,17 +6,16 @@ import (
 )
 
 var rootAllowed = map[string]bool{
-	".git":             true,
-	".mise.toml":       true,
-	"00_ARCHITECTURE":  true,
-	"01_EXTENSIONS":    true,
-	"02_SKILLS":        true,
-	"03_PROMPTS":       true,
-	"04_THEMES":        true,
-	"docs":             true,
-	"lefthook.yml":     true,
-	"package.json":     true,
-	"README":           true,
+	".git":            true,
+	".mise.toml":      true,
+	"00_ARCHITECTURE": true,
+	"01_EXTENSIONS":   true,
+	"02_SKILLS":       true,
+	"03_PROMPTS":      true,
+	"docs":            true,
+	"lefthook.yml":    true,
+	"package.json":    true,
+	"README":          true,
 }
 
 func TestRoot_AllowedEntriesOnly(t *testing.T) {
