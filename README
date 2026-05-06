@@ -48,6 +48,7 @@
 
   PROMPTS
     fix-bug … 버그를 재현·분석·수정하고 검증까지 주도
+    pr-review-response … GitHub PR 리뷰 코멘트별 대응·답글·재리뷰 대기
 
   THEMES
     claude-code-dark … Claude Code dark theme token 매핑
