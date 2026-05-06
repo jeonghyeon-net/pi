@@ -691,6 +691,28 @@ function getCurrentAnalysisState(current, token) {
   return current;
 }
 
+// node_modules/@jeonghyeon.net/pi-supervisor/src/steering-run.ts
+var AgentRunSteeringTracker = class {
+  currentRunId = 0;
+  steeredRunId = -1;
+  startRun() {
+    this.currentRunId++;
+    return this.currentRunId;
+  }
+  getCurrentRunId() {
+    return this.currentRunId;
+  }
+  hasSteered(runId = this.currentRunId) {
+    return this.steeredRunId === runId;
+  }
+  tryMarkSteered(runId = this.currentRunId) {
+    if (runId !== this.currentRunId) return false;
+    if (this.steeredRunId === runId) return false;
+    this.steeredRunId = runId;
+    return true;
+  }
+};
+
 // node_modules/@jeonghyeon.net/pi-supervisor/src/index.ts
 function extractThinking(accumulated) {
   const keyIdx = accumulated.indexOf('"reasoning"');
@@ -717,6 +739,7 @@ function src_default(pi) {
   let currentCtx;
   let idleSteers = 0;
   let lastAnalysisWarningAt = 0;
+  const runSteering = new AgentRunSteeringTracker();
   function maybeWarnAnalysisError(ctx, reasoning) {
     if (!reasoning.startsWith("Analysis error:")) return;
     const now = Date.now();
@@ -750,6 +773,10 @@ function src_default(pi) {
   pi.on("session_switch", async (_event, ctx) => onSessionLoad(ctx));
   pi.on("session_fork", async (_event, ctx) => onSessionLoad(ctx));
   pi.on("session_tree", async (_event, ctx) => onSessionLoad(ctx));
+  pi.on("agent_start", async (_event, ctx) => {
+    currentCtx = ctx;
+    runSteering.startRun();
+  });
   pi.on("turn_start", async (_event, ctx) => {
     currentCtx = ctx;
   });
@@ -758,6 +785,8 @@ function src_default(pi) {
     if (!state.isActive()) return;
     const s = state.getState();
     const analysisToken = createAnalysisToken(s);
+    const runId = runSteering.getCurrentRunId();
+    if (runSteering.hasSteered(runId)) return;
     if (s.sensitivity === "low") return;
     if (event.turnIndex < 2) return;
     if (s.sensitivity === "medium" && (event.turnIndex - 2) % 3 !== 0) return;
@@ -774,10 +803,11 @@ function src_default(pi) {
       return;
     }
     const current = getCurrentAnalysisState(state.getState(), analysisToken);
-    if (!current) return;
+    if (!current || runSteering.hasSteered(runId)) return;
     maybeWarnAnalysisError(ctx, decision.reasoning);
     const threshold = current.sensitivity === "medium" ? 0.9 : 0.85;
     if (decision.action === "steer" && decision.message && decision.confidence >= threshold && !isDuplicateSteer(current, decision.message)) {
+      if (!runSteering.tryMarkSteered(runId)) return;
       state.addIntervention({
         turnCount: analysisToken.turnCount,
         message: decision.message,
@@ -791,9 +821,14 @@ function src_default(pi) {
   pi.on("agent_end", async (_event, ctx) => {
     currentCtx = ctx;
     if (!state.isActive()) return;
+    const runId = runSteering.getCurrentRunId();
     state.incrementTurnCount();
     const s = state.getState();
     const analysisToken = createAnalysisToken(s);
+    if (runSteering.hasSteered(runId)) {
+      updateUI(ctx, s, { type: "watching" });
+      return;
+    }
     const stagnating = idleSteers >= MAX_IDLE_STEERS;
     updateUI(ctx, s, { type: "analyzing", turn: analysisToken.turnCount });
     const decision = await analyze(ctx, s, true, stagnating, void 0, (accumulated) => {
@@ -803,9 +838,10 @@ function src_default(pi) {
       updateUI(ctx, current2, { type: "analyzing", turn: analysisToken.turnCount, thinking });
     });
     const current = getCurrentAnalysisState(state.getState(), analysisToken);
-    if (!current) return;
+    if (!current || runSteering.hasSteered(runId)) return;
     maybeWarnAnalysisError(ctx, decision.reasoning);
     if (decision.action === "steer" && decision.message && !isDuplicateSteer(current, decision.message)) {
+      if (!runSteering.tryMarkSteered(runId)) return;
       idleSteers++;
       state.addIntervention({
         turnCount: analysisToken.turnCount,
