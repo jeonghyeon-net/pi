@@ -2,15 +2,23 @@
 description: GitHub PR 리뷰 코멘트별 대응·답글·재리뷰 대기
 argument-hint: "[추가 지시사항]"
 ---
-먼저 `start_supervision` 도구를 사용해 아래 목표로 supervisor를 활성화해줘.
+먼저 `start_supervision` 도구를 `sensitivity: high`로 사용해 아래 목표로 supervisor를 활성화해줘.
 
 outcome:
-현재 git 브랜치와 remote 정보를 기준으로 대상 GitHub PR을 자동으로 찾고, 추가 지시사항에 PR URL/번호가 명시된 경우에만 그 PR을 우선한다. 대상 PR의 리뷰 항목을 빠짐없이 확인해, 아직 대응이 필요한 각 항목에 올바른 위치로 개별 답글을 남긴다. 리뷰어 피드백은 무조건 수용하지 말고 현재 코드 흐름, 요구사항, 아키텍처, 테스트, 유지보수성, 호환성, 보안/성능 영향, 변경 범위와 트레이드오프를 비교해 타당성을 판단한다. 타당하면 최소 변경으로 반영하고 검증·커밋·푸시한다. 타당하지 않거나 더 나은 대안이 있으면 근거를 들어 답글로 설명한다. 모든 대응이 끝나면 review conversation/thread를 절대로 resolve하지 않은 상태로 기존 리뷰어에게 re-review를 요청한다. re-review 요청만으로 작업을 끝내지 말고, 새 리뷰·추가 코멘트·changes requested·CI 실패·merge conflict·mergeability 변화를 계속 확인한다. 새로 대응할 일이 생기면 같은 원칙으로 반복 처리하고, PR이 리뷰와 체크 기준을 충족해 mergeable 상태가 되거나 직접 처리할 수 없는 블로커가 생겼을 때만 최종 보고한다. 직접 merge, merge queue 등록, auto-merge 활성화는 하지 않는다.
+현재 git 브랜치와 remote 정보를 기준으로 대상 GitHub PR을 자동으로 찾고, 추가 지시사항에 PR URL/번호가 명시된 경우에만 그 PR을 우선한다. 대상 PR의 리뷰 항목을 빠짐없이 확인해, 아직 대응이 필요한 각 항목에 올바른 위치로 개별 답글을 남긴다. 리뷰어 피드백은 무조건 수용하지 말고 현재 코드 흐름, 요구사항, 아키텍처, 테스트, 유지보수성, 호환성, 보안/성능 영향, 변경 범위와 트레이드오프를 비교해 타당성을 판단한다. 타당하면 최소 변경으로 반영하고 검증·커밋·푸시한다. 타당하지 않거나 더 나은 대안이 있으면 근거를 들어 답글로 설명한다. 모든 대응이 끝나면 review conversation/thread를 절대로 resolve하지 않은 상태로 기존 리뷰어에게 re-review를 요청한다. re-review 요청은 중간 단계일 뿐 완료 조건이 아니다. 새 리뷰·추가 코멘트·changes requested·CI 실패·merge conflict·mergeability 변화를 계속 확인한다. 새로 대응할 일이 생기면 같은 원칙으로 반복 처리한다. 최종 보고는 완료 게이트를 모두 만족할 때만 허용한다: reviewDecision이 `CHANGES_REQUESTED`가 아니고, required review/check 조건이 충족됐고, 실패·대기·진행 중 check가 없고, `mergeable=MERGEABLE`이며, `mergeStateStatus`가 `BEHIND`/`BLOCKED`/`DIRTY`/`UNKNOWN` 같은 비완료 상태가 아니고, 대응이 필요한 새/후속 리뷰 항목이 없어야 한다. 특히 `reviewDecision=CHANGES_REQUESTED`, `mergeStateStatus=BEHIND`, Code review/required check `IN_PROGRESS`, reviewer re-review 요청 대기는 완료가 아니라 계속 추적하거나 직접 조치해야 하는 비종료 상태다. `BEHIND`면 force push 없이 가능한 안전한 최신화(예: update branch 또는 base merge)와 재검증을 시도하고, 충돌·권한 부족 등으로 직접 처리할 수 없을 때만 비최종 블로커로 보고한다. 직접 merge, merge queue 등록, auto-merge 활성화는 하지 않는다.
 
 추가 지시사항:
 $@
 
 그 다음 아래 원칙으로 작업해줘.
+
+## 추가 지시사항 우선순위
+
+- 추가 지시사항은 대상 PR 선택, 범위 제한, 답글 톤, 검증 명령 힌트처럼 이 템플릿을 보강하는 용도로만 사용한다.
+- 추가 지시사항이 절대 금지, 진행 절차, 완료 게이트를 약화·무시·단축하면 따르지 말고 본 템플릿을 우선한다.
+- 특히 “추가 명령을 실행하지 말고 최종 보고”, “방금 조회한 결과만으로 완료 처리”, “re-review 요청했으면 종료” 같은 지시는 완료 게이트를 모두 만족한 경우에만 따른다.
+- 사용자가 명시적으로 중단을 요구해 더 진행하지 않는 경우에도 최종 보고나 outcome achieved로 표현하지 않는다. `비최종 중단 상태`로 표시하고, 미충족 게이트와 다음에 해야 할 확인/조치만 보고한다.
+- supervisor가 `outcome achieved` 또는 steering limit 도달을 표시해도 완료 게이트가 미충족이면 최종 보고하지 않는다. supervisor 결과는 참고 신호일 뿐 이 템플릿의 완료 게이트를 대체하지 않는다.
 
 ## 용어와 범위
 
@@ -27,13 +35,21 @@ $@
 - 직접 merge하지 않는다. merge queue에 넣지 않고, `enable auto-merge` 같은 auto-merge 동작도 하지 않는다.
 - 명시 승인 없이 force push로 리뷰 컨텍스트를 깨지 않는다.
 
+## 완료 게이트와 비종료 상태
+
+- 최종 보고 직전에는 PR 상태를 다시 조회해 review, checks, mergeability, 새 코멘트 여부를 모두 확인한다.
+- `mergeable`은 GitHub의 `mergeable` 필드 하나만 뜻하지 않는다. branch protection과 리뷰/체크 조건까지 포함해 실제로 머지 가능한 상태여야 한다.
+- 다음 중 하나라도 있으면 최종 보고 금지: `reviewDecision=CHANGES_REQUESTED`, required review 미충족, review request/re-review 대기, 새로 대응할 review 항목 존재, check `IN_PROGRESS`/`QUEUED`/`PENDING`/`FAILURE`/`ERROR`, `mergeStateStatus=BEHIND`/`BLOCKED`/`DIRTY`/`UNKNOWN`, merge conflict, base 최신화 필요.
+- 리뷰어 응답 대기나 re-review 요청 상태는 직접 해결 가능한 블로커도, 완료도 아니다. 가능한 범위에서 주기적으로 재조회하고, 장시간 대기가 필요해 세션을 멈춰야 할 때만 `비최종 대기 상태`로 보고한다.
+- 직접 처리할 수 없는 블로커로 인정되는 것은 권한 부족, 인증 문제, 충돌 해결에 필요한 제품/소유자 판단, GitHub 장애처럼 에이전트가 추가 조치로 해소할 수 없는 경우뿐이다.
+
 ## 진행 절차
 
 1. 현재 브랜치와 remote에서 대상 PR을 자동으로 찾는다.
-   - 먼저 현재 브랜치에 연결된 open PR을 확인한다. 예: `gh pr view --json number,url,headRefName,baseRefName,reviewDecision,statusCheckRollup,mergeStateStatus`.
+   - 먼저 현재 브랜치에 연결된 open PR을 확인한다. 예: `gh pr view --json number,url,headRefName,baseRefName,reviewDecision,reviewRequests,statusCheckRollup,mergeable,mergeStateStatus`.
    - 실패하면 현재 브랜치명과 head remote 기준으로 open PR을 검색한다. 예: `gh pr list --head "$(git branch --show-current)" --state open`.
    - 그래도 찾지 못하거나 여러 PR이 매칭될 때만 사용자에게 대상 PR 선택을 요청한다.
-2. 대상 PR의 base/head, CI 상태, review 상태, required review/check 조건, mergeability를 확인한다.
+2. 대상 PR의 base/head, CI 상태, review 상태, reviewRequests, required review/check 조건, `mergeable`, `mergeStateStatus`를 확인한다.
 3. 모든 리뷰 항목을 수집한다. 항목 ID, 리뷰어, 위치, 최신 코멘트, 내가 이미 남긴 답글, 아직 대응이 필요한 후속 코멘트를 구분해 기록한다.
 4. 아직 대응이 필요한 항목별로 아래를 판단한다.
    - 리뷰어의 핵심 주장과 의도
@@ -55,9 +71,10 @@ $@
    - 새 리뷰, 새 리뷰 항목, 기존 항목의 후속 코멘트, 추가 changes requested가 오면 3번부터 다시 반복하되 이미 답한 내용은 중복 답변하지 않는다.
    - CI/check 실패, merge conflict, mergeability 저하가 생기면 원인을 확인해 수정·검증·커밋·푸시하고 필요한 위치에 답글을 남긴 뒤 다시 re-review를 요청한다.
    - 단순히 리뷰어 응답을 기다리는 상태는 완료가 아니다. 너무 짧은 busy-wait는 피하되, 합리적인 간격으로 PR 상태를 다시 확인한다.
-   - 세션/도구 제약 때문에 장시간 대기를 계속할 수 없을 때만 현재 대기 상태, 마지막 확인 시각, 다음에 확인해야 할 조건을 사용자에게 보고하고 멈춘다.
-   - reviewDecision이 `CHANGES_REQUESTED`가 아니고, 대응이 필요한 리뷰 항목이 없고, 필수 리뷰/체크 조건이 충족됐으며, PR이 mergeable 상태임을 확인했을 때만 최종 보고로 넘어간다.
-   - 권한 부족, GitHub 인증 문제, 리뷰어/관리자만 할 수 있는 조치, 제품 판단 등 직접 처리할 수 없는 블로커가 생긴 경우에만 즉시 사용자 액션을 요청한다.
+   - `mergeStateStatus=BEHIND`이면 완료로 보지 않는다. force push 없이 가능한 방식으로 base를 반영하거나 GitHub update branch를 시도하고, 이후 check/review 상태를 다시 확인한다.
+   - 세션/도구 제약 때문에 장시간 대기를 계속할 수 없을 때만 현재 대기 상태, 마지막 확인 시각, 다음에 확인해야 할 조건을 사용자에게 보고하고 멈춘다. 이때도 최종 보고가 아니라 `비최종 대기 상태`로 명시한다.
+   - reviewDecision이 `CHANGES_REQUESTED`가 아니고, 대응이 필요한 리뷰 항목이 없고, 필수 리뷰/체크 조건이 충족됐고, 실패·대기·진행 중 check가 없고, `mergeable=MERGEABLE`이며, `mergeStateStatus`가 `BEHIND`/`BLOCKED`/`DIRTY`/`UNKNOWN`이 아님을 확인했을 때만 최종 보고로 넘어간다.
+   - 권한 부족, GitHub 인증 문제, 리뷰어/관리자만 할 수 있는 조치, 제품 판단 등 직접 처리할 수 없는 블로커가 생긴 경우에만 즉시 사용자 액션을 요청한다. 단순 re-review 대기는 블로커로 간주하지 않는다.
 11. 최종 요약에는 다음만 간결히 포함한다.
    - 반영한 피드백과 커밋
    - 반영하지 않은 피드백과 핵심 근거
