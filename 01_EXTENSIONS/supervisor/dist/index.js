@@ -184,6 +184,108 @@ function safeContinue(reason) {
   return { action: "continue", reasoning: reason, confidence: 0 };
 }
 
+// node_modules/@jeonghyeon.net/pi-supervisor/src/snapshot.ts
+var MAX_TEXT_CHARS = 6e3;
+var MAX_JSON_CHARS = 2e3;
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+function truncate(text, max = MAX_TEXT_CHARS) {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\u2026 [truncated ${text.length - max} chars]`;
+}
+function stringify(value, max = MAX_JSON_CHARS) {
+  try {
+    const json = JSON.stringify(value);
+    return truncate(json ?? String(value), max);
+  } catch {
+    return "[unserializable]";
+  }
+}
+function extractText(content) {
+  if (typeof content === "string") return truncate(content.trim());
+  if (!Array.isArray(content)) return "";
+  const parts = [];
+  for (const block of content) {
+    if (!isRecord(block)) continue;
+    if (block.type === "text" && typeof block.text === "string") {
+      const text = block.text.trim();
+      if (text) parts.push(text);
+    } else if (block.type === "image") {
+      const mimeType = typeof block.mimeType === "string" ? block.mimeType : "image";
+      parts.push(`[${mimeType} attached]`);
+    }
+  }
+  return truncate(parts.join("\n").trim());
+}
+function extractToolCalls(content) {
+  if (!Array.isArray(content)) return [];
+  const calls = [];
+  for (const block of content) {
+    if (!isRecord(block) || block.type !== "toolCall") continue;
+    const name = typeof block.name === "string" ? block.name : "unknown_tool";
+    const id = typeof block.id === "string" ? ` id=${block.id}` : "";
+    const args = "arguments" in block ? stringify(block.arguments) : "{}";
+    calls.push(`TOOL CALL: ${name}${id}
+args: ${args}`);
+  }
+  return calls;
+}
+function assistantContent(message) {
+  const parts = [];
+  const text = extractText(message.content);
+  if (text) parts.push(text);
+  parts.push(...extractToolCalls(message.content));
+  if (message.stopReason === "error" || message.stopReason === "aborted") {
+    const error = typeof message.errorMessage === "string" ? message.errorMessage.trim() : "";
+    parts.push(`ASSISTANT ${String(message.stopReason).toUpperCase()}: ${error || "no error message"}`);
+  }
+  return parts.join("\n").trim();
+}
+function toolResultContent(message) {
+  const toolName = typeof message.toolName === "string" ? message.toolName : "unknown_tool";
+  const callId = typeof message.toolCallId === "string" ? ` id=${message.toolCallId}` : "";
+  const status = message.isError === true ? "ERROR" : "OK";
+  const output = extractText(message.content) || "(no text output)";
+  const details = message.details === void 0 ? "" : `
+details: ${stringify(message.details, 1e3)}`;
+  return `TOOL RESULT: ${toolName} ${status}${callId}
+${output}${details}`;
+}
+function bashExecutionContent(message) {
+  if (message.excludeFromContext === true) return "";
+  const command = typeof message.command === "string" ? message.command : "";
+  const output = typeof message.output === "string" ? message.output.trim() : "";
+  const exitCode = message.exitCode === void 0 ? "unknown" : String(message.exitCode);
+  const cancelled = message.cancelled === true ? " cancelled" : "";
+  const truncated = message.truncated === true ? " truncated" : "";
+  const fullOutputPath = typeof message.fullOutputPath === "string" ? `
+fullOutputPath: ${message.fullOutputPath}` : "";
+  return `USER BASH: ${command}
+exitCode: ${exitCode}${cancelled}${truncated}
+${truncate(output || "(no output)")}${fullOutputPath}`;
+}
+function buildSnapshotFromBranch(entries, limit) {
+  const messages = [];
+  for (const entry of entries) {
+    if (!isRecord(entry) || entry.type !== "message" || !isRecord(entry.message)) continue;
+    const msg = entry.message;
+    if (msg.role === "user") {
+      const content = extractText(msg.content);
+      if (content) messages.push({ role: "user", content });
+    } else if (msg.role === "assistant") {
+      const content = assistantContent(msg);
+      if (content) messages.push({ role: "assistant", content });
+    } else if (msg.role === "toolResult") {
+      messages.push({ role: "tool", content: toolResultContent(msg) });
+    } else if (msg.role === "bashExecution") {
+      const content = bashExecutionContent(msg);
+      if (content) messages.push({ role: "tool", content });
+    }
+  }
+  return messages.slice(-limit);
+}
+
 // node_modules/@jeonghyeon.net/pi-supervisor/src/engine.ts
 var SUPERVISOR_MD = "SUPERVISOR.md";
 var CONFIG_DIR = ".pi";
@@ -217,6 +319,8 @@ Trust the agent to complete what it has started. Avoid interrupting productive w
 - Never repeat a steering message that had no effect \u2014 escalate or change approach.
 - A good steer answers the agent's question OR redirects to the missing piece of the outcome.
 - If the agent is taking shortcuts to satisfy the goal without properly achieving it, always steer and remind it not to take shortcuts.
+- Treat TOOL CALL and TOOL RESULT entries in the recent conversation as authoritative evidence. Do not claim a command was not run, or that output is missing, when a matching TOOL RESULT is present.
+- If recent context shows runtime/tool-protocol errors rather than agent negligence, avoid repeated command demands; if you must steer, ask for one focused retry instead.
 
 "done" CRITERIA: The core outcome is complete and functional. Minor polish, style tweaks, or
 optional improvements do NOT block "done". Prefer stopping when the goal is substantially
@@ -256,36 +360,16 @@ function extractCompactionSummary(ctx) {
   return summary;
 }
 function buildSnapshot(ctx, limit) {
-  const messages = [];
-  for (const entry of ctx.sessionManager.getBranch()) {
-    if (entry.type !== "message") continue;
-    const msg = entry.message;
-    if (!msg) continue;
-    if (msg.role === "user") {
-      const content = extractText(msg.content);
-      if (content) messages.push({ role: "user", content });
-    } else if (msg.role === "assistant") {
-      const content = extractAssistantText(msg.content);
-      if (content) messages.push({ role: "assistant", content });
-    }
-  }
-  return messages.slice(-limit);
+  return buildSnapshotFromBranch(ctx.sessionManager.getBranch(), limit);
 }
-function extractText(content) {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
-  }
-  return "";
-}
-function extractAssistantText(content) {
-  if (!Array.isArray(content)) return "";
-  const textParts = content.filter((b) => b.type === "text").map((b) => b.text);
-  return textParts.join("\n").trim();
+function formatRole(role) {
+  if (role === "user") return "USER";
+  if (role === "assistant") return "ASSISTANT";
+  return "TOOL";
 }
 function buildUserPrompt(state, snapshot, agentIsIdle, stagnating, compactionSummary) {
   const interventionHistory = state.interventions.length === 0 ? "None yet." : state.interventions.slice(-5).map((iv, i) => `[${i + 1}] Turn ${iv.turnCount}: "${iv.message}"`).join("\n");
-  const conversationText = snapshot.length === 0 ? "(No conversation yet)" : snapshot.map((m) => `${m.role === "user" ? "USER" : "ASSISTANT"}: ${m.content}`).join("\n\n---\n\n");
+  const conversationText = snapshot.length === 0 ? "(No conversation yet)" : snapshot.map((m) => `${formatRole(m.role)}: ${m.content}`).join("\n\n---\n\n");
   const agentStatus = agentIsIdle ? `AGENT STATUS: IDLE \u2014 the agent has finished its turn and is now waiting for user input.
 You MUST return "done" or "steer". Returning "continue" here means the agent stays idle forever.` : `AGENT STATUS: WORKING \u2014 the agent is actively processing. Only intervene if clearly off track.`;
   const stagnationWarning = stagnating ? `
@@ -306,7 +390,7 @@ SENSITIVITY: ${state.sensitivity}
 
 ${agentStatus}${stagnationWarning}
 
-${summarySection}RECENT CONVERSATION (last ${snapshot.length} messages):
+${summarySection}RECENT CONVERSATION (last ${snapshot.length} messages/tool events):
 ${conversationText}
 
 PREVIOUS INTERVENTIONS BY YOU:
@@ -345,7 +429,7 @@ function toggleWidget() {
 function isWidgetVisible() {
   return _widgetVisible;
 }
-function truncate(s, max) {
+function truncate2(s, max) {
   return s.length <= max ? s : s.slice(0, max - 1) + "\u2026";
 }
 function updateUI(ctx, state, action = { type: "watching" }) {
@@ -368,7 +452,7 @@ function updateUI(ctx, state, action = { type: "watching" }) {
     const steerCount = snap.interventions.length;
     const header = `${theme.fg("accent", "\u25C9")} ${theme.fg("accent", "Supervising")}`;
     const goalLabel = theme.fg("dim", "Goal:");
-    const goalText = theme.fg("muted", `"${truncate(snap.outcome, MAX_OUTCOME_DISPLAY)}"`);
+    const goalText = theme.fg("muted", `"${truncate2(snap.outcome, MAX_OUTCOME_DISPLAY)}"`);
     const goal = `${goalLabel} ${goalText}`;
     const model = theme.fg("dim", snap.modelId);
     const steers = steerCount > 0 ? theme.fg("dim", `\u2197 ${steerCount}`) : "";
@@ -383,7 +467,7 @@ function updateUI(ctx, state, action = { type: "watching" }) {
         thinking = snapAction.thinking ?? "";
         break;
       case "steering":
-        actionStr = theme.fg("warning", `\u2197 "${truncate(snapAction.message, MAX_STEER_DISPLAY)}"`);
+        actionStr = theme.fg("warning", `\u2197 "${truncate2(snapAction.message, MAX_STEER_DISPLAY)}"`);
         break;
       case "done":
         actionStr = theme.fg("accent", "\u2713 done");
@@ -392,7 +476,7 @@ function updateUI(ctx, state, action = { type: "watching" }) {
     const sep = theme.fg("dim", " \xB7 ");
     const parts = [header, goal, model, steers, actionStr].filter(Boolean);
     const line = parts.join(sep);
-    const thinkingLine = thinking ? theme.fg("dim", `  ${truncate(thinking, MAX_THINKING_DISPLAY)}`) : "";
+    const thinkingLine = thinking ? theme.fg("dim", `  ${truncate2(thinking, MAX_THINKING_DISPLAY)}`) : "";
     return {
       render: (width) => {
         const l1 = truncateToWidth(line, width);
@@ -586,6 +670,28 @@ function saveWorkspaceModel(cwd, provider, modelId) {
 
 // node_modules/@jeonghyeon.net/pi-supervisor/src/index.ts
 import { Type } from "@sinclair/typebox";
+
+// node_modules/@jeonghyeon.net/pi-supervisor/src/analysis-guard.ts
+function createAnalysisToken(state) {
+  return {
+    startedAt: state.startedAt,
+    turnCount: state.turnCount,
+    sensitivity: state.sensitivity,
+    provider: state.provider,
+    modelId: state.modelId
+  };
+}
+function getCurrentAnalysisState(current, token) {
+  if (current?.active !== true) return null;
+  if (current.startedAt !== token.startedAt) return null;
+  if (current.turnCount !== token.turnCount) return null;
+  if (current.sensitivity !== token.sensitivity) return null;
+  if (current.provider !== token.provider) return null;
+  if (current.modelId !== token.modelId) return null;
+  return current;
+}
+
+// node_modules/@jeonghyeon.net/pi-supervisor/src/index.ts
 function extractThinking(accumulated) {
   const keyIdx = accumulated.indexOf('"reasoning"');
   if (keyIdx === -1) return "";
@@ -619,16 +725,20 @@ function src_default(pi) {
     const detail = reasoning.slice("Analysis error:".length).trim() || "unknown error";
     ctx.ui.notify(`Supervisor analysis failed for this turn: ${detail}`, "warning");
   }
+  function queueUserMessage(message, deliverAs) {
+    try {
+      pi.sendUserMessage(message, { deliverAs });
+    } catch {
+      if (deliverAs !== "steer") return;
+      try {
+        pi.sendUserMessage(message, { deliverAs: "followUp" });
+      } catch {
+      }
+    }
+  }
   function sendIdleSteer(message) {
     setTimeout(() => {
-      try {
-        pi.sendUserMessage(message);
-      } catch {
-        try {
-          pi.sendUserMessage(message, { deliverAs: "followUp" });
-        } catch {
-        }
-      }
+      queueUserMessage(message, "followUp");
     }, 0);
   }
   const onSessionLoad = (ctx) => {
@@ -647,6 +757,7 @@ function src_default(pi) {
     currentCtx = ctx;
     if (!state.isActive()) return;
     const s = state.getState();
+    const analysisToken = createAnalysisToken(s);
     if (s.sensitivity === "low") return;
     if (event.turnIndex < 2) return;
     if (s.sensitivity === "medium" && (event.turnIndex - 2) % 3 !== 0) return;
@@ -662,17 +773,19 @@ function src_default(pi) {
     } catch {
       return;
     }
+    const current = getCurrentAnalysisState(state.getState(), analysisToken);
+    if (!current) return;
     maybeWarnAnalysisError(ctx, decision.reasoning);
-    const threshold = s.sensitivity === "medium" ? 0.9 : 0.85;
-    if (decision.action === "steer" && decision.message && decision.confidence >= threshold && !isDuplicateSteer(s, decision.message)) {
+    const threshold = current.sensitivity === "medium" ? 0.9 : 0.85;
+    if (decision.action === "steer" && decision.message && decision.confidence >= threshold && !isDuplicateSteer(current, decision.message)) {
       state.addIntervention({
-        turnCount: s.turnCount,
+        turnCount: analysisToken.turnCount,
         message: decision.message,
         reasoning: decision.reasoning,
         timestamp: Date.now()
       });
       updateUI(ctx, state.getState(), { type: "steering", message: decision.message });
-      pi.sendUserMessage(decision.message, { deliverAs: "steer" });
+      queueUserMessage(decision.message, "steer");
     }
   });
   pi.on("agent_end", async (_event, ctx) => {
@@ -680,17 +793,22 @@ function src_default(pi) {
     if (!state.isActive()) return;
     state.incrementTurnCount();
     const s = state.getState();
+    const analysisToken = createAnalysisToken(s);
     const stagnating = idleSteers >= MAX_IDLE_STEERS;
-    updateUI(ctx, s, { type: "analyzing", turn: s.turnCount });
+    updateUI(ctx, s, { type: "analyzing", turn: analysisToken.turnCount });
     const decision = await analyze(ctx, s, true, stagnating, void 0, (accumulated) => {
+      const current2 = getCurrentAnalysisState(state.getState(), analysisToken);
+      if (!current2) return;
       const thinking = extractThinking(accumulated);
-      updateUI(ctx, state.getState(), { type: "analyzing", turn: s.turnCount, thinking });
+      updateUI(ctx, current2, { type: "analyzing", turn: analysisToken.turnCount, thinking });
     });
+    const current = getCurrentAnalysisState(state.getState(), analysisToken);
+    if (!current) return;
     maybeWarnAnalysisError(ctx, decision.reasoning);
-    if (decision.action === "steer" && decision.message && !isDuplicateSteer(s, decision.message)) {
+    if (decision.action === "steer" && decision.message && !isDuplicateSteer(current, decision.message)) {
       idleSteers++;
       state.addIntervention({
-        turnCount: s.turnCount,
+        turnCount: analysisToken.turnCount,
         message: decision.message,
         reasoning: decision.reasoning,
         timestamp: Date.now()
@@ -701,7 +819,7 @@ function src_default(pi) {
       idleSteers = 0;
       updateUI(ctx, state.getState(), { type: "done" });
       const suffix = stagnating ? ` (stopped after ${MAX_IDLE_STEERS} steering attempts \u2014 goal substantially achieved)` : "";
-      ctx.ui.notify(`Supervisor: outcome achieved! "${s.outcome}"${suffix}`, "info");
+      ctx.ui.notify(`Supervisor: outcome achieved! "${current.outcome}"${suffix}`, "info");
       state.stop();
       updateUI(ctx, state.getState());
     } else {
